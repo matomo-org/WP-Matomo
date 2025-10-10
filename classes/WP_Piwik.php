@@ -3,16 +3,17 @@
 use WP_Piwik\Widget\Post;
 
 /**
- * The main WP-Matomo class configures, registers and manages the plugin
+ * The main Connect Matomo class configures, registers and manages the plugin
  *
  * @author Andr&eacute; Br&auml;kling <webmaster@braekling.de>
  * @package WP_Piwik
  */
 class WP_Piwik {
 
-	private static $revisionId = 2022020701, $version = '1.0.27', $blog_id, $pluginBasename = NULL, $logger, $settings, $request, $optionsPageId;
+	private static $revisionId = 2023092201, $version = '1.0.30', $blog_id, $pluginBasename = NULL, $logger, $settings, $request, $optionsPageId;
+    public $statsPageId;
 
-	/**
+    /**
 	 * Constructor class to configure and register all WP-Piwik components
 	 */
 	public function __construct() {
@@ -196,7 +197,7 @@ class WP_Piwik {
 	 * Install WP-Piwik for the first time
 	 */
 	private function installPlugin($isUpdate = false) {
-		self::$logger->log ( 'Running WP-Matomo installation' );
+		self::$logger->log ( 'Running Connect Matomo installation' );
 		if (! $isUpdate)
 			$this->addNotice ( 'install', sprintf ( __ ( '%s %s installed.', 'wp-piwik' ), self::$settings->getNotEmptyGlobalOption ( 'plugin_display_name' ), self::$version ), __ ( 'Next you should connect to Matomo', 'wp-piwik' ) );
 		self::$settings->setGlobalOption ( 'revision', self::$revisionId );
@@ -207,7 +208,7 @@ class WP_Piwik {
 	 * Uninstall WP-Piwik
 	 */
 	public function uninstallPlugin() {
-		self::$logger->log ( 'Running WP-Matomo uninstallation' );
+		self::$logger->log ( 'Running Connect Matomo uninstallation' );
 		if (! defined ( 'WP_UNINSTALL_PLUGIN' ))
 			exit ();
 		self::deleteWordPressOption ( 'wp-piwik-notices' );
@@ -218,7 +219,7 @@ class WP_Piwik {
 	 * Update WP-Piwik
 	 */
 	private function updatePlugin() {
-		self::$logger->log ( 'Upgrade WP-Matomo to ' . self::$version );
+		self::$logger->log ( 'Upgrade Connect Matomo to ' . self::$version );
 		$patches = glob ( dirname ( __FILE__ ) . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'update' . DIRECTORY_SEPARATOR . '*.php' );
 		$isPatched = false;
 		if (is_array ( $patches )) {
@@ -657,13 +658,6 @@ class WP_Piwik {
 	 */
 	private function applySettings() {
 		self::$settings->applyChanges ( $_POST ['wp-piwik'] );
-		if (self::$settings->getGlobalOption ( 'auto_site_config' ) && self::isConfigured ()) {
-			if ($this->isPHPMode () && ! defined ( 'PIWIK_INCLUDE_PATH' ))
-				self::definePiwikConstants ();
-			$siteId = $this->getPiwikSiteId ();
-			$trackingCode = $this->updateTrackingCode ( $siteId );
-			self::$settings->setOption ( 'site_id', $siteId );
-		}
 		self::$settings->setGlobalOption ( 'revision', self::$revisionId );
 		self::$settings->setGlobalOption ( 'last_settings_update', time () );
 		return true;
@@ -1084,12 +1078,12 @@ class WP_Piwik {
 	 *        	which blog's Piwik site ID to get, default is the current blog
 	 * @return mixed Piwik site ID or n/a
 	 */
-	public function getPiwikSiteId($blogId = null) {
+	public function getPiwikSiteId($blogId = null, $forceFetch = false) {
 		if (! $blogId && $this->isNetworkMode ())
 			$blogId = get_current_blog_id ();
-		$result = self::$settings->getOption ( 'site_id', $blogId );
+		$result = self::$settings->getOption ( 'site_id' );
         self::$logger->log ( 'Database result: ' . $result );
-        return (! empty ( $result ) ? $result : $this->requestPiwikSiteId ( $blogId ));
+        return (! empty ( $result ) && ! $forceFetch ? $result : $this->requestPiwikSiteId ( $blogId ));
 	}
 
 	/**
@@ -1152,7 +1146,12 @@ class WP_Piwik {
 				'urls' => $isCurrent ? get_bloginfo ( 'url' ) : get_blog_details ( $blogId )->siteurl,
 				'siteName' => urlencode( $isCurrent ? get_bloginfo ( 'name' ) : get_blog_details ( $blogId )->blogname )
 		) );
-		$result = (int) $this->request ( $id );
+		$result = $this->request ( $id );
+		if ( is_array( $result ) && isset( $result['value'] ) ) {
+			$result = (int) $result['value'];
+		} else {
+			$result = (int) $result;
+		}
 		self::$logger->log ( 'Create Matomo ID: WordPress site ' . ($isCurrent ? get_bloginfo ( 'url' ) : get_blog_details ( $blogId )->siteurl) . ' = Matomo ID ' . $result );
 		if (empty ( $result ))
 			return null;
@@ -1319,7 +1318,7 @@ class WP_Piwik {
 	 * Get option value, choose method depending on network mode
 	 *
 	 * @param string $option option key
-	 * @return string option value
+	 * @return string|array option value
 	 */
 	private function getWordPressOption($option, $default = null) {
 		return ($this->isNetworkMode () ? get_site_option ( $option, $default ) : get_option ( $option, $default ));

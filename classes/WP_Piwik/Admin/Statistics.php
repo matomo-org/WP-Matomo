@@ -19,7 +19,6 @@
 					return;
 				}
 				echo '<p>'.__('Currently shown stats:').' <a href="'.get_bloginfo('url').'">'.get_bloginfo('name').'</a>.'.' <a href="?page=wp-piwik_stats&overview=1">Show site overview</a>.</p>';
-				echo '</form>'."\n";
 			}
 			echo '<form action="admin-post.php" method="post"><input type="hidden" name="action" value="save_wp-piwik_stats_general" /><div id="dashboard-widgets" class="metabox-holder columns-'.$screen_layout_columns.(2 <= $screen_layout_columns?' has-right-sidebar':'').'">';
 			wp_nonce_field('wp-piwik_stats-general');

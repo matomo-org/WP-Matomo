@@ -80,6 +80,8 @@ msgid ""
 "You are running a WordPress %s blog network (WPMU). WP-Matomo will handle "
 "your sites as different websites."
 msgstr ""
+"You are running a WordPress %s blog network (WPMU). Connect Matomo will handle "
+"your sites as different websites."
 
 #: classes/WP_Piwik/Admin/Settings.php:62
 #, php-format
@@ -87,6 +89,8 @@ msgid ""
 "WP-Matomo %s was not able to connect to Matomo using your configuration. Check "
 "the &raquo;Connect to Matomo&laquo; section below."
 msgstr ""
+"Connect Matomo %s was not able to connect to Matomo using your configuration. Check "
+"the &raquo;Connect to Matomo&laquo; section below."
 
 #: classes/WP_Piwik/Admin/Settings.php:64
 #, php-format
@@ -94,6 +98,8 @@ msgid ""
 "WP-Matomo %s was not able to connect to Matomo using your configuration. "
 "During connection the following error occured: <br /><code>%s</code>"
 msgstr ""
+"Connect Matomo %s was not able to connect to Matomo using your configuration. "
+"During connection the following error occured: <br /><code>%s</code>"
 
 #: classes/WP_Piwik/Admin/Settings.php:67
 #, php-format
@@ -101,6 +107,8 @@ msgid ""
 "WP-Matomo %s has to be connected to Matomo first. Check the &raquo;Connect to "
 "Matomo&laquo; section below."
 msgstr ""
+"Connect Matomo %s has to be connected to Matomo first. Check the &raquo;Connect to "
+"Matomo&laquo; section below."
 
 #: classes/WP_Piwik/Admin/Settings.php:71
 msgid "Connect to Matomo"
@@ -129,6 +137,10 @@ msgid ""
 "To use this you will need your own Matomo instance. If you do not already "
 "have a Matomo setup, you have two simple options: use either"
 msgstr ""
+"Connect Matomo is a WordPress plugin to show a selection of Matomo stats in your "
+"WordPress admin dashboard and to add and configure your Matomo tracking code. "
+"To use this you will need your own Matomo instance. If you do not already "
+"have a Matomo setup, you have two simple options: use either"
 
 #: classes/WP_Piwik/Admin/Settings.php:106
 msgid "a self-hosted Matomo"
@@ -147,6 +159,8 @@ msgid ""
 "Neither cURL nor fopen are available. So WP-Matomo can not use the HTTP API "
 "and not connect to InnoCraft Cloud."
 msgstr ""
+"Neither cURL nor fopen are available. So Connect Matomo can not use the HTTP API "
+"and not connect to InnoCraft Cloud."
 
 #: classes/WP_Piwik/Admin/Settings.php:109
 #: classes/WP_Piwik/Template/MetaBoxCustomVars.php:30
@@ -167,6 +181,8 @@ msgid ""
 "This is the default option for a self-hosted Matomo and should work for most "
 "configurations. WP-Matomo will connect to Matomo using http(s)."
 msgstr ""
+"This is the default option for a self-hosted Matomo and should work for most "
+"configurations. Connect Matomo will connect to Matomo using http(s)."
 
 #: classes/WP_Piwik/Admin/Settings.php:111
 #: classes/WP_Piwik/Admin/Settings.php:115
@@ -250,13 +266,16 @@ msgid ""
 "Check this to automatically choose your blog from your Matomo sites by URL. "
 "If your blog is not added to Matomo yet, WP-Matomo will add a new site."
 msgstr ""
+"Check this to automatically choose your blog from your Matomo sites by URL. "
+"If your blog is not added to Matomo yet, Connect Matomo will add a new site."
 
 #: classes/WP_Piwik/Admin/Settings.php:131
 #, php-format
 msgid ""
 "WP-Matomo %s was not able to get sites with at least view access: <br /><code>"
 "%s</code>"
-msgstr ""
+msgstr "Connect Matomo %s was not able to get sites with at least view access: <br /><code>"
+"%s</code>"
 
 #: classes/WP_Piwik/Admin/Settings.php:141
 msgid "Determined site"
@@ -400,7 +419,7 @@ msgstr ""
 
 #: classes/WP_Piwik/Admin/Settings.php:195
 msgid "WP-Matomo display name"
-msgstr ""
+msgstr "Connect Matomo display name"
 
 #: classes/WP_Piwik/Admin/Settings.php:195
 msgid "Plugin name shown in WordPress."
@@ -424,6 +443,9 @@ msgid ""
 "tracking code to your template files or you use another plugin to add the "
 "tracking code."
 msgstr ""
+"Connect Matomo will not add the tracking code. Use this, if you want to add the "
+"tracking code to your template files or you use another plugin to add the "
+"tracking code."
 
 #: classes/WP_Piwik/Admin/Settings.php:208
 #: classes/WP_Piwik/Admin/Settings.php:211
@@ -778,6 +800,8 @@ msgid ""
 "Choose whether WP-Matomo should use cURL or fopen to connect to Matomo in HTTP "
 "or Cloud mode."
 msgstr ""
+"Choose whether Connect Matomo should use cURL or fopen to connect to Matomo in HTTP "
+"or Cloud mode."
 
 #: classes/WP_Piwik/Admin/Settings.php:305
 msgid "HTTP method"
@@ -795,7 +819,7 @@ msgstr ""
 
 #: classes/WP_Piwik/Admin/Settings.php:308
 msgid "Choose whether WP-Matomo should use POST or GET in HTTP or Cloud mode."
-msgstr ""
+msgstr "Choose whether Connect Matomo should use POST or GET in HTTP or Cloud mode."
 
 #: classes/WP_Piwik/Admin/Settings.php:310
 msgid "Disable time limit"
@@ -906,11 +930,11 @@ msgstr ""
 
 #: classes/WP_Piwik/Admin/Settings.php:338
 msgid "Show always if WP-Matomo is updated"
-msgstr ""
+msgstr "Show always if Connect Matomo is updated"
 
 #: classes/WP_Piwik/Admin/Settings.php:339
 msgid "Show only if WP-Matomo is updated and settings were changed"
-msgstr ""
+msgstr "Show only if Connect Matomo is updated and settings were changed"
 
 #: classes/WP_Piwik/Admin/Settings.php:341
 msgid "Choose if you want to get an update notice if WP-Matomo is updated."
@@ -1004,6 +1028,9 @@ msgid ""
 "commendation, feature requests and bug reports! You help me to make WP-Matomo "
 "much better."
 msgstr ""
+"Thank you very much, all users who send me mails containing criticism, "
+"commendation, feature requests and bug reports! You help me to make Connect Matomo "
+"much better."
 
 #: classes/WP_Piwik/Admin/Settings.php:565
 msgid ""

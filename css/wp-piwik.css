@@ -2,6 +2,23 @@
 	display: none;
 }
 
+.wp-piwik-help-list {
+	list-style-type: disc;
+	margin-left: 20px;
+}
+
+.wp-piwik-input-row label {
+	display: block;
+}
+
+.wp-piwik-input-row input[type=text], .wp-piwik-input-row input:not([type]) {
+	width: 70%;
+}
+
+.wp-piwik-input-row p {
+	width: 70%;
+}
+
 table.wp-piwik-table th.right, td.right {
 	text-align: right;
 }

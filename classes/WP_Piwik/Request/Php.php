@@ -52,4 +52,13 @@
 				self::$debug[$id] = array ( $params.'&token_auth=...' );
 			return $result;
 		}
+
+        public function reset() {
+            if (class_exists('\Piwik\Application\Environment') && !self::$piwikEnvironment) {
+                self::$piwikEnvironment->destroy();
+            }
+            if (class_exists('Piwik\FrontController'))
+                \Piwik\FrontController::unsetInstance();
+            parent::reset();
+        }
 	}

@@ -1,9 +1,9 @@
-=== WP-Matomo Integration (WP-Piwik) ===
+=== Connect Matomo (WP-Matomo, WP-Piwik) ===
 
 Contributors: Braekling
 Requires at least: 5.0
-Tested up to: 5.8
-Stable tag: 1.0.27
+Tested up to: 6.8
+Stable tag: 1.0.30
 Donate link: https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=6046779
 Tags: matomo, tracking, statistics, stats, analytics
 
@@ -70,9 +70,11 @@ You can get a more detailed description here: https://matomo.org/blog/2015/05/wo
 First, please make sure your configuration is valid, e.g., if you are using the right Matomo URL (see description above). Then, go to the "Support" tab and run the test script. This test script will try to get some information from Matomo and shows the full response. Usually, the response output gives a clear hint what's wrong:
 
 The response output contains...
-* **bool(false)** and **HTTP/1.1 403 Forbidden**: WP-Matomo is not allowed to connect to Matomo. Please check your Matomo server's configuration. Maybe you are using a password protection via .htaccess or you are blocking requests from localhost/127.0.0.1. If you aren’t sure about this, please contact your web hoster for support.
-* **bool(false)** and **HTTP/1.1 404 Not Found**: The Matomo URL is wrong. Try to copy & paste the URL you use to access Matomo itself via browser.
-* **bool(false)** and no further HTTP response code: The Matomo server does not respond. Very often, this is caused by firewall or mod_security settings. Check your server logfiles to get further information. If you aren’t sure about this, please contact your web hoster for support.
+- **bool(false)** and **HTTP/1.1 403 Forbidden**: WP-Matomo is not allowed to connect to Matomo. Please check your Matomo server's configuration. Maybe you are using a password protection via .htaccess or you are blocking requests from localhost/127.0.0.1. If you aren’t sure about this, please contact your web hoster for support.
+- **bool(false)** and **HTTP/1.1 404 Not Found**: The Matomo URL is wrong. Try to copy & paste the URL you use to access Matomo itself via browser.
+- **bool(false)** and no further HTTP response code: The Matomo server does not respond. Very often, this is caused by firewall or mod_security settings. Check your server logfiles to get further information. If you aren’t sure about this, please contact your web hoster for support.
+
+If this does not help as well, feel free to open a [topic in the support forum](https://wordpress.org/support/plugin/wp-piwik/). Please share all available information including the test script result, if possible.
 
 = PHP Compatibility Checker reports PHP7 compatbility issues with WP-Matomo. =
 
@@ -142,6 +144,24 @@ Add WP-Matomo to your /wp-content/plugins folder and enable it as [Network Plugi
 5. Matomo: Here you'll find your auth token.
 
 == Changelog ==
+
+= 1.0.30 =
+* Fix settings behavior
+* Fix auto configuration in PHP API mode
+* Fix Opt-Out shortcode language attribute
+* Remove deprecated dynamic property (PHP 8.2)
+
+= 1.0.29 =
+* Rename plugin to "Connect Matomo"
+* Fix a XSS vulnerability
+
+= 1.0.28 =
+* Encode plugin display name
+* Option to set requireConsent or requireCookieConsent
+* Avoid notice on empty ecommerce data
+* Improve search tracking performance (thanks to theodejager, [details](https://github.com/braekling/WP-Matomo/pull/111))
+* Fix multisite sub-site tracking (thanks to ulkoalex, [details](https://github.com/braekling/WP-Matomo/issues/107))
+* Remove excess form closing tag (thanks to ulkoalex, [details](https://github.com/braekling/WP-Matomo/pull/113))
 
 = 1.0.27 =
 * Fix a CSRF vulnerability
