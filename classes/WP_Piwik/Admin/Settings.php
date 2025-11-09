@@ -130,7 +130,7 @@ class Settings extends \WP_Piwik\Admin {
 		$this->showInput ( 'piwik_path', __ ( 'Matomo path', 'wp-piwik' ), __( 'Enter the file path to your Matomo instance, e.g. /var/www/matomo/.', 'wp-piwik' ), self::$settings->getGlobalOption ( 'piwik_mode' ) != 'php', 'wp-piwik-mode-option', 'php', self::$wpPiwik->isConfigured (), true );
 		$this->showInput ( 'piwik_user', __ ( 'Innocraft subdomain', 'wp-piwik' ), __( 'Enter your InnoCraft Cloud subdomain. It is also part of your URL: https://SUBDOMAIN.innocraft.cloud.', 'wp-piwik' ), self::$settings->getGlobalOption ( 'piwik_mode' ) != 'cloud', 'wp-piwik-mode-option', 'cloud', self::$wpPiwik->isConfigured () );
         $this->showInput ( 'matomo_user', __ ( 'Matomo subdomain', 'wp-piwik' ), __( 'Enter your Matomo Cloud subdomain. It is also part of your URL: https://SUBDOMAIN.matomo.cloud.', 'wp-piwik' ), self::$settings->getGlobalOption ( 'piwik_mode' ) != 'cloud-matomo', 'wp-piwik-mode-option', 'cloud-matomo', self::$wpPiwik->isConfigured () );
-		$this->showInput ( 'piwik_token', __ ( 'Auth token', 'wp-piwik' ), __( 'Enter your Matomo auth token here. It is an alphanumerical code like 0a1b2c34d56e78901fa2bc3d45678efa.', 'wp-piwik' ).' '.sprintf ( __ ( 'See %sWP-Matomo FAQ%s.', 'wp-piwik' ), '<a href="https://wordpress.org/plugins/wp-piwik/faq/" target="_BLANK">', '</a>' ), false, '', '', self::$wpPiwik->isConfigured (), true );
+		$this->showInput ( 'piwik_token', __ ( 'Auth token', 'wp-piwik' ), __( 'Enter your Matomo auth token here. It is an alphanumerical code like 0a1b2c34d56e78901fa2bc3d45678efa.', 'wp-piwik' ).' '.sprintf ( __ ( 'See %sWP-Matomo FAQ%s.', 'wp-piwik' ), '<a href="https://wordpress.org/plugins/wp-piwik/faq/" target="_BLANK">', '</a>' ), false, '', '', self::$wpPiwik->isConfigured (), true, 'password' );
 
 		// Site configuration
 		$piwikSiteId = self::$wpPiwik->isConfigured () ? self::$wpPiwik->getPiwikSiteId () : false;
@@ -506,10 +506,10 @@ class Settings extends \WP_Piwik\Admin {
 	 * @param boolean $hideDescription $hideDescription set to false to show description initially (default: true)
 	 * @param boolean $wide Create a wide box (default: false)
 	 */
-	private function showInput($id, $name, $description, $isHidden = false, $groupName = '', $rowName = false, $hideDescription = true, $wide = false) {
-        $this->showInputWrapper($id, $name, $description, $isHidden, $groupName, $hideDescription, function() use ($id) {
+	private function showInput($id, $name, $description, $isHidden = false, $groupName = '', $rowName = false, $hideDescription = true, $wide = false, $type = false) {
+        $this->showInputWrapper($id, $name, $description, $isHidden, $groupName, $hideDescription, function() use ($id, $type) {
             ?>
-            <input name="wp-piwik[<?=$id?>]" id="<?=$id?>" value="<?=htmlentities(self::$settings->getGlobalOption( $id ), ENT_QUOTES, 'UTF-8', false)?>" >
+            <input type="<?= $type ? $type : 'text' ?>" name="wp-piwik[<?=$id?>]" id="<?=$id?>" value="<?=htmlentities(self::$settings->getGlobalOption( $id ), ENT_QUOTES, 'UTF-8', false)?>" >
             <?php
         }, $rowName);
 	}
