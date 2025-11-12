@@ -3,7 +3,7 @@
 Contributors: Braekling
 Requires at least: 5.0
 Tested up to: 6.8
-Stable tag: 1.0.30
+Stable tag: 1.0.31
 Donate link: https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=6046779
 Tags: matomo, tracking, statistics, stats, analytics
 
@@ -144,6 +144,10 @@ Add WP-Matomo to your /wp-content/plugins folder and enable it as [Network Plugi
 5. Matomo: Here you'll find your auth token.
 
 == Changelog ==
+
+= 1.0.31 =
+* Do not display value of persisted Matomo token in settings page.
+* Fix notice when persisted notifications value is for some reason not an array.
 
 = 1.0.30 =
 * Fix settings behavior

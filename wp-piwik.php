@@ -6,14 +6,14 @@ Plugin URI: http://wordpress.org/extend/plugins/wp-piwik/
 
 Description: Adds Matomo statistics to your WordPress dashboard and is also able to add the Matomo Tracking Code to your blog.
 
-Version: 1.0.30
+Version: 1.0.31
 Author: Andr&eacute; Br&auml;kling
 Author URI: https://www.braekling.de
 Text Domain: wp-piwik
 Domain Path: /languages
 License: GPL3
 
-****************************************************************************************** 
+******************************************************************************************
 	Copyright (C) 2009-today Andre Braekling (email: webmaster@braekling.de)
 
 	This program is free software: you can redistribute it and/or modify
