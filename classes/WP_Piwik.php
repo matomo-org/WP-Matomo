@@ -10,7 +10,15 @@ use WP_Piwik\Widget\Post;
  */
 class WP_Piwik {
 
-	private static $revisionId = 2023092201, $version = '1.0.31', $blog_id, $pluginBasename = NULL, $logger, $settings, $request, $optionsPageId;
+	private static $revisionId = 2023092201;
+	private static $version = '1.0.31';
+	private static $blog_id;
+	private static $pluginBasename = NULL;
+	private static $logger;
+	private static $settings;
+	private static $request;
+	private static $optionsPageId;
+
     public $statsPageId;
 
     /**
@@ -19,12 +27,17 @@ class WP_Piwik {
 	public function __construct() {
 		global $blog_id;
 		self::$blog_id = (isset ( $blog_id ) ? $blog_id : 'n/a');
-		$this->openLogger ();
-		$this->openSettings ();
-		$this->setup ();
-		$this->addFilters ();
-		$this->addActions ();
-		$this->addShortcodes ();
+		$this->openLogger();
+		$this->openSettings();
+		$this->setup();
+		$this->addFilters();
+		$this->addActions();
+		$this->addShortcodes();
+		$this->setUpAiBotTracking();
+	}
+
+	public static function getSettings() {
+		return self::$settings;
 	}
 
 	/**
@@ -825,16 +838,11 @@ class WP_Piwik {
 	 * Start chosen logging method
 	 */
 	private function openLogger() {
-		switch (WP_PIWIK_ACTIVATE_LOGGER) {
-			case 1 :
-				self::$logger = new WP_Piwik\Logger\Screen ( __CLASS__ );
-				break;
-			case 2 :
-				self::$logger = new WP_Piwik\Logger\File ( __CLASS__ );
-				break;
-			default :
-				self::$logger = new WP_Piwik\Logger\Dummy ( __CLASS__ );
-		}
+		self::$logger = \WP_Piwik\Logger::makeLogger();
+	}
+
+	public static function getLogger() {
+		return self::$logger;
 	}
 
 	/**
@@ -1360,5 +1368,10 @@ class WP_Piwik {
 	 */
 	public static function isValidOptionsPost() {
 		return is_admin() && check_admin_referer( 'wp-piwik_settings' ) && current_user_can( 'manage_options' ) ;
+	}
+
+	private function setUpAiBotTracking() {
+		$aiBotTracking = new \WP_Piwik\AIBotTracking( self::$settings, self::$logger );
+		$aiBotTracking->registerHooks();
 	}
 }

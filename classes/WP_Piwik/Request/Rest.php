@@ -3,14 +3,10 @@
 	namespace WP_Piwik\Request;
 
 	class Rest extends \WP_Piwik\Request {
-			
+
 		protected function request($id) {
 			$count = 0;
-			if (self::$settings->getGlobalOption('piwik_mode') == 'http')
-				$url = self::$settings->getGlobalOption('piwik_url');
-			else if (self::$settings->getGlobalOption('piwik_mode') == 'cloud')
-				$url = 'https://'.self::$settings->getGlobalOption('piwik_user').'.innocraft.cloud/';
-			else $url = 'https://'.self::$settings->getGlobalOption('matomo_user').'.matomo.cloud/';
+			$url = self::$settings->getMatomoUrl();
 			$params = 'module=API&method=API.getBulkRequest&format=json';
 			if (self::$settings->getGlobalOption('filter_limit') != "" && self::$settings->getGlobalOption('filter_limit') == (int) self::$settings->getGlobalOption('filter_limit'))
                 $params .= '&filter_limit='.self::$settings->getGlobalOption('filter_limit');
@@ -27,7 +23,7 @@
 				    if (isset($map[$num]))
 					    self::$results[$map[$num]] = $result;
 		}
-			
+
 		private function curl($id, $url, $params) {
 			if (self::$settings->getGlobalOption('http_method')=='post') {
 				$c = curl_init($url);

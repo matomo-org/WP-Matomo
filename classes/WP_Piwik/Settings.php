@@ -10,22 +10,27 @@ namespace WP_Piwik;
  */
 class Settings {
 
+	const TRACK_AI_BOTS           = 'track_ai_bots';
+	const TRACK_AI_BOTS_USING_ESI = 'track_ai_bots_using_esi';
+
 	/**
 	 *
 	 * @var Environment variables and default settings container
 	 */
-	private static $wpPiwik, $defaultSettings;
+	private static $wpPiwik;
+
+	private static $defaultSettings;
 
 	/**
 	 *
 	 * @var Define callback functions for changed settings
 	 */
 	private $checkSettings = array (
-			'piwik_url' => 'checkPiwikUrl',
-			'piwik_token' => 'checkPiwikToken',
-			'site_id' => 'requestPiwikSiteID',
-			'tracking_code' => 'prepareTrackingCode',
-			'noscript_code' => 'prepareNocscriptCode'
+		'piwik_url' => 'checkPiwikUrl',
+		'piwik_token' => 'checkPiwikToken',
+		'site_id' => 'requestPiwikSiteID',
+		'tracking_code' => 'prepareTrackingCode',
+		'noscript_code' => 'prepareNocscriptCode'
 	);
 
 	/**
@@ -33,95 +38,102 @@ class Settings {
 	 * @var Register default configuration set
 	 */
 	private $globalSettings = array (
-			// Plugin settings
-			'revision' => 0,
-			'last_settings_update' => 0,
-			// User settings: Piwik configuration
-			'piwik_mode' => 'http',
-			'piwik_url' => '',
-			'piwik_path' => '',
-			'piwik_user' => '',
-			'matomo_user' => '',
-			'piwik_token' => '',
-			'auto_site_config' => true,
-			// User settings: Stats configuration
-			'default_date' => 'yesterday',
-			'stats_seo' => false,
-            'stats_ecommerce' => false,
-			'dashboard_widget' => false,
-			'dashboard_ecommerce' => false,
-			'dashboard_chart' => false,
-			'dashboard_seo' => false,
-			'toolbar' => false,
-			'capability_read_stats' => array (
-					'administrator' => true
-			),
-			'perpost_stats' => "disabled",
-			'plugin_display_name' => 'Connect Matomo',
-			'piwik_shortcut' => false,
-			'shortcodes' => false,
-			// User settings: Tracking configuration
-			'track_mode' => 'disabled',
-			'track_codeposition' => 'footer',
-			'track_noscript' => false,
-			'track_nojavascript' => false,
-			'proxy_url' => '',
-			'track_content' => 'disabled',
-			'track_search' => false,
-			'track_404' => false,
-			'add_post_annotations' => array(),
-			'add_customvars_box' => false,
-			'add_download_extensions' => '',
-			'set_download_extensions' => '',
-			'set_link_classes' => '',
-			'set_download_classes' => '',
-            'require_consent' => 'disabled',
-			'disable_cookies' => false,
-			'limit_cookies' => false,
-			'limit_cookies_visitor' => 34186669, // Piwik default 13 months
-			'limit_cookies_session' => 1800, // Piwik default 30 minutes
-			'limit_cookies_referral' => 15778463, // Piwik default 6 months
-			'track_admin' => false,
-			'capability_stealth' => array (),
-			'track_across' => false,
-			'track_across_alias' => false,
-			'track_crossdomain_linking' => false,
-			'track_feed' => false,
-			'track_feed_addcampaign' => false,
-			'track_feed_campaign' => 'feed',
-			'track_heartbeat' => 0,
-			'track_user_id' => 'disabled',
-			// User settings: Expert configuration
-			'cache' => true,
-			'http_connection' => 'curl',
-			'http_method' => 'post',
-			'disable_timelimit' => false,
-			'filter_limit' => '',
-			'connection_timeout' => 5,
-			'disable_ssl_verify' => false,
-			'disable_ssl_verify_host' => false,
-			'piwik_useragent' => 'php',
-			'piwik_useragent_string' => 'WP-Piwik',
-            'dnsprefetch' => false,
-			'track_datacfasync' => false,
-			'track_cdnurl' => '',
-			'track_cdnurlssl' => '',
-			'force_protocol' => 'disabled',
-			'remove_type_attribute' => false,
-			'update_notice' => 'enabled'
-	), $settings = array (
-			'name' => '',
-			'site_id' => NULL,
-			'noscript_code' => '',
-			'tracking_code' => '',
-			'last_tracking_code_update' => 0,
-			'dashboard_revision' => 0
-	), $settingsChanged = false;
+		// Plugin settings
+		'revision' => 0,
+		'last_settings_update' => 0,
+		// User settings: Piwik configuration
+		'piwik_mode' => 'http',
+		'piwik_url' => '',
+		'piwik_path' => '',
+		'piwik_user' => '',
+		'matomo_user' => '',
+		'piwik_token' => '',
+		'auto_site_config' => true,
+		// User settings: Stats configuration
+		'default_date' => 'yesterday',
+		'stats_seo' => false,
+		'stats_ecommerce' => false,
+		'dashboard_widget' => false,
+		'dashboard_ecommerce' => false,
+		'dashboard_chart' => false,
+		'dashboard_seo' => false,
+		'toolbar' => false,
+		'capability_read_stats' => array (
+				'administrator' => true
+		),
+		'perpost_stats' => "disabled",
+		'plugin_display_name' => 'Connect Matomo',
+		'piwik_shortcut' => false,
+		'shortcodes' => false,
+		// User settings: Tracking configuration
+		'track_mode' => 'disabled',
+		'track_codeposition' => 'footer',
+		'track_noscript' => false,
+		'track_nojavascript' => false,
+		'proxy_url' => '',
+		'track_content' => 'disabled',
+		'track_search' => false,
+		'track_404' => false,
+		'add_post_annotations' => array(),
+		'add_customvars_box' => false,
+		'add_download_extensions' => '',
+		'set_download_extensions' => '',
+		'set_link_classes' => '',
+		'set_download_classes' => '',
+		'require_consent' => 'disabled',
+		'disable_cookies' => false,
+		'limit_cookies' => false,
+		'limit_cookies_visitor' => 34186669, // Piwik default 13 months
+		'limit_cookies_session' => 1800, // Piwik default 30 minutes
+		'limit_cookies_referral' => 15778463, // Piwik default 6 months
+		'track_admin' => false,
+		'capability_stealth' => array (),
+		'track_across' => false,
+		'track_across_alias' => false,
+		'track_crossdomain_linking' => false,
+		'track_feed' => false,
+		'track_feed_addcampaign' => false,
+		'track_feed_campaign' => 'feed',
+		'track_heartbeat' => 0,
+		'track_user_id' => 'disabled',
+		// User settings: Expert configuration
+		'cache' => true,
+		'http_connection' => 'curl',
+		'http_method' => 'post',
+		'disable_timelimit' => false,
+		'filter_limit' => '',
+		'connection_timeout' => 5,
+		'disable_ssl_verify' => false,
+		'disable_ssl_verify_host' => false,
+		'piwik_useragent' => 'php',
+		'piwik_useragent_string' => 'WP-Piwik',
+		'dnsprefetch' => false,
+		'track_datacfasync' => false,
+		'track_cdnurl' => '',
+		'track_cdnurlssl' => '',
+		'force_protocol' => 'disabled',
+		'remove_type_attribute' => false,
+		'update_notice' => 'enabled',
+
+		self::TRACK_AI_BOTS => false,
+		self::TRACK_AI_BOTS_USING_ESI => false,
+	);
+
+	private $settings = array (
+		'name' => '',
+		'site_id' => NULL,
+		'noscript_code' => '',
+		'tracking_code' => '',
+		'last_tracking_code_update' => 0,
+		'dashboard_revision' => 0
+	);
+
+	private $settingsChanged = false;
 
 	/**
 	 * Constructor class to prepare settings manager
 	 *
-	 * @param WP_Piwik $wpPiwik
+	 * @param \WP_Piwik $wpPiwik
 	 *        	active WP-Piwik instance
 	 */
 	public function __construct($wpPiwik) {
@@ -207,7 +219,7 @@ class Settings {
 	 *        	option key
 	 * @param int $blogID
 	 *        	blog ID (default: current blog)
-	 * @return \WP_Piwik\Register
+	 * @return mixed
 	 */
 	public function getOption($key, $blogID = null) {
 		if ($this->checkNetworkActivation () && ! empty ( $blogID )) {
@@ -423,5 +435,33 @@ class Settings {
 		);
 		$debug['global_settings']['piwik_token'] = !empty($debug['global_settings']['piwik_token'])?'set':'not set';
 		return $debug;
+	}
+
+	public function isAiBotTrackingEnabled() {
+		return (bool) $this->getGlobalOption( self::TRACK_AI_BOTS );
+	}
+
+	public function isAiBotTrackingEnabledViaEsiIncludes() {
+		return (bool) $this->getGlobalOption( self::TRACK_AI_BOTS_USING_ESI );
+	}
+
+	public function isTrackViaEsiEnabled() {
+		return ( (bool) $this->getGlobalOption( 'track_ai_bots_using_esi' ) ) === true;
+	}
+
+	public function getMatomoUrl() {
+		if ($this->getGlobalOption('piwik_mode') == 'http') {
+			return $this->getGlobalOption('piwik_url');
+		}
+
+		if ($this->getGlobalOption('piwik_mode') == 'cloud') {
+			return 'https://' . $this->getGlobalOption('piwik_user') . '.innocraft.cloud/';
+		}
+
+		return 'https://'.$this->getGlobalOption('matomo_user').'.matomo.cloud/';
+	}
+
+	public function isTrackingEnabled() {
+		return $this->getGlobalOption('track_mode') !== 'disabled';
 	}
 }

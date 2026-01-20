@@ -72,3 +72,11 @@ div.wp-piwik-donate div {
 	border-width:1px 0 0 0 ;
 	padding:5px
 }
+
+.wp-matomo-inline-notice {
+    padding: 1em;
+}
+
+.wp-matomo-inline-notice.wp-matomo-warning {
+    background-color: rgba(255, 165, 0, 0.2);
+}

@@ -324,6 +324,110 @@ class Settings extends \WP_Piwik\Admin {
 				'displayname' => __ ( 'Display Name (Not Recommended!)', 'wp-piwik' )
 		), __ ( 'When a user is logged in to WordPress, track their &quot;User ID&quot;. You can select which field from the User\'s profile is tracked as the &quot;User ID&quot;. When enabled, Tracking based on Email Address is recommended.', 'wp-piwik' ), '', $isNotTracking, $fullGeneratedTrackingGroup );
 
+		?>
+		<tr class="<?= $isNotTracking ? 'hidden' : ''?> <?= $fullGeneratedTrackingGroup ?> wp-piwik-track-option-manually">
+			<td><h4><?php esc_html_e( 'AI Bot Tracking', 'wp-piwik' ); ?></h4></td>
+		</tr>
+		<?php
+
+		$this->showCheckbox(
+			\WP_Piwik\Settings::TRACK_AI_BOTS,
+			esc_html__( 'Track AI Bots', 'wp-piwik' ),
+			esc_html__( 'If enabled, AI bots will trigger page views even if they do not execute JavaScript. These page views can be seen in the special AI Assistants report.', 'wp-piwik' ),
+			$isNotTracking,
+			$fullGeneratedTrackingGroup . ' wp-piwik-track-option-manually',
+			true,
+			"window.jQuery('.wp-matomo-track-ai-warning').toggle();"
+		);
+
+		$matomoIsTrackAiEnabled            = self::$settings->isAiBotTrackingEnabled();
+		$matomoIsAdvancedCacheUsed         = self::isAdvancedCacheUsed();
+		$matomoIsTrackScriptUsedInWpConfig = self::isTrackScriptUsedInWpConfig();
+		$matomoIsHtaccessServingCacheFiles = self::isHtaccessServingCacheFiles();
+
+		if ( $matomoIsHtaccessServingCacheFiles ) {
+			?>
+			<tr>
+				<td colspan="2">
+					<div class="wp-matomo-inline-notice wp-matomo-warning wp-matomo-track-ai-warning" style="<?php echo $matomoIsTrackAiEnabled ? '' : 'display:none;'; ?>">
+						<p>
+							<strong><?php esc_html_e( 'Warning', 'wp-piwik' ); ?>:</strong>
+							<?php esc_html_e( 'Your caching plugin is using an .htaccess file to serve cached pages directly through your webserver, bypassing PHP. AI bots cannot be tracked for pages served this way. Please consult your caching plugin documentation if you wish to disable this behavior.', 'wp-piwik' ); ?>
+						</p>
+					</div>
+				</td>
+			</tr>
+			<?php
+		} elseif ( $matomoIsAdvancedCacheUsed && false === $matomoIsTrackScriptUsedInWpConfig ) {
+			?>
+			<tr>
+				<td colspan="2">
+					<div class="wp-matomo-inline-notice wp-matomo-warning wp-matomo-track-ai-warning" style="<?php echo $matomoIsTrackAiEnabled ? '' : 'display:none;'; ?>">
+						<p>
+							<strong><?php esc_html_e( 'Warning', 'wp-piwik' ); ?>:</strong>
+							<?php esc_html_e( 'We noticed WordPress\' advanced cache feature is active. This feature will serve your blog pages without ever loading your WordPress plugins. To track AI bots while the advanced cache is active you will need to add the following snippet to your wp-config.php file:', 'wp-piwik' ); ?>
+						</p>
+						<p>
+							<textarea style="width:100%" rows="3" readonly="readonly">if ( is_file( ABSPATH . 'wp-content/plugins/wp-piwik/misc/track_ai_bot.php' ) ) {
+	require_once ABSPATH . 'wp-content/plugins/wp-piwik/misc/track_ai_bot.php';
+}</textarea>
+						</p>
+						<p><?php echo sprintf( esc_html__( 'Make sure to add it immediately before the line that reads %1$srequire_once ABSPATH . \'wp-settings.php\';%2$s.', 'wp-piwik' ), '<code>', '</code>' ); ?></p>
+					</div>
+				</td>
+			</tr>
+			<?php
+		}
+
+		$this->showCheckbox(
+			\WP_Piwik\Settings::TRACK_AI_BOTS_USING_ESI,
+			esc_html__( 'Track AI Bots using Edge Side Includes', 'wp-piwik' ),
+			esc_html__( 'If you are using a CDN to serve your blog, you will not be able to track AI bots in the traditional method. If your CDN supports ESI (Edge Side Includes), however, you can enable this option to use this feature for tracking AI bots.', 'wp-piwik' ),
+			$isNotTracking,
+			$fullGeneratedTrackingGroup . ' wp-piwik-track-option-manually',
+		);
+
+		$matomoIsTrackViaEsiEnabled    = self::$settings->isTrackViaEsiEnabled();
+		$matomoIsUsingLitespeed        = $this->isUsingLitespeedWebServer();
+		$matomoIsUsingLitespeedCache   = $this->isUsingLitespeedCachePlugin();
+		$matomoIsEsiEnabledInLitespeed = $this->isLitespeedEsiEnabledInWebserver();
+
+		if ( $matomoIsUsingLitespeed && $matomoIsUsingLitespeedCache ) {
+			if ( ! $matomoIsTrackViaEsiEnabled ) {
+				?>
+			<tr>
+				<td colspan="2">
+					<div class="wp-matomo-inline-notice wp-matomo-warning wp-matomo-track-ai-warning" style="<?php echo $matomoIsTrackAiEnabled ? '' : 'display:none;'; ?>">
+						<p>
+							<strong><?php esc_html_e( 'Warning', 'matomo' ); ?>:</strong>
+							<?php esc_html_e( 'We noticed you are using a LiteSpeed webserver with the LiteSpeed Cache plugin. Tracking AI bots with LiteSpeed can only be accomplished via ESI. Please enable the feature both here and in your LiteSpeed webserver.', 'matomo' ); ?>
+						</p>
+					</div>
+				</td>
+			</tr>
+				<?php
+			} elseif ( ! $matomoIsEsiEnabledInLitespeed ) {
+				?>
+			<tr>
+				<td colspan="2">
+					<div class="wp-matomo-inline-notice wp-matomo-warning wp-matomo-track-ai-warning" style="<?php echo $matomoIsTrackAiEnabled ? '' : 'display:none;'; ?>">
+						<p>
+							<strong><?php esc_html_e( 'Warning', 'matomo' ); ?>:</strong>
+							<?php
+								echo sprintf(
+									esc_html__( 'ESI is not currently enabled in your LiteSpeed webserver. To track AI bots with LiteSpeed it is required to enable this feature. %1$sSee LiteSpeed docs for more info.%2$s', 'matomo' ),
+									'<a href="https://docs.litespeedtech.com/lscache/lscwp/cache/#esi-tab" target="_blank" rel="noreferrer noopener">',
+									'</a>'
+								);
+							?>
+						</p>
+					</div>
+				</td>
+			</tr>
+				<?php
+			}
+		}
+
 		echo $submitButton;
 		echo '</tbody></table><table id="expert" class="wp-piwik_menu-tab hidden"><tbody>';
 
@@ -813,4 +917,81 @@ class Settings extends \WP_Piwik\Admin {
 		</div>
 	<?php }
 
+
+	/**
+	 * Returns true if WordPress is configured to use the advanced-cache.php
+	 * file, and if such a file exists.
+	 *
+	 * @return bool
+	 */
+	public static function isAdvancedCacheUsed() {
+		return defined( 'WP_CACHE' )
+			&& WP_CACHE
+			&& is_file( WP_CONTENT_DIR . '/advanced-cache.php' );
+	}
+
+	/**
+	 * To track AI bots when the advanced-cache.php file is in use, a
+	 * special code snippet must be added to a user's wp-config.php.
+	 *
+	 * This function checks if the required snippet has been added to
+	 * this WordPress' wp-config.php file.
+	 *
+	 * @param string $abspathOverride only used for tests.
+	 * @return bool|null true if the snippet is detected, false if it is not,
+	 *                   and null if the wp-config.php file cannot be read for
+	 *                   some reason
+	 */
+	public static function isTrackScriptUsedInWpConfig( $abspathOverride = null ) {
+		$abspathOverride = ! empty( $abspathOverride ) ? $abspathOverride : ABSPATH;
+
+		$wpConfigPath = $abspathOverride . '/wp-config.php';
+
+		if ( ! is_readable( $wpConfigPath ) ) {
+			return null;
+		}
+
+		// phpcs:disable WordPress.PHP.NoSilencedErrors.Discouraged
+		// phpcs:disable WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents
+		$wpConfigContents = @file_get_contents( $wpConfigPath );
+
+		// some systems may disable reading of files outside of wp-content
+		if ( ! is_string( $wpConfigContents ) ) {
+			return null;
+		}
+
+		$isTrackAiBotScriptUsed = preg_match( '/require_once.*?track_ai_bot\.php/', $wpConfigContents ) === 1;
+
+		return $isTrackAiBotScriptUsed;
+	}
+
+	public static function isHtaccessServingCacheFiles() {
+		if ( ! is_file( ABSPATH . '/.htaccess' ) ) {
+			return false;
+		}
+
+		if ( ! function_exists( 'apache_get_modules' ) ) {
+			return false; // not using apache
+		}
+
+		$htaccessContents     = file_get_contents( ABSPATH . '/.htaccess' );
+		$isRewriteRuleFound = preg_match( '%RewriteRule.*?/wp-content/cache/%', $htaccessContents ) === 1;
+
+		return $isRewriteRuleFound;
+	}
+
+
+	public function isUsingLitespeedWebServer() {
+		return php_sapi_name() === 'litespeed';
+	}
+
+	public function isUsingLitespeedCachePlugin() {
+		return is_plugin_active( 'litespeed-cache/litespeed-cache.php' );
+	}
+
+	private function isLitespeedEsiEnabledInWebserver() {
+		// see https://docs.litespeedtech.com/lscache/lscwp/api/#get-esi-enable-status
+		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
+		return (bool) apply_filters( 'litespeed_esi_status', false );
+	}
 }

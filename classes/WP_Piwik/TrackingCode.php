@@ -30,6 +30,12 @@ class TrackingCode {
 		return $this->trackingCode;
 	}
 
+	/**
+	 * @param string $code
+	 * @param Settings $settings
+	 * @param Logger $logger
+	 * @return array
+	 */
 	public static function prepareTrackingCode($code, $settings, $logger) {
 		global $current_user;
 		$logger->log ( 'Apply tracking code changes:' );
@@ -74,6 +80,52 @@ class TrackingCode {
 
 		if ($settings->getGlobalOption ( 'track_datacfasync' ))
 			$code = str_replace ( '<script type', '<script data-cfasync="false" type', $code );
+
+		if ( $settings->isAiBotTrackingEnabled() ) {
+			// recMode is a temporary parameter introduced in core to conditionally
+			// enable AI bot tracking. if AI bot tracking is enabled in MWP, we set
+			// it to `2` here, to enable "auto" mode when doing JS tracking. in this
+			// mode, tracking requests with AI bot user agents will be tracked as bots
+			// instead of visits, while all other requests will be tracked normally
+			// as visits.
+			$code = str_replace(
+				"_paq.push(['trackPageView']);",
+				"_paq.push(['appendToTrackingUrl', 'recMode=2']);\n_paq.push(['trackPageView']);",
+				$code
+			);
+
+			// set cookie via javascript cookie for known AI bots so we can skip tracking server side
+			// for them.
+			// NOTE: this must be done ONLY for known AI bots to be compliant with privacy regulations.
+			$user_agent_substrings = wp_json_encode( AjaxTracker::AI_BOT_USER_AGENT_SUBSTRINGS );
+
+			$cookie_set_fn = <<<EOF
+_paq.push([ function () {
+  var userAgentSubstrings = $user_agent_substrings;
+  for (var i = 0; i < userAgentSubstrings.length; ++i) {
+  	var isAiBotUserAgent = navigator.userAgent.toLowerCase().indexOf(userAgentSubstrings[i].toLowerCase()) !== -1;
+  	if (isAiBotUserAgent) {
+      var path = this.getCookiePath();
+      var domain = this.getCookieDomain();
+      var sameSite = 'Lax';
+      document.cookie = 'matomo_has_js=1;path=' +
+      	(path || '/') +
+      	(domain ? ';domain=' + domain : '') +
+		';SameSite=' + sameSite
+		;
+  	  return;
+  	}
+  }
+} ]);
+EOF;
+
+			$code = str_replace(
+				"_paq.push(['trackPageView']);",
+				$cookie_set_fn . "\n_paq.push(['trackPageView']);",
+				$code
+			);
+		}
+
 		if ($settings->getGlobalOption ( 'set_download_extensions' ))
 			$code = str_replace ( "_paq.push(['trackPageView']);", "_paq.push(['setDownloadExtensions', '" . ($settings->getGlobalOption ( 'set_download_extensions' )) . "']);\n_paq.push(['trackPageView']);", $code );
 		if ($settings->getGlobalOption ( 'add_download_extensions' ))
@@ -151,7 +203,7 @@ class TrackingCode {
          	if ( isset( $pkUserId ) && ! empty( $pkUserId ))
 			$this->trackingCode = str_replace ( "_paq.push(['trackPageView']);", "_paq.push(['setUserId', '" . esc_js( $pkUserId ) . "']);\n_paq.push(['trackPageView']);", $this->trackingCode );
 	}
-	
+
 	private function addCustomValues() {
 		$customVars = '';
 		for($i = 1; $i <= 5; $i ++) {

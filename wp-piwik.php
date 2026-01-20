@@ -36,8 +36,9 @@ if (! function_exists ( 'add_action' )) {
 	exit ();
 }
 
-if (! defined ( 'NAMESPACE_SEPARATOR' ))
+if (! defined ( 'NAMESPACE_SEPARATOR' )) {
 	define ( 'NAMESPACE_SEPARATOR', '\\' );
+}
 
 /**
  * Define WP-Piwik autoloader
@@ -48,7 +49,10 @@ if (! defined ( 'NAMESPACE_SEPARATOR' ))
 function wp_piwik_autoloader($class) {
 	if (substr ( $class, 0, 9 ) == 'WP_Piwik' . NAMESPACE_SEPARATOR) {
 		$class = str_replace ( '.', '', str_replace ( NAMESPACE_SEPARATOR, DIRECTORY_SEPARATOR, substr ( $class, 9 ) ) );
-		require_once ('classes' . DIRECTORY_SEPARATOR . 'WP_Piwik' . DIRECTORY_SEPARATOR . $class . '.php');
+		$file = 'classes' . DIRECTORY_SEPARATOR . 'WP_Piwik' . DIRECTORY_SEPARATOR . $class . '.php';
+		if ( is_file( __DIR__ . '/' . $file ) ) {
+			require_once $file;
+		}
 	}
 }
 
@@ -69,13 +73,15 @@ add_action( 'plugins_loaded', 'wp_piwik_load_textdomain' );
 if (version_compare ( PHP_VERSION, '5.3.0', '<' ))
 	add_action ( 'admin_notices', 'wp_piwik_phperror' );
 else {
+	define ( 'WP_PIWIK_FILE', __FILE__ );
 	define ( 'WP_PIWIK_PATH', dirname ( __FILE__ ) . DIRECTORY_SEPARATOR );
 	require_once (WP_PIWIK_PATH . 'config.php');
 	require_once (WP_PIWIK_PATH . 'classes' . DIRECTORY_SEPARATOR . 'WP_Piwik.php');
 	spl_autoload_register ( 'wp_piwik_autoloader' );
 	$GLOBALS ['wp-piwik_debug'] = false;
-	if (class_exists ( 'WP_Piwik' ))
-		add_action( 'init', 'wp_piwik_loader' );
+	if (class_exists ( 'WP_Piwik' )) {
+		add_action( 'setup_theme', 'wp_piwik_loader' );
+	}
 }
 
 function wp_piwik_loader() {
