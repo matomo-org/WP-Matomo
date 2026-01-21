@@ -89,10 +89,12 @@ function wp_piwik_track_if_ai_bot() {
 		wp_plugin_directory_constants();
 	}
 
+	$url = !empty( $_REQUEST['mtm_url'] ) ? $_REQUEST['mtm_url'] : null;
+
 	$wpPiwik       = new \WP_Piwik();
 	$settings      = new \WP_Piwik\Settings( $wpPiwik );
 	$aiBotTracking = new \WP_Piwik\AIBotTracking( $settings, \WP_Piwik::getLogger() );
-	$aiBotTracking->doAiBotTracking();
+	$aiBotTracking->doAiBotTracking( $url );
 }
 
 register_shutdown_function( 'wp_piwik_track_if_ai_bot' );

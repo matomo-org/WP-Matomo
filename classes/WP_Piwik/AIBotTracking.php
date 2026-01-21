@@ -83,7 +83,11 @@ class AIBotTracking {
 		}
 	}
 
-	public function doAiBotTracking() {
+	/**
+	 * @param string|null $url
+	 * @return void
+	 */
+	public function doAiBotTracking( $url = null ) {
 		// track AI bots only once per request
 		if ( self::$aiBotTracked ) {
 			return;
@@ -97,7 +101,7 @@ class AIBotTracking {
 			$is_using_esi_to_track
 			&& empty( $GLOBALS['MATOMO_IN_AI_ESI'] )
 		) {
-			$track_script_url = plugins_url( '/misc/track_ai_bot.php', WP_PIWIK_FILE ) . '?mtm_esi=1';
+			$track_script_url = plugins_url( '/misc/track_ai_bot.php', WP_PIWIK_FILE ) . '?mtm_esi=1&mtm_url=' . rawurlencode( AjaxTracker::getCurrentUrl() );
 			echo '<esi:include src="' . esc_attr( $track_script_url ) . '" cache-control="no-cache" />';
 			return;
 		}
@@ -109,6 +113,7 @@ class AIBotTracking {
 		$responseCode     = http_response_code();
 		$requestElapsedMs = null;
 
+		// cannot track request time if executed via an esi:include
 		if ( empty( $GLOBALS['MATOMO_IN_AI_ESI'] ) ) {
 			$requestElapsedMs = (int) ( timer_float() * 1000 );
 		}
@@ -119,6 +124,12 @@ class AIBotTracking {
 
 		// phpcs:ignore WordPress.WP.CapitalPDangit.Misspelled
 		$source = 'wordpress';
+
+		if ( empty( $url ) ) {
+			$url = AjaxTracker::getCurrentUrl();
+		}
+
+		$this->tracker->setUrl( $url );
 
 		// cannot count bytes echo'd so no response size tracked
 		$this->tracker->doTrackPageViewIfAIBot( $responseCode, null, $requestElapsedMs, $source );

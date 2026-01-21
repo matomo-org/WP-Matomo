@@ -146,6 +146,10 @@ class AjaxTracker extends \WP_Piwik\MatomoTracker {
 		// disabled
 	}
 
+	public static function getCurrentUrl(): string {
+		return parent::getCurrentUrl();
+	}
+
 	public function getTrackingCookieDomain( Settings $settings ) {
 		if (
 			$settings->getGlobalOption( 'track_across' )
