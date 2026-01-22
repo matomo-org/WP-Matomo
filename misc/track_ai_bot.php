@@ -26,7 +26,6 @@ function wp_piwik_track_if_ai_bot() {
 		( ! defined( 'WP_CACHE' ) || ! WP_CACHE )
 		&& empty( $_GET['mtm_esi'] )
 	) { // advanced-cache.php not in use and we are not tracking via esi:include
-		echo "abc?\n";
 		return;
 	}
 
