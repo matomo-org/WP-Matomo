@@ -12,10 +12,17 @@ class Visitors extends Widget
     protected function configure($prefix = '', $params = array())
     {
         $timeSettings = $this->getTimeSettings();
+
+        $lastN = $timeSettings['period'] == 'day' ? '30' : '12';
+        $piwikMode = \WP_Piwik::$wpPiwik->getGlobalOption('piwik_mode');
+        if ($piwikMode === 'cloud' || $piwikMode === 'cloud-matomo') {
+            $lastN = '1';
+        }
+
         $this->parameter = array(
             'idSite' => self::$wpPiwik->getPiwikSiteId($this->blogId),
             'period' => isset($params['period']) ? $params['period'] : $timeSettings['period'],
-            'date' => 'last' . ($timeSettings['period'] == 'day' ? '30' : '12'),
+            'date' => 'last' . $lastN,
             'limit' => null
         );
         $this->title = $prefix . __('Visitors', 'wp-piwik') . ' (' . __($this->rangeName(), 'wp-piwik') . ')';
