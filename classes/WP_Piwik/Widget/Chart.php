@@ -14,7 +14,15 @@ class Chart extends Visitors
         $result = $this->requestData();
         $response = $result["response"];
         if (!$result["success"]) {
-            echo '<strong>' . __('Piwik error', 'wp-piwik') . ':</strong> ' . htmlentities($response[$method]['message'], ENT_QUOTES, 'utf-8');
+			$message = '';
+			foreach ($this->method as $m) {
+				if (empty($response[$m]['message'])) {
+					continue;
+				}
+
+				$message .= ' ' . $m . ' - ' . $response[$m]['message'];
+			}
+            echo '<strong>' . __('Piwik error', 'wp-piwik') . ':</strong> ' . htmlentities($message, ENT_QUOTES, 'utf-8');
         } else {
             $values = $labels = $bounced = $unique = '';
             $count = $uniqueSum = 0;
