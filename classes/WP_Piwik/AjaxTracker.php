@@ -25,7 +25,7 @@ class AjaxTracker extends \WP_Piwik\MatomoTracker {
 	public function __construct( Settings $settings, Logger $logger ) {
 		$this->logger = $logger;
 
-		$idsite = $settings->getOption('site_id' );
+		$idsite = $settings->getOption( 'site_id' );
 		if ( ! $idsite ) {
 			return;
 		}
@@ -111,7 +111,7 @@ class AjaxTracker extends \WP_Piwik\MatomoTracker {
 		return $response['body'];
 	}
 
-	private function isInvalidVisitorIdError(\Exception $ex ) {
+	private function isInvalidVisitorIdError( \Exception $ex ) {
 		return strpos( $ex->getMessage(), 'setVisitorId() expects' ) === 0;
 	}
 
@@ -137,7 +137,7 @@ class AjaxTracker extends \WP_Piwik\MatomoTracker {
 	}
 
 	/**
-	 * In Matomo for WordPress we want to rely entirely on JavaScript tracker
+	 * In Connect Matomo we want to rely entirely on JavaScript tracker
 	 * for creating cookies.
 	 *
 	 * @return void

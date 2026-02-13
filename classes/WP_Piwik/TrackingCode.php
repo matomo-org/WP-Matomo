@@ -83,10 +83,10 @@ class TrackingCode {
 
 		if ( $settings->isAiBotTrackingEnabled() ) {
 			// recMode is a temporary parameter introduced in core to conditionally
-			// enable AI bot tracking. if AI bot tracking is enabled in MWP, we set
-			// it to `2` here, to enable "auto" mode when doing JS tracking. in this
-			// mode, tracking requests with AI bot user agents will be tracked as bots
-			// instead of visits, while all other requests will be tracked normally
+			// enable AI bot tracking. if AI bot tracking is enabled in Connect Matomo,
+			// we set it to `2` here, to enable "auto" mode when doing JS tracking. in
+			// this mode, tracking requests with AI bot user agents will be tracked as
+			// bots instead of visits, while all other requests will be tracked normally
 			// as visits.
 			$code = str_replace(
 				"_paq.push(['trackPageView']);",

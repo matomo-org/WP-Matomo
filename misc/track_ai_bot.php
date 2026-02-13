@@ -16,7 +16,7 @@
  *
  * This script can be added to a user's wp-config.php or be executed
  * via an HTTP request in an <esi:include> directive. It should have as
- * few dependencies as possible, and load as few PHP file as possible.
+ * few dependencies as possible, and load as few PHP files as possible.
  */
 
 function wp_piwik_track_if_ai_bot() {

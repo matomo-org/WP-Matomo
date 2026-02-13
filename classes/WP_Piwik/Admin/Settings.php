@@ -974,7 +974,7 @@ class Settings extends \WP_Piwik\Admin {
 			return false; // not using apache
 		}
 
-		$htaccessContents     = file_get_contents( ABSPATH . '/.htaccess' );
+		$htaccessContents   = file_get_contents( ABSPATH . '/.htaccess' );
 		$isRewriteRuleFound = preg_match( '%RewriteRule.*?/wp-content/cache/%', $htaccessContents ) === 1;
 
 		return $isRewriteRuleFound;
