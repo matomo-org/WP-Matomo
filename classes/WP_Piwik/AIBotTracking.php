@@ -114,8 +114,11 @@ class AIBotTracking {
 		$requestElapsedMs = null;
 
 		// cannot track request time if executed via an esi:include
-		if ( empty( $GLOBALS['MATOMO_IN_AI_ESI'] ) ) {
-			$requestElapsedMs = (int) ( timer_float() * 1000 );
+		if (
+			empty( $GLOBALS['MATOMO_IN_AI_ESI'] )
+			&& array_key_exists( 'REQUEST_TIME_FLOAT', $_SERVER )
+		) {
+			$requestElapsedMs = (int) ( ( microtime( true ) - $_SERVER['REQUEST_TIME_FLOAT'] ) * 1000 );
 		}
 
 		if ( empty( $responseCode ) ) {
@@ -177,10 +180,6 @@ class AIBotTracking {
 
 		$extension = pathinfo( $requestPath, PATHINFO_EXTENSION );
 		return ! in_array( $extension, self::$extensionsToTrack, true );
-	}
-
-	public static function setIsAiBotTracked($is_tracked ) {
-		self::$aiBotTracked = $is_tracked;
 	}
 
 	public function isJsExecutionDetected() {
