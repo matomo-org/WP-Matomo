@@ -56,6 +56,11 @@ class AIBotTracking {
 	private $settings;
 
 	/**
+	 * @var Logger
+	 */
+	private $logger;
+
+	/**
 	 * @var AjaxTracker
 	 */
 	private $tracker;
@@ -66,8 +71,7 @@ class AIBotTracking {
 	 */
 	public function __construct( Settings $settings, Logger $logger ) {
 		$this->settings = $settings;
-		$this->tracker  = new AjaxTracker( $settings, $logger );
-		$this->tracker->setRequestTimeout( 1 );
+		$this->logger   = $logger;
 	}
 
 	public function registerHooks() {
@@ -132,10 +136,12 @@ class AIBotTracking {
 			$url = AjaxTracker::getCurrentUrl();
 		}
 
-		$this->tracker->setUrl( $url );
+		$tracker = $this->getTracker();
+
+		$tracker->setUrl( $url );
 
 		// cannot count bytes echo'd so no response size tracked
-		$this->tracker->doTrackPageViewIfAIBot( $responseCode, null, $requestElapsedMs, $source );
+		$tracker->doTrackPageViewIfAIBot( $responseCode, null, $requestElapsedMs, $source );
 	}
 
 	public function shouldTrackCurrentPage() {
@@ -200,7 +206,8 @@ class AIBotTracking {
 			return false;
 		}
 
-		if ( ! AjaxTracker::isUserAgentAIBot( $this->tracker->userAgent ) ) {
+		$tracker = $this->getTracker();
+		if ( ! AjaxTracker::isUserAgentAIBot( $tracker->userAgent ) ) {
 			return false;
 		}
 
@@ -212,5 +219,14 @@ class AIBotTracking {
 		}
 
 		return true;
+	}
+
+	private function getTracker() {
+		if ( empty( $this->tracker ) ) {
+			$this->tracker  = new AjaxTracker( $this->settings, $this->logger );
+			$this->tracker->setRequestTimeout( 1 );
+		}
+
+		return $this->tracker;
 	}
 }
