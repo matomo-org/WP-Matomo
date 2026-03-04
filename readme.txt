@@ -1,4 +1,4 @@
-=== Connect Matomo (WP-Matomo, WP-Piwik) ===
+=== Connect Matomo - Analytics Dashboard for WordPress ===
 
 Contributors: Braekling
 Requires at least: 5.0
