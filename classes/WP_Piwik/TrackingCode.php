@@ -208,10 +208,10 @@ EOF;
 		$customVars = '';
 		for($i = 1; $i <= 5; $i ++) {
 			$postId = get_the_ID ();
-			$metaKey = get_post_meta ( $postId, 'wp-piwik_custom_cat' . $i, true );
-			$metaVal = get_post_meta ( $postId, 'wp-piwik_custom_val' . $i, true );
+			$metaKey = get_post_meta( $postId, 'wp-piwik_custom_cat' . $i, true );
+			$metaVal = get_post_meta( $postId, 'wp-piwik_custom_val' . $i, true );
 			if (! empty ( $metaKey ) && ! empty ( $metaVal ))
-				$customVars .= "_paq.push(['setCustomVariable'," . $i . ", '" . $metaKey . "', '" . $metaVal . "', 'page']);\n";
+				$customVars .= "_paq.push(['setCustomVariable'," . $i . ", " . json_encode( $metaKey ) . ", " . json_encode( $metaVal ) . ", 'page']);\n";
 		}
 		if (! empty ( $customVars ))
 			$this->trackingCode = str_replace ( "_paq.push(['trackPageView']);", $customVars . "_paq.push(['trackPageView']);", $this->trackingCode );

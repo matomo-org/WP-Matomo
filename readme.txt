@@ -3,13 +3,15 @@
 Contributors: Braekling
 Requires at least: 5.0
 Tested up to: 6.9.1
-Stable tag: 1.1.0
+Stable tag: 1.1.1
 Donate link: https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=6046779
 Tags: matomo, tracking, statistics, stats, analytics
 
 Adds Matomo (former Piwik) statistics to your WordPress dashboard and is also able to add the Matomo Tracking Code to your blog.
 
 == Description ==
+
+**Version 1.1.1 includes an important security related fix, it is highly recommended to update to this version.**
 
 If you are not yet using Matomo On-Premise, Matomo Cloud or hosting your own instance of Matomo, please use the [Matomo for WordPress plugin](https://wordpress.org/plugins/matomo/). 
 
@@ -144,6 +146,9 @@ Add WP-Matomo to your /wp-content/plugins folder and enable it as [Network Plugi
 5. Matomo: Here you'll find your auth token.
 
 == Changelog ==
+
+= 1.1.1 =
+* Security bug fix: convert custom variable name and values to JSON before using in tracking code.
 
 = 1.1.0 =
 * Support for tracking AI bots to Matomo.
