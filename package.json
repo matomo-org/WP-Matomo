@@ -1,0 +1,8 @@
+{
+  "scripts": {
+    "phpcs": "./vendor/bin/phpcs"
+  },
+  "devDependencies": {
+    "@fastify/pre-commit": "^2.2.1"
+  }
+}
