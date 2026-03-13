@@ -4,77 +4,81 @@ namespace WP_Piwik\Widget;
 
 use WP_Piwik\Widget;
 
-class Types extends Widget
-{
+class Types extends Widget {
 
-    public $className = __CLASS__;
 
-    protected function configure($prefix = '', $params = array())
-    {
-        $timeSettings = $this->getTimeSettings();
-        $this->parameter = array(
-            'idSite' => self::$wpPiwik->getPiwikSiteId($this->blogId),
-            'period' => $timeSettings['period'],
-            'date' => $timeSettings['date']
-        );
-        $this->title = $prefix . __('Types', 'wp-piwik') . ' (' . __($timeSettings['description'], 'wp-piwik') . ')';
-        $this->method = 'DevicesDetection.getType';
-        $this->context = 'normal';
-        wp_enqueue_script('wp-piwik', self::$wpPiwik->getPluginURL() . 'js/wp-piwik.js', array(), self::$wpPiwik->getPluginVersion(), true);
-        wp_enqueue_script('wp-piwik-chartjs', self::$wpPiwik->getPluginURL() . 'js/chartjs/chart.min.js', "3.4.1");
-        wp_enqueue_style('wp-piwik', self::$wpPiwik->getPluginURL() . 'css/wp-piwik.css', array(), self::$wpPiwik->getPluginVersion());
-    }
+	public $class_name = __CLASS__;
 
-    public function show()
-    {
-        $response = self::$wpPiwik->request($this->apiID[$this->method]);
-        $tableBody = array();
-        if (!empty($response['result']) && $response['result'] = 'error')
-            echo '<strong>' . __('Piwik error', 'wp-piwik') . ':</strong> ' . htmlentities($response['message'], ENT_QUOTES, 'utf-8');
-        else {
-            $tableHead = array(__('Type', 'wp-piwik'), __('Unique', 'wp-piwik'), __('Percent', 'wp-piwik'));
-            if (isset($response[0]['nb_uniq_visitors'])) {
-                $unique = 'nb_uniq_visitors';
-            } else {
-                $unique = 'sum_daily_nb_uniq_visitors';
-            }
-            $count = 0;
-            $sum = 0;
-            $js = array();
-            $class = array();
-            if (is_array($response))
-                foreach ($response as $row) {
-                    $key = isset($row[$unique]) ? $unique : "nb_visits";
-                    $count++;
-                    $sum += isset($row[$key]) ? $row[$key] : 0;
-                    if ($count < $this->limit)
-                        $tableBody[$row['label']] = array($row['label'], $row[$key], 0);
-                    elseif (!isset($tableBody['Others'])) {
-                        $tableBody['Others'] = array($row['label'], $row[$key], 0);
-                        $class['Others'] = 'wp-piwik-hideDetails';
-                        $js['Others'] = '$j' . "( '.wp-piwik-hideDetails' ).toggle( 'hidden' );";
-                        $tableBody[$row['label']] = array($row['label'], $row[$key], 0);
-                        $class[$row['label']] = 'wp-piwik-hideDetails hidden';
-                        $js[$row['label']] = '$j' . "( '.wp-piwik-hideDetails' ).toggle( 'hidden' );";
-                    } else {
-                        $tableBody['Others'][1] += $row[$key];
-                        $tableBody[$row['label']] = array($row['label'], $row[$key], 0);
-                        $class[$row['label']] = 'wp-piwik-hideDetails hidden';
-                        $js[$row['label']] = '$j' . "( '.wp-piwik-hideDetails' ).toggle( 'hidden' );";
-                    }
-                }
-            if ($count > $this->limit) {
-                $tableBody['Others'][0] = __('Others', 'wp-piwik');
-            } elseif ($count == $this->limit) {
-                $class['Others'] = $js['Others'] = '';
-            }
+	protected function configure( $prefix = '', $params = array() ) {
+		$time_settings   = $this->get_time_settings();
+		$this->parameter = array(
+			'idSite' => self::$wp_piwik->get_piwik_site_id( $this->blog_id ),
+			'period' => $time_settings['period'],
+			'date'   => $time_settings['date'],
+		);
+		$this->title     = $prefix . __( 'Types', 'wp-piwik' ) . ' (' . $time_settings['description'] . ')';
+		$this->method    = 'DevicesDetection.getType';
+		$this->context   = 'normal';
 
-            foreach ($tableBody as $key => $row)
-                $tableBody[$key][2] = number_format($row[1] / $sum * 100, 2) . '%';
+		$version = self::$wp_piwik->get_plugin_version();
+		wp_enqueue_script( 'wp-piwik', self::$wp_piwik->get_plugin_url() . 'js/wp-piwik.js', array(), $version, true );
+		wp_enqueue_script( 'wp-piwik-chartjs', self::$wp_piwik->get_plugin_url() . 'js/chartjs/chart.min.js', array(), $version, false );
+		wp_enqueue_style( 'wp-piwik', self::$wp_piwik->get_plugin_url() . 'css/wp-piwik.css', array(), $version );
+	}
 
-            if (!empty($tableBody)) $this->pieChart($tableBody);
-            $this->table($tableHead, $tableBody, null, false, $js, $class);
-        }
-    }
+	public function show() {
+		$response   = self::$wp_piwik->request( $this->api_id[ $this->method ] );
+		$table_body = array();
+		if ( ! empty( $response['result'] ) && 'error' === $response['result'] ) {
+			echo '<strong>' . esc_html__( 'Piwik error', 'wp-piwik' ) . ':</strong> ' . esc_html( $response['message'] );
+		} else {
+			$table_head = array( __( 'Type', 'wp-piwik' ), __( 'Unique', 'wp-piwik' ), __( 'Percent', 'wp-piwik' ) );
+			if ( isset( $response[0]['nb_uniq_visitors'] ) ) {
+				$unique = 'nb_uniq_visitors';
+			} else {
+				$unique = 'sum_daily_nb_uniq_visitors';
+			}
+			$count     = 0;
+			$sum       = 0;
+			$js        = array();
+			$css_class = array();
+			if ( is_array( $response ) ) {
+				foreach ( $response as $row ) {
+					$key = isset( $row[ $unique ] ) ? $unique : 'nb_visits';
+					++$count;
+					$sum += isset( $row[ $key ] ) ? $row[ $key ] : 0;
+					if ( $count < $this->limit ) {
+						$table_body[ $row['label'] ] = array( $row['label'], $row[ $key ], 0 );
+					} elseif ( ! isset( $table_body['Others'] ) ) {
+						$table_body['Others']        = array( $row['label'], $row[ $key ], 0 );
+						$css_class['Others']         = 'wp-piwik-hideDetails';
+						$js['Others']                = '$j' . "( '.wp-piwik-hideDetails' ).toggle( 'hidden' );";
+						$table_body[ $row['label'] ] = array( $row['label'], $row[ $key ], 0 );
+						$css_class[ $row['label'] ]  = 'wp-piwik-hideDetails hidden';
+						$js[ $row['label'] ]         = '$j' . "( '.wp-piwik-hideDetails' ).toggle( 'hidden' );";
+					} else {
+						$table_body['Others'][1]    += $row[ $key ];
+						$table_body[ $row['label'] ] = array( $row['label'], $row[ $key ], 0 );
+						$css_class[ $row['label'] ]  = 'wp-piwik-hideDetails hidden';
+						$js[ $row['label'] ]         = '$j' . "( '.wp-piwik-hideDetails' ).toggle( 'hidden' );";
+					}
+				}
+			}
+			if ( $count > $this->limit ) {
+				$table_body['Others'][0] = __( 'Others', 'wp-piwik' );
+			} elseif ( $count === $this->limit ) {
+				$css_class['Others'] = '';
+				$js['Others']        = '';
+			}
 
+			foreach ( $table_body as $key => $row ) {
+				$table_body[ $key ][2] = number_format( $row[1] / $sum * 100, 2 ) . '%';
+			}
+
+			if ( ! empty( $table_body ) ) {
+				$this->pie_chart( $table_body );
+			}
+			$this->table( $table_head, $table_body, null, false, $js, $css_class );
+		}
+	}
 }

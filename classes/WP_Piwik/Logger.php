@@ -1,58 +1,57 @@
 <?php
 
-	namespace WP_Piwik;
+namespace WP_Piwik;
 
-	abstract class Logger {
+abstract class Logger {
 
-		private $loggerName = 'unnamed';
-		private $loggerContent = array();
-		private $startMicrotime = null;
+	private $logger_name     = 'unnamed';
+	private $logger_content  = array();
+	private $start_microtime = null;
 
-		abstract function loggerOutput($loggerTime, $loggerMessage);
+	abstract public function logger_output( $logger_time, $logger_message );
 
-		public function __construct($loggerName) {
-			$this->setName($loggerName);
-			$this->setStartMicrotime(microtime(true));
-			$this->log('Logging started -------------------------------');
-		}
-
-		public static function makeLogger() {
-			switch (WP_PIWIK_ACTIVATE_LOGGER) {
-				case 1 :
-					return new \WP_Piwik\Logger\Screen ( __CLASS__ );
-				case 2 :
-					return new \WP_Piwik\Logger\File ( __CLASS__ );
-				default :
-					return new \WP_Piwik\Logger\Dummy ( __CLASS__ );
-			}
-		}
-
-		public function __destruct() {
-			$this->log('Logging finished ------------------------------');
-		}
-
-		public function log($loggerMessage) {
-			$this->loggerOutput($this->getElapsedMicrotime(), $loggerMessage);
-		}
-
-		private function setName($loggerName) {
-			$this->loggerName = $loggerName;
-		}
-
-		public function getName() {
-			return $this->loggerName;
-		}
-
-		private function setStartMicrotime($startMicrotime) {
-			$this->startMicrotime = $startMicrotime;
-		}
-
-		public function getStartMicrotime() {
-			return $this->startMicrotime;
-		}
-
-		public function getElapsedMicrotime() {
-			return microtime(true) - $this->getStartMicrotime();
-		}
-
+	public function __construct( $logger_name ) {
+		$this->set_name( $logger_name );
+		$this->set_start_microtime( microtime( true ) );
+		$this->log( 'Logging started -------------------------------' );
 	}
+
+	public static function make_logger() {
+		switch ( WP_PIWIK_ACTIVATE_LOGGER ) {
+			case 1:
+				return new \WP_Piwik\Logger\Screen( __CLASS__ );
+			case 2:
+				return new \WP_Piwik\Logger\File( __CLASS__ );
+			default:
+				return new \WP_Piwik\Logger\Dummy( __CLASS__ );
+		}
+	}
+
+	public function __destruct() {
+		$this->log( 'Logging finished ------------------------------' );
+	}
+
+	public function log( $logger_message ) {
+		$this->logger_output( $this->get_elapsed_microtime(), $logger_message );
+	}
+
+	private function set_name( $logger_name ) {
+		$this->logger_name = $logger_name;
+	}
+
+	public function get_name() {
+		return $this->logger_name;
+	}
+
+	private function set_start_microtime( $start_microtime ) {
+		$this->start_microtime = $start_microtime;
+	}
+
+	public function get_start_microtime() {
+		return $this->start_microtime;
+	}
+
+	public function get_elapsed_microtime() {
+		return microtime( true ) - $this->get_start_microtime();
+	}
+}

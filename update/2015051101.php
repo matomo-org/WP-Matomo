@@ -1,41 +1,55 @@
 <?php
+/**
+ * @package wp-piwik
+ * phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
+ */
 
 // Get & delete old version's options
-if (self::$settings->checkNetworkActivation ()) {
-	$oldGlobalOptions = get_site_option ( 'wp-piwik_global-settings', array () );
-	delete_site_option('wp-piwik_global-settings');
+if ( self::$settings->check_network_activation() ) {
+	$old_global_options = get_site_option( 'wp-piwik_global-settings', array() );
+	delete_site_option( 'wp-piwik_global-settings' );
 } else {
-	$oldGlobalOptions = get_option ( 'wp-piwik_global-settings', array () );
-	delete_option('wp-piwik_global-settings');
+	$old_global_options = get_option( 'wp-piwik_global-settings', array() );
+	delete_option( 'wp-piwik_global-settings' );
 }
 
-$oldOptions = get_option ( 'wp-piwik_settings', array () );
-delete_option('wp-piwik_settings');
-	
-if (self::$settings->checkNetworkActivation ()) {
+$old_options = get_option( 'wp-piwik_settings', array() );
+delete_option( 'wp-piwik_settings' );
+
+if ( self::$settings->check_network_activation() ) {
 	global $wpdb;
-	$aryBlogs = \WP_Piwik\Settings::getBlogList();
-	if (is_array($aryBlogs))
-		foreach ($aryBlogs as $aryBlog) {
-            $oldOptions = get_blog_option ( $aryBlog['blog_id'], 'wp-piwik_settings', array () );
-			if (!$this->isConfigured())
-				foreach ( $oldOptions as $key => $value )
-					self::$settings->setOption ( $key, $value, $aryBlog['blog_id'] );
-			delete_blog_option($aryBlog['blog_id'], 'wp-piwik_settings');
+	$ary_blogs = \WP_Piwik\Settings::get_blog_list();
+	if ( is_array( $ary_blogs ) ) {
+		foreach ( $ary_blogs as $ary_blog ) {
+			$old_options = get_blog_option( $ary_blog['blog_id'], 'wp-piwik_settings', array() );
+			if ( ! $this->is_configured() ) {
+				foreach ( $old_options as $key => $value ) {
+					self::$settings->set_option( $key, $value, $ary_blog['blog_id'] );
+				}
+			}
+			delete_blog_option( $ary_blog['blog_id'], 'wp-piwik_settings' );
 		}
+	}
 }
 
-if (!$this->isConfigured()) {
-	if (!$oldGlobalOptions['add_tracking_code']) $oldGlobalOptions['track_mode'] = 'disabled';
-	elseif (!$oldGlobalOptions['track_mode']) $oldGlobalOptions['track_mode'] = 'default';
-	elseif ($oldGlobalOptions['track_mode'] == 1) $oldGlobalOptions['track_mode'] = 'js';
-	elseif ($oldGlobalOptions['track_mode'] == 2) $oldGlobalOptions['track_mode'] = 'proxy';
+if ( ! $this->is_configured() ) {
+	if ( ! $old_global_options['add_tracking_code'] ) {
+		$old_global_options['track_mode'] = 'disabled';
+	} elseif ( ! $old_global_options['track_mode'] ) {
+		$old_global_options['track_mode'] = 'default';
+	} elseif ( 1 === (int) $old_global_options['track_mode'] ) {
+		$old_global_options['track_mode'] = 'js';
+	} elseif ( 2 === (int) $old_global_options['track_mode'] ) {
+		$old_global_options['track_mode'] = 'proxy';
+	}
 
 	// Store old values in new settings
-	foreach ( $oldGlobalOptions as $key => $value )
-		self::$settings->setGlobalOption ( $key, $value );
-	foreach ( $oldOptions as $key => $value )
-		self::$settings->setOption ( $key, $value );
+	foreach ( $old_global_options as $key => $value ) {
+		self::$settings->set_global_option( $key, $value );
+	}
+	foreach ( $old_options as $key => $value ) {
+		self::$settings->set_option( $key, $value );
+	}
 }
 
-self::$settings->save ();
+self::$settings->save();

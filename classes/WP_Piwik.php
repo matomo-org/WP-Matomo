@@ -10,33 +10,38 @@ use WP_Piwik\Widget\Post;
  */
 class WP_Piwik {
 
-	private static $revisionId = 2023092201;
-	private static $version = '1.0.31';
+	private static $revision_id = 2023092201;
+	private static $version     = '1.0.31';
 	private static $blog_id;
-	private static $pluginBasename = NULL;
+	private static $plugin_basename = null;
 	private static $logger;
+
+	/**
+	 * @var \WP_Piwik\Admin\Settings
+	 */
 	private static $settings;
+
 	private static $request;
-	private static $optionsPageId;
+	private static $options_page_id;
 
-    public $statsPageId;
+	public $stats_page_id;
 
-    /**
+	/**
 	 * Constructor class to configure and register all WP-Piwik components
 	 */
 	public function __construct() {
 		global $blog_id;
-		self::$blog_id = (isset ( $blog_id ) ? $blog_id : 'n/a');
-		$this->openLogger();
-		$this->openSettings();
+		self::$blog_id = ( isset( $blog_id ) ? $blog_id : 'n/a' );
+		$this->open_logger();
+		$this->open_settings();
 		$this->setup();
-		$this->addFilters();
-		$this->addActions();
-		$this->addShortcodes();
-		$this->setUpAiBotTracking();
+		$this->add_filters();
+		$this->add_actions();
+		$this->add_shortcodes();
+		$this->set_up_ai_bot_tracking();
 	}
 
-	public static function getSettings() {
+	public static function get_settings() {
 		return self::$settings;
 	}
 
@@ -44,153 +49,237 @@ class WP_Piwik {
 	 * Destructor class to finish logging
 	 */
 	public function __destruct() {
-		$this->closeLogger ();
+		$this->close_logger();
 	}
 
 	/**
 	 * Setup class to prepare settings and check for installation and update
 	 */
 	private function setup() {
-		self::$pluginBasename = plugin_basename ( __FILE__ );
-		if (! $this->isInstalled ())
-			$this->installPlugin ();
-		elseif ($this->isUpdated ())
-			$this->updatePlugin ();
-		if ($this->isConfigSubmitted ())
-			$this->applySettings ();
-		self::$settings->save ();
+		self::$plugin_basename = plugin_basename( __FILE__ );
+		if ( ! $this->is_installed() ) {
+			$this->install_plugin();
+		} elseif ( $this->is_updated() ) {
+			$this->update_plugin();
+		}
+		if ( $this->is_config_submitted() ) {
+			$this->apply_settings();
+		}
+		self::$settings->save();
 	}
 
 	/**
 	 * Register WordPress actions
 	 */
-	private function addActions() {
-		if ( is_admin () ) {
-			add_action ( 'admin_menu', array (
+	private function add_actions() {
+		if ( is_admin() ) {
+			add_action(
+				'admin_menu',
+				array(
 					$this,
-					'buildAdminMenu'
-			) );
-			add_action ( 'admin_post_save_wp-piwik_stats', array (
+					'build_admin_menu',
+				)
+			);
+			add_action(
+				'admin_post_save_wp-piwik_stats',
+				array(
 					$this,
-					'onStatsPageSaveChanges'
-			) );
-			add_action ( 'load-post.php', array (
+					'on_stats_page_save_changes',
+				)
+			);
+			add_action(
+				'load-post.php',
+				array(
 					$this,
-					'addPostMetaboxes'
-			) );
-			add_action ( 'load-post-new.php', array (
+					'add_post_metaboxes',
+				)
+			);
+			add_action(
+				'load-post-new.php',
+				array(
 					$this,
-					'addPostMetaboxes'
-			) );
-			if ($this->isNetworkMode ()) {
-				add_action ( 'network_admin_notices', array (
+					'add_post_metaboxes',
+				)
+			);
+			if ( $this->is_network_mode() ) {
+				add_action(
+					'network_admin_notices',
+					array(
 						$this,
-						'showNotices'
-				) );
-				add_action ( 'network_admin_menu', array (
+						'show_notices',
+					)
+				);
+				add_action(
+					'network_admin_menu',
+					array(
 						$this,
-						'buildNetworkAdminMenu'
-				) );
-				add_action ( 'update_site_option_blogname', array (
+						'build_network_admin_menu',
+					)
+				);
+				add_action(
+					'update_site_option_blogname',
+					array(
 						$this,
-						'onBlogNameChange'
-				) );
-				add_action ( 'update_site_option_siteurl', array (
+						'on_blog_name_change',
+					)
+				);
+				add_action(
+					'update_site_option_siteurl',
+					array(
 						$this,
-						'onSiteUrlChange'
-				) );
+						'on_site_url_change',
+					)
+				);
 			} else {
-				add_action ( 'admin_notices', array (
+				add_action(
+					'admin_notices',
+					array(
 						$this,
-						'showNotices'
-				) );
-				add_action ( 'update_option_blogname', array (
+						'show_notices',
+					)
+				);
+				add_action(
+					'update_option_blogname',
+					array(
 						$this,
-						'onBlogNameChange'
-				) );
-				add_action ( 'update_option_siteurl', array (
+						'on_blog_name_change',
+					)
+				);
+				add_action(
+					'update_option_siteurl',
+					array(
 						$this,
-						'onSiteUrlChange'
-				) );
+						'on_site_url_change',
+					)
+				);
 			}
-			if ($this->isDashboardActive ())
-				add_action ( 'wp_dashboard_setup', array (
+			if ( $this->is_dashboard_active() ) {
+				add_action(
+					'wp_dashboard_setup',
+					array(
 						$this,
-						'extendWordPressDashboard'
-				) );
+						'extend_word_press_dashboard',
+					)
+				);
+			}
 		}
-		if ($this->isToolbarActive ()) {
-			add_action ( is_admin () ? 'admin_head' : 'wp_head', array (
+		if ( $this->is_toolbar_active() ) {
+			add_action(
+				is_admin() ? 'admin_head' : 'wp_head',
+				array(
 					$this,
-					'loadToolbarRequirements'
-			) );
-			add_action ( 'admin_bar_menu', array (
+					'load_toolbar_requirements',
+				)
+			);
+			add_action(
+				'admin_bar_menu',
+				array(
 					$this,
-					'extendWordPressToolbar'
-			), 1000 );
+					'extend_word_press_toolbar',
+				),
+				1000
+			);
 		}
-		if ($this->isTrackingActive ()) {
-			if ( !is_admin () || $this->isAdminTrackingActive ()) {
-			    $prefix = is_admin ()?'admin':'wp';
-				add_action ( self::$settings->getGlobalOption ( 'track_codeposition' ) == 'footer' ? $prefix.'_footer' : $prefix.'_head', array (
+		if ( $this->is_tracking_active() ) {
+			if ( ! is_admin() || $this->is_admin_tracking_active() ) {
+				$prefix = is_admin() ? 'admin' : 'wp';
+				add_action(
+					'footer' === self::$settings->get_global_option( 'track_codeposition' ) ? $prefix . '_footer' : $prefix . '_head',
+					array(
 						$this,
-						'addJavascriptCode'
-					) );
-                if (self::$settings->getGlobalOption ( 'dnsprefetch' ))
-                    add_action ( $prefix.'_head', array (
-                        $this,
-                        'addDNSPrefetchTag'
-                    ) );
-				if ($this->isAddNoScriptCode ())
-					add_action ( $prefix.'_footer', array (
+						'add_javascript_code',
+					)
+				);
+				if ( self::$settings->get_global_option( 'dnsprefetch' ) ) {
+					add_action(
+						$prefix . '_head',
+						array(
 							$this,
-							'addNoscriptCode'
-					) );
+							'add_dns_prefetch_tag',
+						)
+					);
+				}
+				if ( $this->is_add_no_script_code() ) {
+					add_action(
+						$prefix . '_footer',
+						array(
+							$this,
+							'add_noscript_code',
+						)
+					);
+				}
 			}
-			if (self::$settings->getGlobalOption ( 'add_post_annotations' ))
-				add_action ( 'transition_post_status', array (
+			if ( self::$settings->get_global_option( 'add_post_annotations' ) ) {
+				add_action(
+					'transition_post_status',
+					array(
 						$this,
-						'addPiwikAnnotation'
-				), 10, 3 );
+						'add_piwik_annotation',
+					),
+					10,
+					3
+				);
+			}
 		}
-
 	}
 
 	/**
 	 * Register WordPress filters
 	 */
-	private function addFilters() {
-		if (is_admin()) {
-			add_filter ( 'plugin_row_meta', array (
+	private function add_filters() {
+		if ( is_admin() ) {
+			add_filter(
+				'plugin_row_meta',
+				array(
 					$this,
-					'setPluginMeta'
-			), 10, 2 );
-			add_filter ( 'screen_layout_columns', array (
+					'set_plugin_meta',
+				),
+				10,
+				2
+			);
+			add_filter(
+				'screen_layout_columns',
+				array(
 					$this,
-					'onScreenLayoutColumns'
-			), 10, 2 );
-		} elseif ($this->isTrackingActive ()) {
-			if ($this->isTrackFeed ()) {
-				add_filter ( 'the_excerpt_rss', array (
+					'on_screen_layout_columns',
+				),
+				10,
+				2
+			);
+		} elseif ( $this->is_tracking_active() ) {
+			if ( $this->is_track_feed() ) {
+				add_filter(
+					'the_excerpt_rss',
+					array(
 						$this,
-						'addFeedTracking'
-				) );
-				add_filter ( 'the_content', array (
+						'add_feed_tracking',
+					)
+				);
+				add_filter(
+					'the_content',
+					array(
 						$this,
-						'addFeedTracking'
-				) );
+						'add_feed_tracking',
+					)
+				);
 			}
-			if ($this->isAddFeedCampaign ()) {
-				add_filter ( 'post_link', array (
+			if ( $this->is_add_feed_campaign() ) {
+				add_filter(
+					'post_link',
+					array(
 						$this,
-						'addFeedCampaign'
-				) );
+						'add_feed_campaign',
+					)
+				);
 			}
-			if ($this->isCrossDomainLinkingEnabled ()) {
-				add_filter ( 'wp_redirect', array (
-					$this,
-					'forwardCrossDomainVisitorId'
-				) );
+			if ( $this->is_cross_domain_linking_enabled() ) {
+				add_filter(
+					'wp_redirect',
+					array(
+						$this,
+						'forward_cross_domain_visitor_id',
+					)
+				);
 			}
 		}
 	}
@@ -198,99 +287,117 @@ class WP_Piwik {
 	/**
 	 * Register WordPress shortcodes
 	 */
-	private function addShortcodes() {
-		if ($this->isAddShortcode ())
-			add_shortcode ( 'wp-piwik', array (
+	private function add_shortcodes() {
+		if ( $this->is_add_shortcode() ) {
+			add_shortcode(
+				'wp-piwik',
+				array(
 					$this,
-					'shortcode'
-			) );
+					'shortcode',
+				)
+			);
+		}
 	}
 
 	/**
 	 * Install WP-Piwik for the first time
 	 */
-	private function installPlugin($isUpdate = false) {
-		self::$logger->log ( 'Running Connect Matomo installation' );
-		if (! $isUpdate)
-			$this->addNotice ( 'install', sprintf ( __ ( '%s %s installed.', 'wp-piwik' ), self::$settings->getNotEmptyGlobalOption ( 'plugin_display_name' ), self::$version ), __ ( 'Next you should connect to Matomo', 'wp-piwik' ) );
-		self::$settings->setGlobalOption ( 'revision', self::$revisionId );
-		self::$settings->setGlobalOption ( 'last_settings_update', time () );
+	private function install_plugin( $is_update = false ) {
+		self::$logger->log( 'Running Connect Matomo installation' );
+		if ( ! $is_update ) {
+			$this->add_notice( 'install', sprintf( __( '%1$s %2$s installed.', 'wp-piwik' ), self::$settings->get_not_empty_global_option( 'plugin_display_name' ), self::$version ), __( 'Next you should connect to Matomo', 'wp-piwik' ) );
+		}
+		self::$settings->set_global_option( 'revision', self::$revision_id );
+		self::$settings->set_global_option( 'last_settings_update', time() );
 	}
 
 	/**
 	 * Uninstall WP-Piwik
 	 */
-	public function uninstallPlugin() {
-		self::$logger->log ( 'Running Connect Matomo uninstallation' );
-		if (! defined ( 'WP_UNINSTALL_PLUGIN' ))
-			exit ();
-		self::deleteWordPressOption ( 'wp-piwik-notices' );
-		self::$settings->resetSettings ( true );
+	public function uninstall_plugin() {
+		self::$logger->log( 'Running Connect Matomo uninstallation' );
+		if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
+			exit();
+		}
+		self::delete_word_press_option( 'wp-piwik-notices' );
+		self::$settings->resetSettings( true );
 	}
 
 	/**
 	 * Update WP-Piwik
 	 */
-	private function updatePlugin() {
-		self::$logger->log ( 'Upgrade Connect Matomo to ' . self::$version );
-		$patches = glob ( dirname ( __FILE__ ) . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'update' . DIRECTORY_SEPARATOR . '*.php' );
-		$isPatched = false;
-		if (is_array ( $patches )) {
-			sort ( $patches );
+	private function update_plugin() {
+		self::$logger->log( 'Upgrade Connect Matomo to ' . self::$version );
+		$patches    = glob( __DIR__ . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'update' . DIRECTORY_SEPARATOR . '*.php' );
+		$is_patched = false;
+		if ( is_array( $patches ) ) {
+			sort( $patches );
 			foreach ( $patches as $patch ) {
-				$patchVersion = ( int ) pathinfo ( $patch, PATHINFO_FILENAME );
-				if ($patchVersion && self::$settings->getGlobalOption ( 'revision' ) < $patchVersion) {
-					self::includeFile ( 'update' . DIRECTORY_SEPARATOR . $patchVersion );
-					$isPatched = true;
+				$patch_version = (int) pathinfo( $patch, PATHINFO_FILENAME );
+				if ( $patch_version && self::$settings->get_global_option( 'revision' ) < $patch_version ) {
+					self::include_file( 'update' . DIRECTORY_SEPARATOR . $patch_version );
+					$is_patched = true;
 				}
 			}
 		}
-		if ((self::$settings->getGlobalOption('update_notice') == 'enabled') || ((self::$settings->getGlobalOption('update_notice') == 'script') && $isPatched))
-			$this->addNotice ( 'update', sprintf ( __ ( '%s updated to %s.', 'wp-piwik' ), self::$settings->getNotEmptyGlobalOption ( 'plugin_display_name' ), self::$version ), __ ( 'Please validate your configuration', 'wp-piwik' ) );
-		$this->installPlugin ( true );
+		if (
+			'enabled' === self::$settings->get_global_option( 'update_notice' )
+			|| ( 'script' === self::$settings->get_global_option( 'update_notice' ) && $is_patched )
+		) {
+			$this->add_notice( 'update', sprintf( __( '%1$s updated to %2$s.', 'wp-piwik' ), self::$settings->get_not_empty_global_option( 'plugin_display_name' ), self::$version ), __( 'Please validate your configuration', 'wp-piwik' ) );
+		}
+		$this->install_plugin( true );
 	}
 
 	/**
 	 * Define a notice
 	 *
-	 * @param string $type
-	 *        	identifier
-	 * @param string $subject
-	 *        	notice headline
-	 * @param string $text
-	 *        	notice content
+	 * @param string  $type
+	 *          identifier
+	 * @param string  $subject
+	 *          notice headline
+	 * @param string  $text
+	 *          notice content
 	 * @param boolean $stay
-	 *        	set to true if the message should persist (default: false)
+	 *          set to true if the message should persist (default: false)
 	 */
-	private function addNotice($type, $subject, $text, $stay = false) {
-		$notices = $this->getWordPressOption ( 'wp-piwik-notices', array () );
-		$notices [$type] = array (
-				'subject' => $subject,
-				'text' => $text,
-				'stay' => $stay
+	private function add_notice( $type, $subject, $text, $stay = false ) {
+		$notices          = $this->get_word_press_option( 'wp-piwik-notices', array() );
+		$notices[ $type ] = array(
+			'subject' => $subject,
+			'text'    => $text,
+			'stay'    => $stay,
 		);
-		$this->updateWordPressOption ( 'wp-piwik-notices', $notices );
+		$this->update_word_press_option( 'wp-piwik-notices', $notices );
 	}
 
 	/**
 	 * Show all notices defined previously
 	 *
-	 * @see addNotice()
+	 * @see add_notice()
 	 */
-	public function showNotices() {
-		$link = sprintf ( '<a href="' . $this->getSettingsURL () . '">%s</a>', __ ( 'Settings', 'wp-piwik' ) );
-		if ($notices = $this->getWordPressOption ( 'wp-piwik-notices' )) {
-			if (!is_array ( $notices )) {
-				$notices = [];
+	public function show_notices() {
+		$notices = $this->get_word_press_option( 'wp-piwik-notices' );
+		if ( ! empty( $notices ) ) {
+			if ( ! is_array( $notices ) ) {
+				$notices = array();
 			}
 
 			foreach ( $notices as $type => $notice ) {
-				printf ( '<div class="updated fade"><p>%s <strong>%s:</strong> %s: %s</p></div>', $notice ['subject'], __ ( 'Important', 'wp-piwik' ), $notice ['text'], $link );
-				if (! $notice ['stay'])
-					unset ( $notices [$type] );
+				printf(
+					'<div class="updated fade"><p>%s <strong>%s:</strong> %s: <a href="%s">%s</a></p></div>',
+					esc_html( $notice ['subject'] ),
+					esc_html__( 'Important', 'wp-piwik' ),
+					esc_html( $notice ['text'] ),
+					esc_attr( $this->get_settings_url() ),
+					esc_html__( 'Settings', 'wp-piwik' )
+				);
+				if ( ! $notice ['stay'] ) {
+					unset( $notices [ $type ] );
+				}
 			}
 		}
-		$this->updateWordPressOption ( 'wp-piwik-notices', $notices );
+		$this->update_word_press_option( 'wp-piwik-notices', $notices );
 	}
 
 	/**
@@ -298,299 +405,376 @@ class WP_Piwik {
 	 *
 	 * @return string settings page URL
 	 */
-	private function getSettingsURL() {
-		return (self::$settings->checkNetworkActivation () ? 'settings' : 'options-general') . '.php?page=' . self::$pluginBasename;
+	private function get_settings_url() {
+		return ( self::$settings->check_network_activation() ? 'settings' : 'options-general' ) . '.php?page=' . self::$plugin_basename;
 	}
 
 	/**
 	 * Echo javascript tracking code
 	 */
-	public function addJavascriptCode() {
-		if ($this->isHiddenUser ()) {
-			self::$logger->log ( 'Do not add tracking code to site (user should not be tracked) Blog ID: ' . self::$blog_id . ' Site ID: ' . self::$settings->getOption ( 'site_id' ) );
+	public function add_javascript_code() {
+		if ( $this->is_hidden_user() ) {
+			self::$logger->log( 'Do not add tracking code to site (user should not be tracked) Blog ID: ' . self::$blog_id . ' Site ID: ' . self::$settings->get_option( 'site_id' ) );
 			return;
 		}
-		$trackingCode = new WP_Piwik\TrackingCode ( $this );
-		$trackingCode->is404 = (is_404 () && self::$settings->getGlobalOption ( 'track_404' ));
-		$trackingCode->isUsertracking = self::$settings->getGlobalOption ( 'track_user_id' ) != 'disabled';
-		$trackingCode->isSearch = (is_search () && self::$settings->getGlobalOption ( 'track_search' ));
-		self::$logger->log ( 'Add tracking code. Blog ID: ' . self::$blog_id . ' Site ID: ' . self::$settings->getOption ( 'site_id' ) );
-		if ($this->isNetworkMode () && self::$settings->getGlobalOption ( 'track_mode' ) == 'manually') {
-			$siteId = $this->getPiwikSiteId ();
-			if ($siteId != 'n/a')
-				echo str_replace ( '{ID}', $siteId, $trackingCode->getTrackingCode () );
-			else
+		$tracking_code                  = new WP_Piwik\TrackingCode( $this );
+		$tracking_code->is_404          = ( is_404() && self::$settings->get_global_option( 'track_404' ) );
+		$tracking_code->is_usertracking = 'disabled' !== self::$settings->get_global_option( 'track_user_id' );
+		$tracking_code->is_search       = ( is_search() && self::$settings->get_global_option( 'track_search' ) );
+		self::$logger->log( 'Add tracking code. Blog ID: ' . self::$blog_id . ' Site ID: ' . self::$settings->get_option( 'site_id' ) );
+		if ( $this->is_network_mode() && 'manually' === self::$settings->get_global_option( 'track_mode' ) ) {
+			$site_id = $this->get_piwik_site_id();
+			if ( 'n/a' !== $site_id ) {
+				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+				echo str_replace( '{ID}', $site_id, $tracking_code->get_tracking_code() );
+			} else {
 				echo '<!-- Site will be created and tracking code added on next request -->';
-		} else
-			echo $trackingCode->getTrackingCode ();
+			}
+		} else {
+			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			echo $tracking_code->get_tracking_code();
+		}
 	}
 
-    /**
-     * Echo DNS prefetch tag
-     */
-    public function addDNSPrefetchTag() {
-        echo '<link rel="dns-prefetch" href="'.$this->getPiwikDomain().'" />';
-    }
+	/**
+	 * Echo DNS prefetch tag
+	 */
+	public function add_dns_prefetch_tag() {
+		echo '<link rel="dns-prefetch" href="' . esc_attr( $this->get_piwik_domain() ) . '" />';
+	}
 
-    /**
-     * Get Piwik Domain
-     */
-    public function getPiwikDomain() {
-        switch (self::$settings->getGlobalOption ( 'piwik_mode' )) {
-            case 'php' :
-                return '//' . parse_url(self::$settings->getGlobalOption ( 'proxy_url' ), PHP_URL_HOST);
-            case 'cloud' :
-                return '//' . self::$settings->getGlobalOption ( 'piwik_user' ) . '.innocraft.cloud';
-            case 'cloud-matomo' :
-                return '//' . self::$settings->getGlobalOption ( 'matomo_user' ) . '.matomo.cloud';
-            default :
-                return '//' . parse_url(self::$settings->getGlobalOption ( 'piwik_url' ), PHP_URL_HOST);
-        }
-    }
+	/**
+	 * Get Piwik Domain
+	 */
+	public function get_piwik_domain() {
+		switch ( self::$settings->get_global_option( 'piwik_mode' ) ) {
+			case 'php':
+				return '//' . wp_parse_url( self::$settings->get_global_option( 'proxy_url' ), PHP_URL_HOST );
+			case 'cloud':
+				return '//' . self::$settings->get_global_option( 'piwik_user' ) . '.innocraft.cloud';
+			case 'cloud-matomo':
+				return '//' . self::$settings->get_global_option( 'matomo_user' ) . '.matomo.cloud';
+			default:
+				return '//' . wp_parse_url( self::$settings->get_global_option( 'piwik_url' ), PHP_URL_HOST );
+		}
+	}
 
 	/**
 	 * Echo noscript tracking code
 	 */
-	public function addNoscriptCode() {
-		if (self::$settings->getGlobalOption ( 'track_mode' ) == 'proxy')
-			return;
-		if ($this->isHiddenUser ()) {
-			self::$logger->log ( 'Do not add noscript code to site (user should not be tracked) Blog ID: ' . self::$blog_id . ' Site ID: ' . self::$settings->getOption ( 'site_id' ) );
+	public function add_noscript_code() {
+		if ( 'proxy' === self::$settings->get_global_option( 'track_mode' ) ) {
 			return;
 		}
-		self::$logger->log ( 'Add noscript code. Blog ID: ' . self::$blog_id . ' Site ID: ' . self::$settings->getOption ( 'site_id' ) );
-		echo self::$settings->getOption ( 'noscript_code' ) . "\n";
+		if ( $this->is_hidden_user() ) {
+			self::$logger->log( 'Do not add noscript code to site (user should not be tracked) Blog ID: ' . self::$blog_id . ' Site ID: ' . self::$settings->get_option( 'site_id' ) );
+			return;
+		}
+		self::$logger->log( 'Add noscript code. Blog ID: ' . self::$blog_id . ' Site ID: ' . self::$settings->get_option( 'site_id' ) );
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		echo self::$settings->get_option( 'noscript_code' ) . "\n";
 	}
 
 	/**
 	 * Register post view meta boxes
 	 */
-	public function addPostMetaboxes() {
-		if (self::$settings->getGlobalOption ( 'add_customvars_box' )) {
-			add_action ( 'add_meta_boxes', array (
-					new WP_Piwik\Template\MetaBoxCustomVars ( $this, self::$settings ),
-					'addMetabox'
-			) );
-			add_action ( 'save_post', array (
-					new WP_Piwik\Template\MetaBoxCustomVars ( $this, self::$settings ),
-					'saveCustomVars'
-			), 10, 2 );
+	public function add_post_metaboxes() {
+		if ( self::$settings->get_global_option( 'add_customvars_box' ) ) {
+			add_action(
+				'add_meta_boxes',
+				array(
+					new WP_Piwik\Template\MetaBoxCustomVars( $this, self::$settings ),
+					'addMetabox',
+				)
+			);
+			add_action(
+				'save_post',
+				array(
+					new WP_Piwik\Template\MetaBoxCustomVars( $this, self::$settings ),
+					'saveCustomVars',
+				),
+				10,
+				2
+			);
 		}
-		if (self::$settings->getGlobalOption ( 'perpost_stats' ) != "disabled") {
-			add_action ( 'add_meta_boxes', array (
+		if ( 'disabled' !== self::$settings->get_global_option( 'perpost_stats' ) ) {
+			add_action(
+				'add_meta_boxes',
+				array(
 					$this,
-					'onloadPostPage'
-			) );
+					'onload_post_page',
+				)
+			);
 		}
 	}
 
 	/**
 	 * Register admin menu components
 	 */
-	public function buildAdminMenu() {
-		if (self::isConfigured ()) {
+	public function build_admin_menu() {
+		if ( self::is_configured() ) {
 			$cap = 'wp-piwik_read_stats';
-			if (self::$settings->checkNetworkActivation ()) {
+			if ( self::$settings->check_network_activation() ) {
 				global $current_user;
-				$userRoles = $current_user->roles;
-				$allowed = self::$settings->getGlobalOption ( 'capability_read_stats' );
-				if (is_array($userRoles) && is_array($allowed))
-					foreach ($userRoles as $userRole)
-						if (isset( $allowed[$userRole] ) && $allowed[$userRole]) {
+				$user_roles = $current_user->roles;
+				$allowed    = self::$settings->get_global_option( 'capability_read_stats' );
+				if ( is_array( $user_roles ) && is_array( $allowed ) ) {
+					foreach ( $user_roles as $user_role ) {
+						if ( isset( $allowed[ $user_role ] ) && $allowed[ $user_role ] ) {
 							$cap = 'read';
 							break;
 						}
+					}
+				}
 			}
-			$statsPage = new WP_Piwik\Admin\Statistics ( $this, self::$settings );
-			$this->statsPageId = add_dashboard_page ( __ ( 'Matomo Statistics', 'wp-piwik' ), self::$settings->getNotEmptyGlobalOption ( 'plugin_display_name' ), $cap, 'wp-piwik_stats', array (
-					$statsPage,
-					'show'
-			) );
-			$this->loadAdminStatsHeader ( $this->statsPageId, $statsPage );
+			$stats_page          = new WP_Piwik\Admin\Statistics( $this, self::$settings );
+			$this->stats_page_id = add_dashboard_page(
+				__( 'Matomo Statistics', 'wp-piwik' ),
+				self::$settings->get_not_empty_global_option( 'plugin_display_name' ),
+				$cap,
+				'wp-piwik_stats',
+				array(
+					$stats_page,
+					'show',
+				)
+			);
+			$this->load_admin_stats_header( $this->stats_page_id, $stats_page );
 		}
-		if (! self::$settings->checkNetworkActivation ()) {
-			$optionsPage = new WP_Piwik\Admin\Settings ( $this, self::$settings );
-			self::$optionsPageId = add_options_page ( self::$settings->getNotEmptyGlobalOption ( 'plugin_display_name' ), self::$settings->getNotEmptyGlobalOption ( 'plugin_display_name' ), 'activate_plugins', __FILE__, array (
-					$optionsPage,
-					'show'
-			) );
-			$this->loadAdminSettingsHeader ( self::$optionsPageId, $optionsPage );
+		if ( ! self::$settings->check_network_activation() ) {
+			$options_page          = new WP_Piwik\Admin\Settings( $this, self::$settings );
+			self::$options_page_id = add_options_page(
+				self::$settings->get_not_empty_global_option( 'plugin_display_name' ),
+				self::$settings->get_not_empty_global_option( 'plugin_display_name' ),
+				'activate_plugins',
+				'wp-matomo-settings',
+				array(
+					$options_page,
+					'show',
+				)
+			);
+			$this->load_admin_settings_header( self::$options_page_id, $options_page );
 		}
 	}
 
 	/**
 	 * Register network admin menu components
 	 */
-	public function buildNetworkAdminMenu() {
-		if (self::isConfigured ()) {
-			$statsPage = new WP_Piwik\Admin\Network ( $this, self::$settings );
-			$this->statsPageId = add_dashboard_page ( __ ( 'Matomo Statistics', 'wp-piwik' ), self::$settings->getNotEmptyGlobalOption ( 'plugin_display_name' ), 'manage_sites', 'wp-piwik_stats', array (
-					$statsPage,
-					'show'
-			) );
-			$this->loadAdminStatsHeader ( $this->statsPageId, $statsPage );
+	public function build_network_admin_menu() {
+		if ( self::is_configured() ) {
+			$stats_page          = new WP_Piwik\Admin\Network( $this, self::$settings );
+			$this->stats_page_id = add_dashboard_page(
+				__( 'Matomo Statistics', 'wp-piwik' ),
+				self::$settings->get_not_empty_global_option( 'plugin_display_name' ),
+				'manage_sites',
+				'wp-piwik_stats',
+				array(
+					$stats_page,
+					'show',
+				)
+			);
+			$this->load_admin_stats_header( $this->stats_page_id, $stats_page );
 		}
-		$optionsPage = new WP_Piwik\Admin\Settings ( $this, self::$settings );
-		self::$optionsPageId = add_submenu_page ( 'settings.php', self::$settings->getNotEmptyGlobalOption ( 'plugin_display_name' ), self::$settings->getNotEmptyGlobalOption ( 'plugin_display_name' ), 'manage_sites', __FILE__, array (
-				$optionsPage,
-				'show'
-		) );
-		$this->loadAdminSettingsHeader ( self::$optionsPageId, $optionsPage );
+		$options_page          = new WP_Piwik\Admin\Settings( $this, self::$settings );
+		self::$options_page_id = add_submenu_page(
+			'settings.php',
+			self::$settings->get_not_empty_global_option( 'plugin_display_name' ),
+			self::$settings->get_not_empty_global_option( 'plugin_display_name' ),
+			'manage_sites',
+			'wp-matomo-settings',
+			array(
+				$options_page,
+				'show',
+			)
+		);
+		$this->load_admin_settings_header( self::$options_page_id, $options_page );
 	}
 
 	/**
 	 * Register admin header extensions for stats page
 	 *
-	 * @param $optionsPageId options
-	 *        	page id
-	 * @param $optionsPage options
-	 *        	page object
+	 * @param mixed $stats_page_id options page id
+	 * @param mixed $stats_page options page object
 	 */
-	public function loadAdminStatsHeader($statsPageId, $statsPage) {
-		add_action ( 'admin_print_scripts-' . $statsPageId, array (
-				$statsPage,
-				'printAdminScripts'
-		) );
-		add_action ( 'admin_print_styles-' . $statsPageId, array (
-				$statsPage,
-				'printAdminStyles'
-		) );
-		add_action ( 'load-' . $statsPageId, array (
+	public function load_admin_stats_header( $stats_page_id, $stats_page ) {
+		add_action(
+			'admin_print_scripts-' . $stats_page_id,
+			array(
+				$stats_page,
+				'print_admin_scripts',
+			)
+		);
+		add_action(
+			'admin_print_styles-' . $stats_page_id,
+			array(
+				$stats_page,
+				'print_admin_styles',
+			)
+		);
+		add_action(
+			'load-' . $stats_page_id,
+			array(
 				$this,
-				'onloadStatsPage'
-		) );
+				'onload_stats_page',
+			)
+		);
 	}
 
 	/**
 	 * Register admin header extensions for settings page
 	 *
-	 * @param $optionsPageId options
-	 *        	page id
-	 * @param $optionsPage options
-	 *        	page object
+	 * @param string $options_page_id options page id
+	 * @param mixed  $options_page options page object
 	 */
-	public function loadAdminSettingsHeader($optionsPageId, $optionsPage) {
-		add_action ( 'admin_head-' . $optionsPageId, array (
-				$optionsPage,
-				'extendAdminHeader'
-		) );
-		add_action ( 'admin_print_styles-' . $optionsPageId, array (
-				$optionsPage,
-				'printAdminStyles'
-		) );
+	public function load_admin_settings_header( $options_page_id, $options_page ) {
+		add_action(
+			'admin_head-' . $options_page_id,
+			array(
+				$options_page,
+				'extend_admin_header',
+			)
+		);
+		add_action(
+			'admin_print_styles-' . $options_page_id,
+			array(
+				$options_page,
+				'print_admin_styles',
+			)
+		);
 	}
 
 	/**
 	 * Register WordPress dashboard widgets
 	 */
-	public function extendWordPressDashboard() {
-		if (current_user_can ( 'wp-piwik_read_stats' )) {
-			if (self::$settings->getGlobalOption ( 'dashboard_widget' ) != 'disabled')
-				new WP_Piwik\Widget\Overview ( $this, self::$settings, 'dashboard', 'side', 'default', array (
-						'date' => self::$settings->getGlobalOption ( 'dashboard_widget' ),
-						'period' => 'day'
-				) );
-			if (self::$settings->getGlobalOption ( 'dashboard_chart' ))
-				new WP_Piwik\Widget\Chart ( $this, self::$settings );
-            if (self::$settings->getGlobalOption ( 'dashboard_ecommerce' ))
-                new WP_Piwik\Widget\Ecommerce ( $this, self::$settings );
-			if (self::$settings->getGlobalOption ( 'dashboard_seo' ))
-				new WP_Piwik\Widget\Seo ( $this, self::$settings );
+	public function extend_word_press_dashboard() {
+		if ( current_user_can( 'wp-piwik_read_stats' ) ) {
+			if ( 'disabled' !== self::$settings->get_global_option( 'dashboard_widget' ) ) {
+				new WP_Piwik\Widget\Overview(
+					$this,
+					self::$settings,
+					'dashboard',
+					'side',
+					'default',
+					array(
+						'date'   => self::$settings->get_global_option( 'dashboard_widget' ),
+						'period' => 'day',
+					)
+				);
+			}
+			if ( self::$settings->get_global_option( 'dashboard_chart' ) ) {
+				new WP_Piwik\Widget\Chart( $this, self::$settings );
+			}
+			if ( self::$settings->get_global_option( 'dashboard_ecommerce' ) ) {
+				new WP_Piwik\Widget\Ecommerce( $this, self::$settings );
+			}
+			if ( self::$settings->get_global_option( 'dashboard_seo' ) ) {
+				new WP_Piwik\Widget\Seo( $this, self::$settings );
+			}
 		}
 	}
 
 	/**
 	 * Register WordPress toolbar components
 	 */
-	public function extendWordPressToolbar($toolbar) {
-		if (current_user_can ( 'wp-piwik_read_stats' ) && is_admin_bar_showing ()) {
-			$id = WP_Piwik\Request::register ( 'VisitsSummary.getUniqueVisitors', array (
+	public function extend_word_press_toolbar( $toolbar ) {
+		if ( current_user_can( 'wp-piwik_read_stats' ) && is_admin_bar_showing() ) {
+			$id      = WP_Piwik\Request::register(
+				'VisitsSummary.getUniqueVisitors',
+				array(
 					'period' => 'day',
-					'date' => 'last30'
-			) );
-			$unique = $this->request ( $id );
-			$url = is_network_admin () ? $this->getSettingsURL () : false;
-			$content = is_network_admin () ? __('Configure WP-Matomo', 'wp-piwik') : '';
+					'date'   => 'last30',
+				)
+			);
+			$unique  = $this->request( $id );
+			$url     = is_network_admin() ? $this->get_settings_url() : false;
+			$content = is_network_admin() ? __( 'Configure WP-Matomo', 'wp-piwik' ) : '';
 			// Leave if result array does contain a message instead of valid data
-			if (isset($unique['result']))
-				$content .= '<!-- '.$unique['result'].': '.($unique['message']?$unique['message']:'...').' -->';
-			elseif (is_array ( $unique ) ) {
-			    $labels = "";
-			    for ($i = 0; $i < count($unique); $i++) {
-                    $labels .= $i.",";
-                }
-                ob_start();
-                ?>
-                    <div style="width:100px; height:100%;">
-                        <canvas id="wpPiwikSparkline" style="max-width:100%; max-height:100%;padding-top:4px; padding-bottom:4px;"></canvas>
-                    </div>
-                    <script>
-                        function showWpPiwikSparkline() {
-                            new Chart(document.getElementById('wpPiwikSparkline').getContext('2d'), {
-                                type: 'bar',
-                                data: {
-                                    labels: [<?php echo $labels; ?>],
-                                    datasets: [
-                                        {
-                                            borderColor: "rgb(240, 240, 241)",
-                                            backgroundColor: "rgb(240, 240, 241)",
-                                            borderWidth:1,
-                                            radius:0,
-                                            data: [<?php echo implode(',', $unique); ?>]
-                                        }
-                                    ]
-                                },
-                                options: {
-                                    responsive: true,
-                                    plugins: {
-                                        legend: { display: false },
-                                        tooltip: { enabled: false }
-                                    },
-                                    scales: {
-                                        y: { display: false },
-                                        x: { display: false }
-                                    }
-                                }
-                            });
-                        }
-                        jQuery(showWpPiwikSparkline);
-                    </script>
-                <?php
-                $content .= ob_get_contents();
-                ob_end_clean();
-				$url = $this->getStatsURL ();
+			if ( isset( $unique['result'] ) ) {
+				$content .= '<!-- ' . esc_html( $unique['result'] ) . ': ' . esc_html( $unique['message'] ? $unique['message'] : '...' ) . ' -->';
+			} elseif ( is_array( $unique ) ) {
+				$unique_count = count( $unique );
+
+				$labels = array();
+				for ( $i = 0; $i < $unique_count; $i++ ) {
+					$labels [] = $i;
+				}
+				ob_start();
+				?>
+					<div style="width:100px; height:100%;">
+						<canvas id="wpPiwikSparkline" style="max-width:100%; max-height:100%;padding-top:4px; padding-bottom:4px;"></canvas>
+					</div>
+					<script>
+						function showWpPiwikSparkline() {
+							new Chart(document.getElementById('wpPiwikSparkline').getContext('2d'), {
+								type: 'bar',
+								data: {
+									labels: <?php echo wp_json_encode( $labels ); ?>,
+									datasets: [
+										{
+											borderColor: "rgb(240, 240, 241)",
+											backgroundColor: "rgb(240, 240, 241)",
+											borderWidth:1,
+											radius:0,
+											data: <?php echo wp_json_encode( array_values( $unique ) ); ?>
+										}
+									]
+								},
+								options: {
+									responsive: true,
+									plugins: {
+										legend: { display: false },
+										tooltip: { enabled: false }
+									},
+									scales: {
+										y: { display: false },
+										x: { display: false }
+									}
+								}
+							});
+						}
+						jQuery(showWpPiwikSparkline);
+					</script>
+				<?php
+				$content .= ob_get_contents();
+				ob_end_clean();
+				$url = $this->get_stats_url();
 			}
-			$toolbar->add_menu ( array (
-				'id' => 'wp-piwik_stats',
-				'title' => $content,
-				'href' => $url
-			) );
+			$toolbar->add_menu(
+				array(
+					'id'    => 'wp-piwik_stats',
+					'title' => $content,
+					'href'  => $url,
+				)
+			);
 		}
 	}
 
 	/**
 	 * Add plugin meta data
 	 *
-	 * @param array $links
-	 *        	list of already defined plugin meta data
+	 * @param array  $links
+	 *          list of already defined plugin meta data
 	 * @param string $file
-	 *        	handled file
+	 *          handled file
 	 * @return array complete list of plugin meta data
 	 */
-	public function setPluginMeta($links, $file) {
-		if ($file == 'wp-piwik/wp-piwik.php' && (!$this->isNetworkMode () || is_network_admin()) )
-			return array_merge ( $links, array (
-					sprintf ( '<a href="%s">%s</a>', self::getSettingsURL (), __ ( 'Settings', 'wp-piwik' ) )
-			) );
+	public function set_plugin_meta( $links, $file ) {
+		if ( 'wp-piwik/wp-piwik.php' === $file && ( ! $this->is_network_mode() || is_network_admin() ) ) {
+			return array_merge(
+				$links,
+				array(
+					sprintf( '<a href="%s">%s</a>', esc_attr( self::get_settings_url() ), esc_html__( 'Settings', 'wp-piwik' ) ),
+				)
+			);
+		}
 		return $links;
 	}
 
 	/**
 	 * Prepare toolbar widget requirements
 	 */
-	public function loadToolbarRequirements() {
-		if (is_admin_bar_showing ()) {
-            wp_enqueue_script ( 'wp-piwik-chartjs', $this->getPluginURL () . 'js/chartjs/chart.min.js', "3.4.1" );
+	public function load_toolbar_requirements() {
+		if ( is_admin_bar_showing() ) {
+			wp_enqueue_script( 'wp-piwik-chartjs', $this->get_plugin_url() . 'js/chartjs/chart.min.js', array(), $this->get_plugin_version(), false );
 		}
 	}
 
@@ -598,34 +782,36 @@ class WP_Piwik {
 	 * Add tracking pixels to feed content
 	 *
 	 * @param string $content
-	 *        	post content
+	 *          post content
 	 * @return string post content extended by tracking pixel
 	 */
-	public function addFeedTracking($content) {
+	public function add_feed_tracking( $content ) {
 		global $post;
-		if (is_feed ()) {
-			self::$logger->log ( 'Add tracking image to feed entry.' );
-			if (! self::$settings->getOption ( 'site_id' )) {
-				$siteId = $this->requestPiwikSiteId ();
-				if ($siteId != 'n/a')
-					self::$settings->setOption ( 'site_id', $siteId );
-				else
+		if ( is_feed() ) {
+			self::$logger->log( 'Add tracking image to feed entry.' );
+			if ( ! self::$settings->get_option( 'site_id' ) ) {
+				$site_id = $this->request_piwik_site_id();
+				if ( 'n/a' !== $site_id ) {
+					self::$settings->set_option( 'site_id', $site_id );
+				} else {
 					return false;
+				}
 			}
-			$title = the_title ( null, null, false );
-			$posturl = get_permalink ( $post->ID );
-			$urlref = get_bloginfo ( 'rss2_url' );
-			if (self::$settings->getGlobalOption ( 'track_mode' ) == 'proxy')
-			    $url = plugins_url ( 'wp-piwik' ) . '/proxy/matomo.php';
-            else {
-                $url = self::$settings->getGlobalOption ( 'piwik_url' );
-                if (substr($url, -10, 10) == '/index.php')
-                    $url = str_replace('/index.php', '/matomo.php', $url);
-                else
-                    $url .= 'piwik.php';
-            }
-			$trackingImage = $url . '?idsite=' . self::$settings->getOption ( 'site_id' ) . '&amp;rec=1&amp;url=' . urlencode ( $posturl ) . '&amp;action_name=' . urlencode ( $title ) . '&amp;urlref=' . urlencode ( $urlref );
-			$content .= '<img src="' . $trackingImage . '" style="border:0;width:0;height:0" width="0" height="0" alt="" />';
+			$title   = the_title( null, null, false );
+			$posturl = get_permalink( $post->ID );
+			$urlref  = get_bloginfo( 'rss2_url' );
+			if ( 'proxy' === self::$settings->get_global_option( 'track_mode' ) ) {
+				$url = plugins_url( 'wp-piwik' ) . '/proxy/matomo.php';
+			} else {
+				$url = self::$settings->get_global_option( 'piwik_url' );
+				if ( '/index.php' === substr( $url, -10, 10 ) ) {
+					$url = str_replace( '/index.php', '/matomo.php', $url );
+				} else {
+					$url .= 'piwik.php';
+				}
+			}
+			$tracking_image = $url . '?idsite=' . self::$settings->get_option( 'site_id' ) . '&rec=1&url=' . rawurlencode( $posturl ) . '&action_name=' . rawurlencode( $title ) . '&urlref=' . rawurlencode( $urlref );
+			$content       .= '<img src="' . esc_attr( $tracking_image ) . '" style="border:0;width:0;height:0" width="0" height="0" alt="" />';
 		}
 		return $content;
 	}
@@ -634,35 +820,36 @@ class WP_Piwik {
 	 * Add a campaign parameter to feed permalink
 	 *
 	 * @param string $permalink
-	 *        	permalink
+	 *          permalink
 	 * @return string permalink extended by campaign parameter
 	 */
-	public function addFeedCampaign($permalink) {
+	public function add_feed_campaign( $permalink ) {
 		global $post;
-		if (is_feed ()) {
-			self::$logger->log ( 'Add campaign to feed permalink.' );
-			$sep = (strpos ( $permalink, '?' ) === false ? '?' : '&');
-			$permalink .= $sep . 'pk_campaign=' . urlencode ( self::$settings->getGlobalOption ( 'track_feed_campaign' ) ) . '&pk_kwd=' . urlencode ( $post->post_name );
+		if ( is_feed() ) {
+			self::$logger->log( 'Add campaign to feed permalink.' );
+			$sep        = ( false === strpos( $permalink, '?' ) ? '?' : '&' );
+			$permalink .= $sep . 'pk_campaign=' . rawurlencode( self::$settings->get_global_option( 'track_feed_campaign' ) ) . '&pk_kwd=' . rawurlencode( $post->post_name );
 		}
 		return $permalink;
 	}
 
 	/**
 	 * Forwards the cross domain parameter pk_vid if the URL parameter is set and a user is about to be redirected.
-     * When another website links to WooCommerce with a pk_vid parameter, and WooCommerce redirects the user to another
-     * URL, the pk_vid parameter would get lost and the visitorId would later not be applied by the tracking code
-     * due to the lost pk_vid URL parameter. If the URL parameter is set, we make sure to forward this parameter.
+	 * When another website links to WooCommerce with a pk_vid parameter, and WooCommerce redirects the user to another
+	 * URL, the pk_vid parameter would get lost and the visitorId would later not be applied by the tracking code
+	 * due to the lost pk_vid URL parameter. If the URL parameter is set, we make sure to forward this parameter.
 	 *
 	 * @param string $location
 	 *
 	 * @return string location extended by pk_vid URL parameter if the URL parameter is set
 	 */
-	public function forwardCrossDomainVisitorId($location) {
-
-		if (!empty($_GET['pk_vid'])
-			&& preg_match('/^[a-zA-Z0-9]{24,48}$/', $_GET['pk_vid'])) {
+	public function forward_cross_domain_visitor_id( $location ) {
+		$pk_vid = ! empty( $_GET['pk_vid'] ) ? sanitize_key( wp_unslash( $_GET['pk_vid'] ) ) : null;
+		if ( ! empty( $pk_vid )
+			&& preg_match( '/^[a-zA-Z0-9]{24,48}$/', $pk_vid )
+		) {
 			// currently, the pk_vid parameter is 32 characters long, but it may vary over time.
-			$location = add_query_arg( 'pk_vid', $_GET['pk_vid'], $location );
+			$location = add_query_arg( 'pk_vid', $pk_vid, $location );
 		}
 
 		return $location;
@@ -672,11 +859,15 @@ class WP_Piwik {
 	 * Apply settings update
 	 *
 	 * @return boolean settings update applied
+	 * @phpcs:disable WordPress.Security.NonceVerification.Missing
 	 */
-	private function applySettings() {
-		self::$settings->applyChanges ( $_POST ['wp-piwik'] );
-		self::$settings->setGlobalOption ( 'revision', self::$revisionId );
-		self::$settings->setGlobalOption ( 'last_settings_update', time () );
+	private function apply_settings() {
+		// TODO: shouldn't have to disable these
+		// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotValidated
+		// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+		self::$settings->apply_changes( wp_unslash( $_POST['wp-piwik'] ) );
+		self::$settings->set_global_option( 'revision', self::$revision_id );
+		self::$settings->set_global_option( 'last_settings_update', time() );
 		return true;
 	}
 
@@ -685,8 +876,15 @@ class WP_Piwik {
 	 *
 	 * @return boolean Is WP-Piwik configured?
 	 */
-	public static function isConfigured() {
-		return (self::$settings->getGlobalOption ( 'piwik_token' ) && (self::$settings->getGlobalOption ( 'piwik_mode' ) != 'disabled') && (((self::$settings->getGlobalOption ( 'piwik_mode' ) == 'http') && (self::$settings->getGlobalOption ( 'piwik_url' ))) || ((self::$settings->getGlobalOption ( 'piwik_mode' ) == 'php') && (self::$settings->getGlobalOption ( 'piwik_path' ))) || ((self::$settings->getGlobalOption ( 'piwik_mode' ) == 'cloud') && (self::$settings->getGlobalOption ( 'piwik_user' ))) || ((self::$settings->getGlobalOption ( 'piwik_mode' ) == 'cloud-matomo') && (self::$settings->getGlobalOption ( 'matomo_user' )))));
+	public static function is_configured() {
+		return self::$settings->get_global_option( 'piwik_token' )
+			&& 'disabled' !== self::$settings->get_global_option( 'piwik_mode' )
+			&& (
+				( 'http' === self::$settings->get_global_option( 'piwik_mode' ) && self::$settings->get_global_option( 'piwik_url' ) )
+				|| ( 'php' === self::$settings->get_global_option( 'piwik_mode' ) && self::$settings->get_global_option( 'piwik_path' ) )
+				|| ( 'cloud' === self::$settings->get_global_option( 'piwik_mode' ) && self::$settings->get_global_option( 'piwik_user' ) )
+				|| ( 'cloud-matomo' === self::$settings->get_global_option( 'piwik_mode' ) && self::$settings->get_global_option( 'matomo_user' ) )
+			);
 	}
 
 	/**
@@ -694,8 +892,9 @@ class WP_Piwik {
 	 *
 	 * @return boolean Was WP-Piwik updated?
 	 */
-	private function isUpdated() {
-		return self::$settings->getGlobalOption ( 'revision' ) && self::$settings->getGlobalOption ( 'revision' ) < self::$revisionId;
+	private function is_updated() {
+		return self::$settings->get_global_option( 'revision' )
+			&& self::$settings->get_global_option( 'revision' ) < self::$revision_id;
 	}
 
 	/**
@@ -703,22 +902,25 @@ class WP_Piwik {
 	 *
 	 * @return boolean Is WP-Piwik installed?
 	 */
-	private function isInstalled() {
-		$oldSettings = $this->getWordPressOption ( 'wp-piwik_global-settings', false );
-		if ($oldSettings && isset( $oldSettings['revision'] )) {
-			self::log('Save old settings');
-			self::$settings->setGlobalOption ( 'revision', $oldSettings['revision'] );
-		} else self::log( 'Current revision '.self::$settings->getGlobalOption ( 'revision' ) );
-		return self::$settings->getGlobalOption ( 'revision' ) > 0;
+	private function is_installed() {
+		$old_settings = $this->get_word_press_option( 'wp-piwik_global-settings', false );
+		if ( $old_settings && isset( $old_settings['revision'] ) ) {
+			self::log( 'Save old settings' );
+			self::$settings->set_global_option( 'revision', $old_settings['revision'] );
+		} else {
+			self::log( 'Current revision ' . self::$settings->get_global_option( 'revision' ) );
+		}
+		return self::$settings->get_global_option( 'revision' ) > 0;
 	}
 
 	/**
 	 * Check if new settings were submitted
 	 *
 	 * @return boolean Are new settings submitted?
+	 * @phpcs:disable WordPress.Security.NonceVerification.Missing
 	 */
-	public static function isConfigSubmitted() {
-		return isset ( $_POST ) && isset ( $_POST ['wp-piwik'] ) && self::isValidOptionsPost();
+	public static function is_config_submitted() {
+		return isset( $_POST ) && isset( $_POST ['wp-piwik'] ) && self::is_valid_options_post();
 	}
 
 	/**
@@ -726,8 +928,8 @@ class WP_Piwik {
 	 *
 	 * @return Is PHP mode chosen?
 	 */
-	public function isPHPMode() {
-		return self::$settings->getGlobalOption ( 'piwik_mode' ) && self::$settings->getGlobalOption ( 'piwik_mode' ) == 'php';
+	public function is_php_mode() {
+		return self::$settings->get_global_option( 'piwik_mode' ) && 'php' === self::$settings->get_global_option( 'piwik_mode' );
 	}
 
 	/**
@@ -735,8 +937,8 @@ class WP_Piwik {
 	 *
 	 * @return boolean Is WordPress running in network mode?
 	 */
-	public function isNetworkMode() {
-		return self::$settings->checkNetworkActivation ();
+	public function is_network_mode() {
+		return self::$settings->check_network_activation();
 	}
 
 	/**
@@ -744,8 +946,8 @@ class WP_Piwik {
 	 *
 	 * @return boolean Is a dashboard widget enabled?
 	 */
-	private function isDashboardActive() {
-		return self::$settings->getGlobalOption ( 'dashboard_widget' ) || self::$settings->getGlobalOption ( 'dashboard_chart' ) || self::$settings->getGlobalOption ( 'dashboard_seo' );
+	private function is_dashboard_active() {
+		return self::$settings->get_global_option( 'dashboard_widget' ) || self::$settings->get_global_option( 'dashboard_chart' ) || self::$settings->get_global_option( 'dashboard_seo' );
 	}
 
 	/**
@@ -753,8 +955,8 @@ class WP_Piwik {
 	 *
 	 * @return boolean Is a toolbar widget enabled?
 	 */
-	private function isToolbarActive() {
-		return self::$settings->getGlobalOption ( 'toolbar' );
+	private function is_toolbar_active() {
+		return self::$settings->get_global_option( 'toolbar' );
 	}
 
 	/**
@@ -762,8 +964,8 @@ class WP_Piwik {
 	 *
 	 * @return boolean Insert tracking code?
 	 */
-	private function isTrackingActive() {
-		return self::$settings->getGlobalOption ( 'track_mode' ) != 'disabled';
+	private function is_tracking_active() {
+		return 'disabled' !== self::$settings->get_global_option( 'track_mode' );
 	}
 
 	/**
@@ -771,8 +973,8 @@ class WP_Piwik {
 	 *
 	 * @return boolean Is admin tracking enabled?
 	 */
-	private function isAdminTrackingActive() {
-		return self::$settings->getGlobalOption ( 'track_admin' ) && is_admin ();
+	private function is_admin_tracking_active() {
+		return self::$settings->get_global_option( 'track_admin' ) && is_admin();
 	}
 
 	/**
@@ -780,8 +982,8 @@ class WP_Piwik {
 	 *
 	 * @return boolean Insert noscript code?
 	 */
-	private function isAddNoScriptCode() {
-		return self::$settings->getGlobalOption ( 'track_noscript' );
+	private function is_add_no_script_code() {
+		return self::$settings->get_global_option( 'track_noscript' );
 	}
 
 	/**
@@ -789,8 +991,8 @@ class WP_Piwik {
 	 *
 	 * @return boolean Is feed tracking enabled?
 	 */
-	private function isTrackFeed() {
-		return self::$settings->getGlobalOption ( 'track_feed' );
+	private function is_track_feed() {
+		return self::$settings->get_global_option( 'track_feed' );
 	}
 
 	/**
@@ -798,8 +1000,8 @@ class WP_Piwik {
 	 *
 	 * @return boolean Add campaign parameter to feed permalinks?
 	 */
-	private function isAddFeedCampaign() {
-		return self::$settings->getGlobalOption ( 'track_feed_addcampaign' );
+	private function is_add_feed_campaign() {
+		return self::$settings->get_global_option( 'track_feed_addcampaign' );
 	}
 
 	/**
@@ -807,8 +1009,8 @@ class WP_Piwik {
 	 *
 	 * @return boolean Add campaign parameter to feed permalinks?
 	 */
-	private function isCrossDomainLinkingEnabled() {
-		return self::$settings->getGlobalOption ( 'track_crossdomain_linking' );
+	private function is_cross_domain_linking_enabled() {
+		return self::$settings->get_global_option( 'track_crossdomain_linking' );
 	}
 
 	/**
@@ -816,32 +1018,32 @@ class WP_Piwik {
 	 *
 	 * @return boolean Are shortcodes enabled?
 	 */
-	private function isAddShortcode() {
-		return self::$settings->getGlobalOption ( 'shortcodes' );
+	private function is_add_shortcode() {
+		return self::$settings->get_global_option( 'shortcodes' );
 	}
 
 	/**
 	 * Define Piwik constants for PHP reporting API
+	 * @phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
 	 */
-	public static function definePiwikConstants() {
-		if (! defined ( 'PIWIK_INCLUDE_PATH' )) {
-            //@header('Content-type: text/html');
-			define ( 'PIWIK_INCLUDE_PATH', self::$settings->getGlobalOption ( 'piwik_path' ) );
-			define ( 'PIWIK_USER_PATH', self::$settings->getGlobalOption ( 'piwik_path' ) );
-			define ( 'PIWIK_ENABLE_DISPATCH', false );
-			define ( 'PIWIK_ENABLE_ERROR_HANDLER', false );
-			define ( 'PIWIK_ENABLE_SESSION_START', false );
+	public static function define_piwik_constants() {
+		if ( ! defined( 'PIWIK_INCLUDE_PATH' ) ) {
+			define( 'PIWIK_INCLUDE_PATH', self::$settings->get_global_option( 'piwik_path' ) );
+			define( 'PIWIK_USER_PATH', self::$settings->get_global_option( 'piwik_path' ) );
+			define( 'PIWIK_ENABLE_DISPATCH', false );
+			define( 'PIWIK_ENABLE_ERROR_HANDLER', false );
+			define( 'PIWIK_ENABLE_SESSION_START', false );
 		}
 	}
 
 	/**
 	 * Start chosen logging method
 	 */
-	private function openLogger() {
-		self::$logger = \WP_Piwik\Logger::makeLogger();
+	private function open_logger() {
+		self::$logger = \WP_Piwik\Logger::make_logger();
 	}
 
-	public static function getLogger() {
+	public static function get_logger() {
 		return self::$logger;
 	}
 
@@ -849,35 +1051,37 @@ class WP_Piwik {
 	 * Log a message
 	 *
 	 * @param string $message
-	 *        	logger message
+	 *          logger message
 	 */
-	public static function log($message) {
-		self::$logger->log ( $message );
+	public static function log( $message ) {
+		self::$logger->log( $message );
 	}
 
 	/**
 	 * End logging
 	 */
-	private function closeLogger() {
+	private function close_logger() {
 		self::$logger = null;
 	}
 
 	/**
 	 * Load WP-Piwik settings
 	 */
-	private function openSettings() {
-		self::$settings = new WP_Piwik\Settings ( $this, self::$logger );
-		if (! $this->isConfigSubmitted () && $this->isPHPMode () && ! defined ( 'PIWIK_INCLUDE_PATH' ))
-			self::definePiwikConstants ();
+	private function open_settings() {
+		self::$settings = new WP_Piwik\Settings( $this, self::$logger );
+		if ( ! $this->is_config_submitted() && $this->is_php_mode() && ! defined( 'PIWIK_INCLUDE_PATH' ) ) {
+			self::define_piwik_constants();
+		}
 	}
 
 	/**
 	 * Include a WP-Piwik file
 	 */
-	private function includeFile($strFile) {
-		self::$logger->log ( 'Include ' . $strFile . '.php' );
-		if (WP_PIWIK_PATH . $strFile . '.php')
-			include (WP_PIWIK_PATH . $strFile . '.php');
+	private function include_file( $str_file ) {
+		self::$logger->log( 'Include ' . $str_file . '.php' );
+		if ( WP_PIWIK_PATH . $str_file . '.php' ) {
+			include WP_PIWIK_PATH . $str_file . '.php';
+		}
 	}
 
 	/**
@@ -885,12 +1089,15 @@ class WP_Piwik {
 	 *
 	 * @return boolean Do not track user?
 	 */
-	private function isHiddenUser() {
-		if (is_multisite ())
-			foreach ( self::$settings->getGlobalOption ( 'capability_stealth' ) as $key => $val )
-				if ($val && current_user_can ( $key ))
+	private function is_hidden_user() {
+		if ( is_multisite() ) {
+			foreach ( self::$settings->get_global_option( 'capability_stealth' ) as $key => $val ) {
+				if ( $val && current_user_can( $key ) ) {
 					return true;
-		return current_user_can ( 'wp-piwik_stealth' );
+				}
+			}
+		}
+		return current_user_can( 'wp-piwik_stealth' );
 	}
 
 	/**
@@ -898,8 +1105,8 @@ class WP_Piwik {
 	 *
 	 * @return boolean Is tracking code up to date?
 	 */
-	public function isCurrentTrackingCode() {
-		return (self::$settings->getOption ( 'last_tracking_code_update' ) && self::$settings->getOption ( 'last_tracking_code_update' ) > self::$settings->getGlobalOption ( 'last_settings_update' ));
+	public function is_current_tracking_code() {
+		return ( self::$settings->get_option( 'last_tracking_code_update' ) && self::$settings->get_option( 'last_tracking_code_update' ) > self::$settings->get_global_option( 'last_settings_update' ) );
 	}
 
 	/**
@@ -909,8 +1116,8 @@ class WP_Piwik {
 	 *
 	 */
 	public function site_header() {
-		self::$logger->log ( 'Using deprecated function site_header' );
-		$this->addJavascriptCode ();
+		self::$logger->log( 'Using deprecated function site_header' );
+		$this->add_javascript_code();
 	}
 
 	/**
@@ -920,91 +1127,93 @@ class WP_Piwik {
 	 *
 	 */
 	public function site_footer() {
-		self::$logger->log ( 'Using deprecated function site_footer' );
-		$this->addNoscriptCode ();
+		self::$logger->log( 'Using deprecated function site_footer' );
+		$this->add_noscript_code();
 	}
 
 	/**
 	 * Identify new posts if an annotation is required
 	 * and create Piwik annotation
 	 *
-	 * @param string $newStatus
-	 *        	new post status
-	 * @param strint $oldStatus
-	 *        	new post status
+	 * @param string $new_status
+	 *          new post status
+	 * @param strint $old_status
+	 *          new post status
 	 * @param object $post
-	 *        	current post object
+	 *          current post object
 	 */
-	public function addPiwikAnnotation($newStatus, $oldStatus, $post) {
-	    $enabledPostTypes = self::$settings->getGlobalOption ( 'add_post_annotations' );
-		if (isset($enabledPostTypes[$post->post_type]) && $enabledPostTypes[$post->post_type] && $newStatus == 'publish' && $oldStatus != 'publish') {
-			$note = 'Published: ' . $post->post_title . ' - URL: ' . get_permalink ( $post->ID );
-			$id = WP_Piwik\Request::register ( 'Annotations.add', array (
-				'idSite' => $this->getPiwikSiteId (),
-				'date' => date ( 'Y-m-d' ),
-				'note' => $note
-			) );
-			$result = $this->request ( $id );
-			self::$logger->log ( 'Add post annotation. ' . $note . ' - ' . serialize ( $result ) );
+	public function add_piwik_annotation( $new_status, $old_status, $post ) {
+		$enabled_post_types = self::$settings->get_global_option( 'add_post_annotations' );
+		if ( isset( $enabled_post_types[ $post->post_type ] ) && $enabled_post_types[ $post->post_type ] && 'publish' !== $new_status && 'publish' !== $old_status ) {
+			$note   = 'Published: ' . $post->post_title . ' - URL: ' . get_permalink( $post->ID );
+			$id     = WP_Piwik\Request::register(
+				'Annotations.add',
+				array(
+					'idSite' => $this->get_piwik_site_id(),
+					'date'   => gmdate( 'Y-m-d' ),
+					'note'   => $note,
+				)
+			);
+			$result = $this->request( $id );
+			self::$logger->log( 'Add post annotation. ' . $note . ' - ' . wp_json_encode( $result ) );
 		}
 	}
 
 	/**
 	 * Get WP-Piwik's URL
 	 */
-	public function getPluginURL() {
-		return trailingslashit ( plugin_dir_url( dirname( __FILE__ ) ) );
+	public function get_plugin_url() {
+		return trailingslashit( plugin_dir_url( __DIR__ ) );
 	}
 
 	/**
 	 * Get WP-Piwik's version
 	 */
-	public function getPluginVersion() {
+	public function get_plugin_version() {
 		return self::$version;
 	}
 
 	/**
 	 * Enable three columns for WP-Piwik stats screen
 	 *
-	 * @param
-	 *        	array full list of column settings
-	 * @param
-	 *        	mixed current screen id
+	 * @param array $columns full list of column settings
+	 * @param mixed $screen current screen id
 	 * @return array updated list of column settings
 	 */
-	public function onScreenLayoutColumns($columns, $screen) {
-		if (isset( $this->statsPageId ) && $screen == $this->statsPageId)
-			$columns [$this->statsPageId] = 3;
+	public function on_screen_layout_columns( $columns, $screen ) {
+		if ( isset( $this->stats_page_id ) && (string) $screen === $this->stats_page_id ) {
+			$columns [ $this->stats_page_id ] = 3;
+		}
 		return $columns;
 	}
 
 	/**
-	 * Add tracking code to admin header
+	 * Add tracking code to admin header.
 	 */
-	function addAdminHeaderTracking() {
-		$this->addJavascriptCode ();
+	public function add_admin_header_tracking() {
+		$this->add_javascript_code();
 	}
 
 	/**
 	 * Get option value
 	 *
 	 * @param string $key
-	 *        	option key
+	 *          option key
 	 * @return mixed option value
 	 */
-	public function getOption($key) {
-		return self::$settings->getOption ( $key );
+	public function get_option( $key ) {
+		return self::$settings->get_option( $key );
 	}
 
 	/**
 	 * Get global option value
 	 *
 	 * @param string $key
-	 *        	global option key
+	 *          global option key
 	 * @return mixed global option value
 	 */
-	public function getGlobalOption($key) {
-		return self::$settings->getGlobalOption ( $key );
+	public function get_global_option( $key ) {
+		return self::$settings->get_global_option( $key );
 	}
 
 	/**
@@ -1012,90 +1221,97 @@ class WP_Piwik {
 	 *
 	 * @return string stats page URL
 	 */
-	public function getStatsURL() {
-		return admin_url () . '?page=wp-piwik_stats';
+	public function get_stats_url() {
+		return admin_url() . '?page=wp-piwik_stats';
 	}
 
 	/**
 	 * Execute WP-Piwik test script
 	 */
-	private function loadTestscript() {
-		$this->includeFile ( 'debug' . DIRECTORY_SEPARATOR . 'testscript' );
+	private function load_testscript() {
+		$this->include_file( 'debug' . DIRECTORY_SEPARATOR . 'testscript' );
 	}
 
 	/**
 	 * Echo an error message
 	 *
-	 * @param string $message
-	 *        	message content
+	 * @param string $message message content
 	 */
-	private static function showErrorMessage($message) {
-		echo '<strong class="wp-piwik-error">' . __ ( 'An error occured', 'wp-piwik' ) . ':</strong> ' . $message . ' [<a href="' . (self::$settings->checkNetworkActivation () ? 'network/settings' : 'options-general') . '.php?page=wp-piwik/classes/WP_Piwik.php&tab=support">' . __ ( 'Support', 'wp-piwik' ) . '</a>]';
+	private static function show_error_message( $message ) {
+		echo '<strong class="wp-piwik-error">' . esc_html__( 'An error occured', 'wp-piwik' ) . ':</strong> ' . esc_html( $message ) . ' [<a href="' . esc_attr( self::$settings->check_network_activation() ? 'network/settings' : 'options-general' ) . '.php?page=wp-piwik/classes/WP_Piwik.php&amp;tab=support">' . esc_html__( 'Support', 'wp-piwik' ) . '</a>]';
 	}
 
 	/**
 	 * Perform a Piwik request
 	 *
 	 * @param string $id
-	 *        	request ID
+	 *          request ID
 	 * @return mixed request result
 	 */
-	public function request($id, $debug = false) {
-		if ( self::$settings->getGlobalOption ( 'piwik_mode' ) == 'disabled' )
+	public function request( $id, $debug = false ) {
+		if ( 'disabled' === self::$settings->get_global_option( 'piwik_mode' ) ) {
 			return 'n/a';
-		if (! isset ( self::$request ) || empty ( self::$request ))
-			self::$request = (self::$settings->getGlobalOption ( 'piwik_mode' ) == 'http' || self::$settings->getGlobalOption ( 'piwik_mode' ) == 'cloud' || self::$settings->getGlobalOption ( 'piwik_mode' ) == 'cloud-matomo' ? new WP_Piwik\Request\Rest ( $this, self::$settings ) : new WP_Piwik\Request\Php ( $this, self::$settings ));
-		if ($debug)
-			return self::$request->getDebug ( $id );
-		return self::$request->perform ( $id );
+		}
+		if ( ! isset( self::$request ) || empty( self::$request ) ) {
+			self::$request = ( 'http' === self::$settings->get_global_option( 'piwik_mode' ) || 'cloud' === self::$settings->get_global_option( 'piwik_mode' ) || 'cloud-matomo' === self::$settings->get_global_option( 'piwik_mode' ) ? new WP_Piwik\Request\Rest( $this, self::$settings ) : new WP_Piwik\Request\Php( $this, self::$settings ) );
+		}
+		if ( $debug ) {
+			return self::$request->get_debug( $id );
+		}
+		return self::$request->perform( $id );
 	}
 
 	/**
 	 * Reset request object
 	 */
-	public function resetRequest() {
-		if (is_object(self::$request))
+	public function reset_request() {
+		if ( is_object( self::$request ) ) {
 			self::$request->reset();
-		self::$request = NULL;
+		}
+		self::$request = null;
 	}
 
 	/**
 	 * Execute WP-Piwik shortcode
 	 *
 	 * @param array $attributes
-	 *        	attribute list
+	 *          attribute list
 	 */
-	public function shortcode($attributes) {
-		shortcode_atts ( array (
-				'title' => '',
-				'module' => 'overview',
-				'period' => 'day',
-				'date' => 'yesterday',
-				'limit' => 10,
-				'width' => '100%',
-				'height' => '200px',
-				'idsite' => '',
+	public function shortcode( $attributes ) {
+		shortcode_atts(
+			array(
+				'title'    => '',
+				'module'   => 'overview',
+				'period'   => 'day',
+				'date'     => 'yesterday',
+				'limit'    => 10,
+				'width'    => '100%',
+				'height'   => '200px',
+				'idsite'   => '',
 				'language' => 'en',
-				'range' => false,
-				'key' => 'sum_daily_nb_uniq_visitors'
-		), $attributes );
-		$shortcodeObject = new \WP_Piwik\Shortcode ( $attributes, $this, self::$settings );
-		return $shortcodeObject->get();
+				'range'    => false,
+				'key'      => 'sum_daily_nb_uniq_visitors',
+			),
+			$attributes
+		);
+		$shortcode_object = new \WP_Piwik\Shortcode( $attributes, $this, self::$settings );
+		return $shortcode_object->get();
 	}
 
 	/**
 	 * Get Piwik site ID by blog ID
 	 *
-	 * @param int $blogId
-	 *        	which blog's Piwik site ID to get, default is the current blog
+	 * @param int $blog_id
+	 *          which blog's Piwik site ID to get, default is the current blog
 	 * @return mixed Piwik site ID or n/a
 	 */
-	public function getPiwikSiteId($blogId = null, $forceFetch = false) {
-		if (! $blogId && $this->isNetworkMode ())
-			$blogId = get_current_blog_id ();
-		$result = self::$settings->getOption ( 'site_id' );
-        self::$logger->log ( 'Database result: ' . $result );
-        return (! empty ( $result ) && ! $forceFetch ? $result : $this->requestPiwikSiteId ( $blogId ));
+	public function get_piwik_site_id( $blog_id = null, $force_fetch = false ) {
+		if ( ! $blog_id && $this->is_network_mode() ) {
+			$blog_id = get_current_blog_id();
+		}
+		$result = self::$settings->get_option( 'site_id' );
+		self::$logger->log( 'Database result: ' . $result );
+		return ( ! empty( $result ) && ! $force_fetch ? $result : $this->request_piwik_site_id( $blog_id ) );
 	}
 
 	/**
@@ -1103,40 +1319,47 @@ class WP_Piwik {
 	 *
 	 * @return array Piwik sites
 	 */
-	public function getPiwikSiteDetails() {
-		$id = WP_Piwik\Request::register ( 'SitesManager.getSitesWithAtLeastViewAccess', array () );
-		$piwikSiteDetails = $this->request ( $id );
-		return $piwikSiteDetails;
+	public function get_piwik_site_details() {
+		$id                 = WP_Piwik\Request::register( 'SitesManager.getSitesWithAtLeastViewAccess', array() );
+		$piwik_site_details = $this->request( $id );
+		return $piwik_site_details;
 	}
 
 	/**
 	 * Estimate a Piwik site ID by blog ID
 	 *
-	 * @param int $blogId
-	 *        	which blog's Piwik site ID to estimate, default is the current blog
+	 * @param int $blog_id
+	 *          which blog's Piwik site ID to estimate, default is the current blog
 	 * @return mixed Piwik site ID or n/a
 	 */
-	private function requestPiwikSiteId($blogId = null) {
-		$isCurrent = ! self::$settings->checkNetworkActivation () || empty ( $blogId );
-		if (self::$settings->getGlobalOption ( 'auto_site_config' )) {
-			$id = WP_Piwik\Request::register ( 'SitesManager.getSitesIdFromSiteUrl', array (
-					'url' => $isCurrent ? get_bloginfo ( 'url' ) : get_blog_details ( $blogId )->siteurl
-			) );
-			$result = $this->request ( $id );
-			$this->log ( 'Tried to identify current site, result: ' . serialize ( $result ) );
-			if (is_array( $result ) && empty( $result ))
-				$result = $this->addPiwikSite ( $blogId );
-			elseif ( $result != 'n/a' && isset($result [0]) )
+	private function request_piwik_site_id( $blog_id = null ) {
+		$is_current = ! self::$settings->check_network_activation() || empty( $blog_id );
+		if ( self::$settings->get_global_option( 'auto_site_config' ) ) {
+			$id     = WP_Piwik\Request::register(
+				'SitesManager.getSitesIdFromSiteUrl',
+				array(
+					'url' => $is_current ? get_bloginfo( 'url' ) : get_blog_details( $blog_id )->siteurl,
+				)
+			);
+			$result = $this->request( $id );
+			$this->log( 'Tried to identify current site, result: ' . wp_json_encode( $result ) );
+			if ( is_array( $result ) && empty( $result ) ) {
+				$result = $this->add_piwik_site( $blog_id );
+			} elseif ( 'n/a' !== $result && isset( $result [0] ) ) {
 				$result = $result [0] ['idsite'];
-			else $result = null;
-		} else $result = null;
-		self::$logger->log ( 'Get Matomo ID: WordPress site ' . ($isCurrent ? get_bloginfo ( 'url' ) : get_blog_details ( $blogId )->siteurl) . ' = Matomo ID ' . $result );
-		if ($result !== null) {
-			self::$settings->setOption ( 'site_id', $result, $blogId );
-			if (self::$settings->getGlobalOption ( 'track_mode' ) != 'disabled' && self::$settings->getGlobalOption ( 'track_mode' ) != 'manually') {
-				$code = $this->updateTrackingCode ( $result, $blogId );
+			} else {
+				$result = null;
 			}
-			$this::$settings->save ();
+		} else {
+			$result = null;
+		}
+		self::$logger->log( 'Get Matomo ID: WordPress site ' . ( $is_current ? get_bloginfo( 'url' ) : get_blog_details( $blog_id )->siteurl ) . ' = Matomo ID ' . $result );
+		if ( null !== $result ) {
+			self::$settings->set_option( 'site_id', $result, $blog_id );
+			if ( 'disabled' !== self::$settings->get_global_option( 'track_mode' ) && 'manually' !== self::$settings->get_global_option( 'track_mode' ) ) {
+				$code = $this->update_tracking_code( $result, $blog_id );
+			}
+			$this::$settings->save();
 			return $result;
 		}
 		return 'n/a';
@@ -1145,172 +1368,183 @@ class WP_Piwik {
 	/**
 	 * Add a new Piwik
 	 *
-	 * @param int $blogId
-	 *        	which blog's Piwik site to create, default is the current blog
+	 * @param int $blog_id
+	 *          which blog's Piwik site to create, default is the current blog
 	 * @return int Piwik site ID
+	 * @phpcs:disable WordPress.NamingConventions.ValidHookName.UseUnderscores
+	 * @phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 	 */
-	public function addPiwikSite($blogId = null) {
-		$isCurrent = ! self::$settings->checkNetworkActivation () || empty ( $blogId );
+	public function add_piwik_site( $blog_id = null ) {
+		$is_current = ! self::$settings->check_network_activation() || empty( $blog_id );
 		// Do not add site if Piwik connection is unreliable
-		if (! $this->request ( 'global.getPiwikVersion' ))
+		if ( ! $this->request( 'global.getPiwikVersion' ) ) {
 			return null;
-		$id = WP_Piwik\Request::register ( 'SitesManager.addSite', array (
-				'urls' => $isCurrent ? get_bloginfo ( 'url' ) : get_blog_details ( $blogId )->siteurl,
-				'siteName' => urlencode( $isCurrent ? get_bloginfo ( 'name' ) : get_blog_details ( $blogId )->blogname )
-		) );
-		$result = $this->request ( $id );
+		}
+		$id     = WP_Piwik\Request::register(
+			'SitesManager.addSite',
+			array(
+				'urls'     => $is_current ? get_bloginfo( 'url' ) : get_blog_details( $blog_id )->siteurl,
+				'siteName' => rawurlencode( $is_current ? get_bloginfo( 'name' ) : get_blog_details( $blog_id )->blogname ),
+			)
+		);
+		$result = $this->request( $id );
 		if ( is_array( $result ) && isset( $result['value'] ) ) {
 			$result = (int) $result['value'];
 		} else {
 			$result = (int) $result;
 		}
-		self::$logger->log ( 'Create Matomo ID: WordPress site ' . ($isCurrent ? get_bloginfo ( 'url' ) : get_blog_details ( $blogId )->siteurl) . ' = Matomo ID ' . $result );
-		if (empty ( $result ))
+		self::$logger->log( 'Create Matomo ID: WordPress site ' . ( $is_current ? get_bloginfo( 'url' ) : get_blog_details( $blog_id )->siteurl ) . ' = Matomo ID ' . $result );
+		if ( empty( $result ) ) {
 			return null;
-		else {
-            do_action('wp-piwik_site_created', $result);
-            return $result;
-        }
+		} else {
+			// check disabled for bacwards compatibility
+			do_action( 'wp-piwik_site_created', $result );
+			return $result;
+		}
 	}
 
 	/**
 	 * Update a Piwik site's detail information
 	 *
-	 * @param int $siteId
-	 *        	which Piwik site to updated
-	 * @param int $blogId
-	 *        	which blog's Piwik site ID to get, default is the current blog
+	 * @param int $site_id
+	 *          which Piwik site to updated
+	 * @param int $blog_id
+	 *          which blog's Piwik site ID to get, default is the current blog
 	 */
-	private function updatePiwikSite($siteId, $blogId = null) {
-		$isCurrent = ! self::$settings->checkNetworkActivation () || empty ( $blogId );
-		$id = WP_Piwik\Request::register ( 'SitesManager.updateSite', array (
-				'idSite' => $siteId,
-				'urls' => $isCurrent ? get_bloginfo ( 'url' ) : get_blog_details ( $blogId )->siteurl,
-				'siteName' => $isCurrent ? get_bloginfo ( 'name' ) : get_blog_details ( $blogId )->blogname
-		) );
-		$this->request ( $id );
-		self::$logger->log ( 'Update Matomo site: WordPress site ' . ($isCurrent ? get_bloginfo ( 'url' ) : get_blog_details ( $blogId )->siteurl) );
+	private function update_piwik_site( $site_id, $blog_id = null ) {
+		$is_current = ! self::$settings->check_network_activation() || empty( $blog_id );
+		$id         = WP_Piwik\Request::register(
+			'SitesManager.updateSite',
+			array(
+				'idSite'   => $site_id,
+				'urls'     => $is_current ? get_bloginfo( 'url' ) : get_blog_details( $blog_id )->siteurl,
+				'siteName' => $is_current ? get_bloginfo( 'name' ) : get_blog_details( $blog_id )->blogname,
+			)
+		);
+		$this->request( $id );
+		self::$logger->log( 'Update Matomo site: WordPress site ' . ( $is_current ? get_bloginfo( 'url' ) : get_blog_details( $blog_id )->siteurl ) );
 	}
 
 	/**
 	 * Update a site's tracking code
 	 *
-	 * @param int $siteId
-	 *        	which Piwik site to updated
-	 * @param int $blogId
-	 *        	which blog's Piwik site ID to get, default is the current blog
+	 * @param int $site_id
+	 *          which Piwik site to updated
+	 * @param int $blog_id
+	 *          which blog's Piwik site ID to get, default is the current blog
 	 * @return string tracking code
 	 */
-	public function updateTrackingCode($siteId = false, $blogId = null) {
-		if (!$siteId)
-			$siteId = $this->getPiwikSiteId ();
-		if (self::$settings->getGlobalOption ( 'track_mode' ) == 'disabled' || self::$settings->getGlobalOption ( 'track_mode' ) == 'manually')
+	public function update_tracking_code( $site_id = false, $blog_id = null ) {
+		if ( ! $site_id ) {
+			$site_id = $this->get_piwik_site_id();
+		}
+		if ( 'disabled' === self::$settings->get_global_option( 'track_mode' ) || 'manually' === self::$settings->get_global_option( 'track_mode' ) ) {
 			return false;
-		$id = WP_Piwik\Request::register ( 'SitesManager.getJavascriptTag', array (
-				'idSite' => $siteId,
-				'mergeSubdomains' => self::$settings->getGlobalOption ( 'track_across' ) ? 1 : 0,
-				'mergeAliasUrls' => self::$settings->getGlobalOption ( 'track_across_alias' ) ? 1 : 0,
-				'disableCookies' => self::$settings->getGlobalOption ( 'disable_cookies' ) ? 1 : 0,
-				'crossDomain' => self::$settings->getGlobalOption ( 'track_crossdomain_linking' ) ? 1 : 0,
-                'trackNoScript' => 1
-			) );
-		$code = $this->request ( $id );
-		if (is_array($code) && isset($code['value']))
+		}
+		$id   = WP_Piwik\Request::register(
+			'SitesManager.getJavascriptTag',
+			array(
+				'idSite'          => $site_id,
+				'mergeSubdomains' => self::$settings->get_global_option( 'track_across' ) ? 1 : 0,
+				'mergeAliasUrls'  => self::$settings->get_global_option( 'track_across_alias' ) ? 1 : 0,
+				'disableCookies'  => self::$settings->get_global_option( 'disable_cookies' ) ? 1 : 0,
+				'crossDomain'     => self::$settings->get_global_option( 'track_crossdomain_linking' ) ? 1 : 0,
+				'trackNoScript'   => 1,
+			)
+		);
+		$code = $this->request( $id );
+		if ( is_array( $code ) && isset( $code['value'] ) ) {
 			$code = $code['value'];
-		$result = !is_array ( $code ) ? html_entity_decode ( $code ) : '<!-- '.json_encode($code).' -->';
-		self::$logger->log ( 'Delivered tracking code: ' . $result );
-		$result = WP_Piwik\TrackingCode::prepareTrackingCode ( $result, self::$settings, self::$logger, true );
-		if (isset ( $result ['script'] ) && ! empty ( $result ['script'] )) {
-			self::$settings->setOption ( 'tracking_code', $result ['script'], $blogId );
-			self::$settings->setOption ( 'noscript_code', $result ['noscript'], $blogId );
-			self::$settings->setGlobalOption ( 'proxy_url', $result ['proxy'] );
+		}
+		$result = ! is_array( $code ) ? html_entity_decode( $code ) : '<!-- ' . wp_json_encode( $code ) . ' -->';
+		self::$logger->log( 'Delivered tracking code: ' . $result );
+		$result = WP_Piwik\TrackingCode::prepare_tracking_code( $result, self::$settings, self::$logger, true );
+		if ( isset( $result ['script'] ) && ! empty( $result ['script'] ) ) {
+			self::$settings->set_option( 'tracking_code', $result ['script'], $blog_id );
+			self::$settings->set_option( 'noscript_code', $result ['noscript'], $blog_id );
+			self::$settings->set_global_option( 'proxy_url', $result ['proxy'] );
 		}
 		return $result;
 	}
 
 	/**
 	 * Update Piwik site if blog name changes
-	 *
-	 * @param string $oldValue
-	 *        	old blog name
-	 * @param string $newValue
-	 *        	new blog name
 	 */
-	public function onBlogNameChange($oldValue, $newValue = null) {
-		$this->updatePiwikSite ( self::$settings->getOption ( 'site_id' ) );
+	public function on_blog_name_change() {
+		$this->update_piwik_site( self::$settings->get_option( 'site_id' ) );
 	}
 
 	/**
 	 * Update Piwik site if blog URL changes
-	 *
-	 * @param string $oldValue
-	 *        	old blog URL
-	 * @param string $newValue
-	 *        	new blog URL
 	 */
-	public function onSiteUrlChange($oldValue, $newValue = null) {
-		$this->updatePiwikSite ( self::$settings->getOption ( 'site_id' ) );
+	public function on_site_url_change() {
+		$this->update_piwik_site( self::$settings->get_option( 'site_id' ) );
 	}
 
 	/**
 	 * Register stats page meta boxes
-	 *
-	 * @param mixed $statsPageId
-	 *        	WordPress stats page ID
 	 */
-	public function onloadStatsPage($statsPageId) {
-		if (self::$settings->getGlobalOption ( 'disable_timelimit' ))
-			set_time_limit ( 0 );
-		wp_enqueue_script ( 'common' );
-		wp_enqueue_script ( 'wp-lists' );
-		wp_enqueue_script ( 'postbox' );
-		wp_enqueue_script ( 'wp-piwik', $this->getPluginURL () . 'js/wp-piwik.js', array (), self::$version, true );
-		wp_enqueue_script ( 'wp-piwik-chartjs', $this->getPluginURL () . 'js/chartjs/chart.min.js', "3.4.1" );
-		new \WP_Piwik\Widget\Chart ( $this, self::$settings, $this->statsPageId );
-		new \WP_Piwik\Widget\Visitors ( $this, self::$settings, $this->statsPageId );
-		new \WP_Piwik\Widget\Overview ( $this, self::$settings, $this->statsPageId );
-        if (self::$settings->getGlobalOption ( 'stats_ecommerce' )) {
-            new \WP_Piwik\Widget\Ecommerce ($this, self::$settings, $this->statsPageId);
-            new \WP_Piwik\Widget\Items ($this, self::$settings, $this->statsPageId);
-            new \WP_Piwik\Widget\ItemsCategory ($this, self::$settings, $this->statsPageId);
-        }
-		if (self::$settings->getGlobalOption ( 'stats_seo' ))
-			new \WP_Piwik\Widget\Seo ( $this, self::$settings, $this->statsPageId );
-		new \WP_Piwik\Widget\Pages ( $this, self::$settings, $this->statsPageId );
-		new \WP_Piwik\Widget\Keywords ( $this, self::$settings, $this->statsPageId );
-		new \WP_Piwik\Widget\Referrers ( $this, self::$settings, $this->statsPageId );
-		new \WP_Piwik\Widget\Plugins ( $this, self::$settings, $this->statsPageId );
-		new \WP_Piwik\Widget\Search ( $this, self::$settings, $this->statsPageId );
-		new \WP_Piwik\Widget\Noresult ( $this, self::$settings, $this->statsPageId );
-		new \WP_Piwik\Widget\Browsers ( $this, self::$settings, $this->statsPageId );
-		new \WP_Piwik\Widget\BrowserDetails ( $this, self::$settings, $this->statsPageId );
-		new \WP_Piwik\Widget\Screens ( $this, self::$settings, $this->statsPageId );
-		new \WP_Piwik\Widget\Types ( $this, self::$settings, $this->statsPageId );
-		new \WP_Piwik\Widget\Models ( $this, self::$settings, $this->statsPageId );
-		new \WP_Piwik\Widget\Systems ( $this, self::$settings, $this->statsPageId );
-		new \WP_Piwik\Widget\SystemDetails ( $this, self::$settings, $this->statsPageId );
-		new \WP_Piwik\Widget\City ( $this, self::$settings, $this->statsPageId );
-		new \WP_Piwik\Widget\Country ( $this, self::$settings, $this->statsPageId );
+	public function onload_stats_page() {
+		if ( self::$settings->get_global_option( 'disable_timelimit' ) ) {
+			set_time_limit( 0 );
+		}
+		wp_enqueue_script( 'common' );
+		wp_enqueue_script( 'wp-lists' );
+		wp_enqueue_script( 'postbox' );
+		wp_enqueue_script( 'wp-piwik', $this->get_plugin_url() . 'js/wp-piwik.js', array(), self::$version, true );
+		wp_enqueue_script( 'wp-piwik-chartjs', $this->get_plugin_url() . 'js/chartjs/chart.min.js', array(), self::$version, false );
+		new \WP_Piwik\Widget\Chart( $this, self::$settings, $this->stats_page_id );
+		new \WP_Piwik\Widget\Visitors( $this, self::$settings, $this->stats_page_id );
+		new \WP_Piwik\Widget\Overview( $this, self::$settings, $this->stats_page_id );
+		if ( self::$settings->get_global_option( 'stats_ecommerce' ) ) {
+			new \WP_Piwik\Widget\Ecommerce( $this, self::$settings, $this->stats_page_id );
+			new \WP_Piwik\Widget\Items( $this, self::$settings, $this->stats_page_id );
+			new \WP_Piwik\Widget\ItemsCategory( $this, self::$settings, $this->stats_page_id );
+		}
+		if ( self::$settings->get_global_option( 'stats_seo' ) ) {
+			new \WP_Piwik\Widget\Seo( $this, self::$settings, $this->stats_page_id );
+		}
+		new \WP_Piwik\Widget\Pages( $this, self::$settings, $this->stats_page_id );
+		new \WP_Piwik\Widget\Keywords( $this, self::$settings, $this->stats_page_id );
+		new \WP_Piwik\Widget\Referrers( $this, self::$settings, $this->stats_page_id );
+		new \WP_Piwik\Widget\Plugins( $this, self::$settings, $this->stats_page_id );
+		new \WP_Piwik\Widget\Search( $this, self::$settings, $this->stats_page_id );
+		new \WP_Piwik\Widget\Noresult( $this, self::$settings, $this->stats_page_id );
+		new \WP_Piwik\Widget\Browsers( $this, self::$settings, $this->stats_page_id );
+		new \WP_Piwik\Widget\BrowserDetails( $this, self::$settings, $this->stats_page_id );
+		new \WP_Piwik\Widget\Screens( $this, self::$settings, $this->stats_page_id );
+		new \WP_Piwik\Widget\Types( $this, self::$settings, $this->stats_page_id );
+		new \WP_Piwik\Widget\Models( $this, self::$settings, $this->stats_page_id );
+		new \WP_Piwik\Widget\Systems( $this, self::$settings, $this->stats_page_id );
+		new \WP_Piwik\Widget\SystemDetails( $this, self::$settings, $this->stats_page_id );
+		new \WP_Piwik\Widget\City( $this, self::$settings, $this->stats_page_id );
+		new \WP_Piwik\Widget\Country( $this, self::$settings, $this->stats_page_id );
 	}
 
 	/**
 	 * Add per post statistics to a post's page
-	 *
-	 * @param mixed $postPageId
-	 *        	WordPress post page ID
+	 * @phpcs:disable WordPress.NamingConventions.ValidHookName.UseUnderscores
+	 * @phpcs:disable WordPress.NamingConventions.ValidHookName.NonPrefixedHooknameFound
 	 */
-	public function onloadPostPage($postPageId) {
+	public function onload_post_page() {
 		global $post;
-		$postUrl = get_permalink ( $post->ID );
-		$this->log ( 'Load per post statistics: ' . $postUrl );
-        $locations = apply_filters( 'wp-piwik_meta_boxes_locations', get_post_types( array( 'public' => true ), 'names' ) );
-		array (
-				new Post ( $this, self::$settings, $locations, 'side', 'default', array (
-				        'date' => self::$settings->getGlobalOption ( 'perpost_stats' ),
-						'period' => 'day',
-						'url' => $postUrl
-				) ),
-				'show'
+		$post_url = get_permalink( $post->ID );
+		$this->log( 'Load per post statistics: ' . $post_url );
+		$locations = apply_filters( 'wp-piwik_meta_boxes_locations', get_post_types( array( 'public' => true ), 'names' ) );
+		array(
+			new Post(
+				$this,
+				self::$settings,
+				$locations,
+				'side',
+				'default',
+				array(
+					'date'   => self::$settings->get_global_option( 'perpost_stats' ),
+					'period' => 'day',
+					'url'    => $post_url,
+				)
+			),
+			'show',
 		);
 	}
 
@@ -1319,21 +1553,24 @@ class WP_Piwik {
 	 *
 	 * @see http://tinyurl.com/5r5vnzs
 	 */
-	function onStatsPageSaveChanges() {
-		if (! current_user_can ( 'manage_options' ))
-			wp_die ( __ ( 'Cheatin&#8217; uh?' ) );
-		check_admin_referer ( 'wp-piwik_stats' );
-		wp_redirect ( $_POST ['_wp_http_referer'] );
+	public function on_stats_page_save_changes() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'Cheatin&#8217; uh?', 'wp-piwik' ) );
+		}
+		check_admin_referer( 'wp-piwik_stats' );
+		if ( ! empty( $_POST['_wp_http_referer'] ) ) {
+			wp_safe_redirect( sanitize_url( wp_unslash( $_POST['_wp_http_referer'] ) ) );
+		}
 	}
 
 	/**
 	 * Get option value, choose method depending on network mode
 	 *
 	 * @param string $option option key
-	 * @return string|array option value
+	 * @return string|array|null $default_value option value
 	 */
-	private function getWordPressOption($option, $default = null) {
-		return ($this->isNetworkMode () ? get_site_option ( $option, $default ) : get_option ( $option, $default ));
+	private function get_word_press_option( $option, $default_value = null ) {
+		return ( $this->is_network_mode() ? get_site_option( $option, $default_value ) : get_option( $option, $default_value ) );
 	}
 
 	/**
@@ -1341,24 +1578,26 @@ class WP_Piwik {
 	 *
 	 * @param string $option option key
 	 */
-	private function deleteWordPressOption($option) {
-		if ( $this->isNetworkMode () )
-			delete_site_option ( $option );
-		else
-			delete_option ( $option );
+	private function delete_word_press_option( $option ) {
+		if ( $this->is_network_mode() ) {
+			delete_site_option( $option );
+		} else {
+			delete_option( $option );
+		}
 	}
 
 	/**
 	 * Set option value, choose method depending on network mode
 	 *
 	 * @param string $option option key
-	 * @param mixed $value option value
+	 * @param mixed  $value option value
 	 */
-	private function updateWordPressOption($option, $value) {
-		if ( $this->isNetworkMode () )
-			update_site_option ( $option, $value );
-		else
-			update_option ( $option, $value );
+	private function update_word_press_option( $option, $value ) {
+		if ( $this->is_network_mode() ) {
+			update_site_option( $option, $value );
+		} else {
+			update_option( $option, $value );
+		}
 	}
 
 	/**
@@ -1366,12 +1605,12 @@ class WP_Piwik {
 	 *
 	 * @return boolean True if current page is WP-Piwik's option page
 	 */
-	public static function isValidOptionsPost() {
-		return is_admin() && check_admin_referer( 'wp-piwik_settings' ) && current_user_can( 'manage_options' ) ;
+	public static function is_valid_options_post() {
+		return is_admin() && check_admin_referer( 'wp-piwik_settings' ) && current_user_can( 'manage_options' );
 	}
 
-	private function setUpAiBotTracking() {
-		$aiBotTracking = new \WP_Piwik\AIBotTracking( self::$settings, self::$logger );
-		$aiBotTracking->registerHooks();
+	private function set_up_ai_bot_tracking() {
+		$ai_bot_tracking = new \WP_Piwik\AIBotTracking( self::$settings, self::$logger );
+		$ai_bot_tracking->register_hooks();
 	}
 }

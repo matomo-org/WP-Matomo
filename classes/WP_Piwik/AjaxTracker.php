@@ -17,27 +17,32 @@ if ( ! class_exists( '\WP_Piwik\PiwikTracker' ) ) {
 	include_once __DIR__ . '/../../libs/matomo-php-tracker/MatomoTracker.php';
 }
 
+/**
+ * @phpcs:disable WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
+ * @phpcs:disable WordPress.NamingConventions.ValidVariableName.VariableNotSnakeCase
+ * @phpcs:disable Generic.CodeAnalysis.UselessOverridingMethod.Found
+ */
 class AjaxTracker extends \WP_Piwik\MatomoTracker {
 
-	private $hasCookie = false;
+	private $has_cookie = false;
 	private $logger;
 
 	public function __construct( Settings $settings, Logger $logger ) {
 		$this->logger = $logger;
 
-		$idsite = $settings->getOption( 'site_id' );
+		$idsite = $settings->get_option( 'site_id' );
 		if ( ! $idsite ) {
 			return;
 		}
 
-		$apiEndpoint = rtrim( $settings->getMatomoUrl(), '/' ) . '/matomo.php';
+		$api_endpoint = rtrim( $settings->get_matomo_url(), '/' ) . '/matomo.php';
 
-		parent::__construct( (int) $idsite, $apiEndpoint );
+		parent::__construct( (int) $idsite, $api_endpoint );
 
 		$this->ip = false;
 
-		if ( ! $settings->getGlobalOption( 'disable_cookies' ) ) {
-			$cookie_domain = $this->getTrackingCookieDomain($settings);
+		if ( ! $settings->get_global_option( 'disable_cookies' ) ) {
+			$cookie_domain = $this->get_tracking_cookie_domain( $settings );
 			$this->enableCookies( $cookie_domain );
 		} else {
 			$this->disableCookieSupport();
@@ -45,25 +50,25 @@ class AjaxTracker extends \WP_Piwik\MatomoTracker {
 
 		if ( $this->loadVisitorIdCookie() ) {
 			if ( ! empty( $this->cookieVisitorId ) ) {
-				$this->hasCookie = true;
-				$this->setVisitorIdSafe( $this->cookieVisitorId );
+				$this->has_cookie = true;
+				$this->set_visitor_id_safe( $this->cookieVisitorId );
 			}
 		}
 	}
 
-	public function setVisitorIdSafe($visitor_id ) {
+	public function set_visitor_id_safe( $visitor_id ) {
 		try {
 			$this->setVisitorId( $visitor_id );
 		} catch ( \Exception $ex ) {
 			// do not fatal if the visitor ID is invalid for some reason
-			if ( ! $this->isInvalidVisitorIdError( $ex ) ) {
+			if ( ! $this->is_invalid_visitor_id_error( $ex ) ) {
 				throw $ex;
 			}
 		}
 	}
 
 	protected function setCookie( $cookieName, $cookieValue, $cookieTTL ) {
-		if ( ! $this->hasCookie ) {
+		if ( ! $this->has_cookie ) {
 			// we only set / overwrite cookies if it is a visitor that has eg no JS enabled or ad blocker enabled etc.
 			// this way we will track all cart updates and orders into the same visitor on following requests.
 			// If we recognized the visitor before via cookie we want in our case to make sure to not overwrite
@@ -74,22 +79,22 @@ class AjaxTracker extends \WP_Piwik\MatomoTracker {
 
 	protected function sendRequest( string $url, string $method = 'GET', $data = null, bool $force = false ): string {
 		if ( ! $this->idSite ) {
-			$this->logger->log('ecommerce tracking could not find idSite, cannot send request');
+			$this->logger->log( 'ecommerce tracking could not find idSite, cannot send request' );
 			return ''; // not installed or synced yet
 		}
 
-		if ( $this->isPrerender() ) {
+		if ( $this->is_prerender() ) {
 			// do not track if for some reason we are prerendering
 			return '';
 		}
 
-		$args = [
+		$args = array(
 			'method'   => $method,
-			'headers'  => [
+			'headers'  => array(
 				'User-Agent' => $this->userAgent,
-			],
+			),
 			'blocking' => false,
-		];
+		);
 		if ( ! empty( $data ) ) {
 			$args['body'] = $data;
 		}
@@ -97,7 +102,7 @@ class AjaxTracker extends \WP_Piwik\MatomoTracker {
 		$url = $url . '&bots=1';
 
 		try {
-			$response = $this->wpRemoteRequest( $url, $args );
+			$response = $this->wp_remote_request( $url, $args );
 		} catch ( \Exception $ex ) {
 			$this->logger->log( 'ajax_tracker: ' . $ex->getMessage() );
 			return '';
@@ -111,15 +116,16 @@ class AjaxTracker extends \WP_Piwik\MatomoTracker {
 		return $response['body'];
 	}
 
-	private function isInvalidVisitorIdError( \Exception $ex ) {
+	private function is_invalid_visitor_id_error( \Exception $ex ) {
 		return strpos( $ex->getMessage(), 'setVisitorId() expects' ) === 0;
 	}
 
 	/**
 	 * See https://developer.chrome.com/docs/web-platform/prerender-pages
+	 *
 	 * @return bool
 	 */
-	private function isPrerender() {
+	private function is_prerender() {
 		// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 		$purpose = strtolower( isset( $_SERVER['HTTP_SEC_PURPOSE'] ) ? wp_unslash( $_SERVER['HTTP_SEC_PURPOSE'] ) : '' );
 		return strpos( $purpose, 'prefetch' ) !== false
@@ -128,11 +134,12 @@ class AjaxTracker extends \WP_Piwik\MatomoTracker {
 
 	/**
 	 * for tests to override
+	 *
 	 * @param string $url
-	 * @param array $args
+	 * @param array  $args
 	 * @return array|\WP_Error
 	 */
-	protected function wpRemoteRequest($url, $args ) {
+	protected function wp_remote_request( $url, $args ) {
 		return wp_remote_request( $url, $args );
 	}
 
@@ -150,10 +157,10 @@ class AjaxTracker extends \WP_Piwik\MatomoTracker {
 		return parent::getCurrentUrl();
 	}
 
-	public function getTrackingCookieDomain( Settings $settings ) {
+	public function get_tracking_cookie_domain( Settings $settings ) {
 		if (
-			$settings->getGlobalOption( 'track_across' )
-			|| $settings->getGlobalOption( 'track_crossdomain_linking' )
+			$settings->get_global_option( 'track_across' )
+			|| $settings->get_global_option( 'track_crossdomain_linking' )
 		) {
 			$host = wp_parse_url( home_url(), PHP_URL_HOST );
 			if ( ! empty( $host ) ) {

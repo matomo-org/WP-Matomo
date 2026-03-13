@@ -37,18 +37,17 @@ use LiteSpeed\ESI;
  * that the script and this class use as few total dependencies as possible. Otherwise,
  * AI bot tracking reduce the performance of requests to cached content.
  */
-
 class AIBotTracking {
 
-	private static $aiBotTracked = false;
+	private static $ai_bot_tracked = false;
 
-	private static $extensionsToTrack = [
+	private static $extensions_to_track = array(
 		'', // no extension
 
 		'htm',
 		'html',
 		'php',
-	];
+	);
 
 	/**
 	 * @var Settings
@@ -74,14 +73,14 @@ class AIBotTracking {
 		$this->logger   = $logger;
 	}
 
-	public function registerHooks() {
-		add_action( 'litespeed_init', [ $this, 'litespeedInit' ] );
-		add_action( 'wp_footer', [ $this, 'doAiBotTracking'], 999999 );
+	public function register_hooks() {
+		add_action( 'litespeed_init', array( $this, 'litespeed_init' ) );
+		add_action( 'wp_footer', array( $this, 'do_ai_bot_tracking' ), 999999 );
 	}
 
-	public function litespeedInit() {
+	public function litespeed_init() {
 		if ( class_exists( ESI::class )
-			&& $this->settings->isAiBotTrackingEnabledViaEsiIncludes()
+			&& $this->settings->is_ai_bot_tracking_enabled_via_esi_includes()
 		) {
 			ESI::set_has_esi();
 		}
@@ -91,60 +90,61 @@ class AIBotTracking {
 	 * @param string|null $url
 	 * @return void
 	 */
-	public function doAiBotTracking( $url = null ) {
+	public function do_ai_bot_tracking( $url = null ) {
 		// track AI bots only once per request
-		if ( self::$aiBotTracked ) {
+		if ( self::$ai_bot_tracked ) {
 			return;
 		}
 
-		self::$aiBotTracked = true;
+		self::$ai_bot_tracked = true;
 
 		// if using ESI to track, and not within the track_ai_bot.php script, output the appropriate ESI tag
-		$is_using_esi_to_track = $this->settings->isAiBotTrackingEnabledViaEsiIncludes();
+		$is_using_esi_to_track = $this->settings->is_ai_bot_tracking_enabled_via_esi_includes();
 		if (
 			$is_using_esi_to_track
-			&& empty( $GLOBALS['MATOMO_IN_AI_ESI'] )
+			&& empty( $GLOBALS['WP_PIWIK_IN_ESI'] )
 		) {
 			$track_script_url = plugins_url( '/misc/track_ai_bot.php', WP_PIWIK_FILE ) . '?mtm_esi=1&mtm_url=' . rawurlencode( AjaxTracker::getCurrentUrl() );
 			echo '<esi:include src="' . esc_attr( $track_script_url ) . '" cache-control="no-cache" />';
 			return;
 		}
 
-		if ( ! $this->isDoingAiBotTrackingThisRequest() ) {
+		if ( ! $this->is_doing_ai_bot_tracking_this_request() ) {
 			return;
 		}
 
-		$responseCode     = http_response_code();
-		$requestElapsedMs = null;
+		$response_code      = http_response_code();
+		$request_elapsed_ms = null;
 
 		// cannot track request time if executed via an esi:include
 		if (
-			empty( $GLOBALS['MATOMO_IN_AI_ESI'] )
+			empty( $GLOBALS['WP_PIWIK_IN_ESI'] )
 			&& array_key_exists( 'REQUEST_TIME_FLOAT', $_SERVER )
 		) {
-			$requestElapsedMs = (int) ( ( microtime( true ) - $_SERVER['REQUEST_TIME_FLOAT'] ) * 1000 );
+			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.MissingUnslash
+			$request_elapsed_ms = (int) ( ( microtime( true ) - floatval( $_SERVER['REQUEST_TIME_FLOAT'] ) ) * 1000 );
 		}
 
-		if ( empty( $responseCode ) ) {
-			$responseCode = 200;
+		if ( empty( $response_code ) ) {
+			$response_code = 200;
 		}
 
 		// phpcs:ignore WordPress.WP.CapitalPDangit.Misspelled
-		$source = 'wordpress';
+		$source = 'WordPress';
 
 		if ( empty( $url ) ) {
 			$url = AjaxTracker::getCurrentUrl();
 		}
 
-		$tracker = $this->getTracker();
+		$tracker = $this->get_tracker();
 
 		$tracker->setUrl( $url );
 
 		// cannot count bytes echo'd so no response size tracked
-		$tracker->doTrackPageViewIfAIBot( $responseCode, null, $requestElapsedMs, $source );
+		$tracker->doTrackPageViewIfAIBot( $response_code, null, $request_elapsed_ms, $source );
 	}
 
-	public function shouldTrackCurrentPage() {
+	public function should_track_current_page() {
 		if ( is_admin() ) {
 			return false;
 		}
@@ -162,58 +162,60 @@ class AIBotTracking {
 		}
 
 		// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-		$requestPath = (string) wp_parse_url( wp_unslash( $_SERVER['REQUEST_URI'] ), PHP_URL_PATH );
+		$request_path = (string) wp_parse_url( wp_unslash( $_SERVER['REQUEST_URI'] ), PHP_URL_PATH );
 
-		if ( preg_match( '/matomo\.php$/', $requestPath ) ) {
+		if ( preg_match( '/matomo\.php$/', $request_path ) ) {
 			return false;
 		}
 
-		if ( $this->isRequestForFile( $requestPath ) ) {
+		if ( $this->is_request_for_file( $request_path ) ) {
 			return false;
 		}
 
 		return true;
 	}
 
-	private function isRequestForFile( $requestPath ) {
+	private function is_request_for_file( $request_path ) {
 		if (
 			! empty( $_SERVER['DOCUMENT_ROOT'] )
 			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-			&& is_dir( wp_unslash( $_SERVER['DOCUMENT_ROOT'] ) . $requestPath )
+			&& is_dir( wp_unslash( $_SERVER['DOCUMENT_ROOT'] ) . $request_path )
 		) {
 			return false;
 		}
 
-		$extension = pathinfo( $requestPath, PATHINFO_EXTENSION );
-		return ! in_array( $extension, self::$extensionsToTrack, true );
+		$extension = pathinfo( $request_path, PATHINFO_EXTENSION );
+		return ! in_array( $extension, self::$extensions_to_track, true );
 	}
 
-	public function isJsExecutionDetected() {
+	public function is_js_execution_detected() {
 		return ! empty( $_COOKIE['matomo_has_js'] )
 			&& '1' === $_COOKIE['matomo_has_js'];
 	}
 
-	private function isDoingAiBotTrackingThisRequest() {
-		if ( ! empty( $GLOBALS['MATOMO_IN_AI_ESI'] ) ) {
+	private function is_doing_ai_bot_tracking_this_request() {
+		if ( ! empty( $GLOBALS['WP_PIWIK_IN_ESI'] ) ) {
 			return true;
 		}
 
-		if ( ! $this->shouldTrackCurrentPage() ) {
+		if ( ! $this->should_track_current_page() ) {
 			return false;
 		}
 
-		if ( $this->isJsExecutionDetected() ) {
+		if ( $this->is_js_execution_detected() ) {
 			return false;
 		}
 
-		$tracker = $this->getTracker();
+		$tracker = $this->get_tracker();
+
+		// phpcs:ignore WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase
 		if ( ! AjaxTracker::isUserAgentAIBot( $tracker->userAgent ) ) {
 			return false;
 		}
 
 		if (
-			! $this->settings->isAiBotTrackingEnabled()
-			|| ! $this->settings->isTrackingEnabled()
+			! $this->settings->is_ai_bot_tracking_enabled()
+			|| ! $this->settings->is_tracking_enabled()
 		) {
 			return false;
 		}
@@ -221,9 +223,9 @@ class AIBotTracking {
 		return true;
 	}
 
-	private function getTracker() {
+	private function get_tracker() {
 		if ( empty( $this->tracker ) ) {
-			$this->tracker  = new AjaxTracker( $this->settings, $this->logger );
+			$this->tracker = new AjaxTracker( $this->settings, $this->logger );
 			$this->tracker->setRequestTimeout( 1 );
 		}
 

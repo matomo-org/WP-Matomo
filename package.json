@@ -1,8 +1,12 @@
 {
   "scripts": {
-    "phpcs": "./vendor/bin/phpcs"
+    "phpcs": "./vendor/bin/phpcs",
+    "phpcbf": "./vendor/bin/phpcbf"
   },
   "devDependencies": {
     "@fastify/pre-commit": "^2.2.1"
-  }
+  },
+  "pre-commit": [
+    "phpcs"
+  ]
 }

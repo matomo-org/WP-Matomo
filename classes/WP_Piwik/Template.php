@@ -1,31 +1,45 @@
 <?php
 
-	namespace WP_Piwik;
+namespace WP_Piwik;
 
-	class Template {
-		
-		public static $logger, $settings, $wpPiwik;
-		
-		public function __construct($wpPiwik, $settings) {
-			self::$settings = $settings;
-			self::$wpPiwik = $wpPiwik;
-		}
+class Template {
 
-		public function output($array, $key, $default = '') {
-			if (isset($array[$key]))
-				return $array[$key];
-			else
-				return $default; 
-		}
-		
-		public function tabRow($name, $value) {
-			echo '<tr><td>'.$name.'</td><td>'.$value.'</td></tr>';
-		}
-		
-		public function getRangeLast30() {
-			$diff = (self::$settings->getGlobalOption('default_date') == 'yesterday') ? -86400 : 0;
-			$end = time() + $diff;
-			$start = time() - 2592000 + $diff;
-			return date('Y-m-d', $start).','.date('Y-m-d', $end);
+	/**
+	 * @var Logger
+	 */
+	public static $logger;
+
+	/**
+	 * @var Settings
+	 */
+	public static $settings;
+
+	/**
+	 * @var \WP_Piwik
+	 */
+	public static $wp_piwik;
+
+	public function __construct( $wp_piwik, $settings ) {
+		self::$settings = $settings;
+		self::$wp_piwik = $wp_piwik;
+	}
+
+	public function output( $values, $key, $default_value = '' ) {
+		if ( isset( $values[ $key ] ) ) {
+			return $values[ $key ];
+		} else {
+			return $default_value;
 		}
 	}
+
+	public function tab_row( $name, $value ) {
+		echo '<tr><td>' . esc_html( $name ) . '</td><td>' . esc_html( $value ) . '</td></tr>';
+	}
+
+	public function get_range_last30() {
+		$diff  = ( self::$settings->get_global_option( 'default_date' ) === 'yesterday' ) ? -86400 : 0;
+		$end   = time() + $diff;
+		$start = time() - 2592000 + $diff;
+		return gmdate( 'Y-m-d', $start ) . ',' . gmdate( 'Y-m-d', $end );
+	}
+}

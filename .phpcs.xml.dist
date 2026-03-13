@@ -9,6 +9,8 @@
 	<file>./index.php</file>
 	<file>./wp-piwik.php</file>
 	<file>./uninstall.php</file>
+	<file>./update</file>
+	<file>./misc</file>
     <exclude-pattern>/classes/WpMatomo/Db/*.php</exclude-pattern>
     <exclude-pattern>/classes/WpMatomo/AjaxTracker.php</exclude-pattern>
 	<!-- How to scan -->
@@ -70,15 +72,16 @@
 		<properties>
 			<!-- Value: replace the function, class, and variable prefixes used. Separate multiple prefixes with a comma. -->
 			<property name="prefixes" type="array">
-			    <element key="0" value="matomo" />
-			    <element key="1" value="wpmatomo" />
+			    <element key="0" value="wpmatomo" />
+			    <element key="1" value="WP_PIWIK" />
+			    <element key="2" value="WP_MATOMO" />
 			</property>
 		</properties>
 	</rule>
 	<rule ref="WordPress.WP.I18n">
 		<properties>
 			<property name="text_domain" type="array">
-			    <element key="0" value="matomo" />
+			    <element key="0" value="wp-piwik" />
 			</property>
 		</properties>
 	</rule>
@@ -86,5 +89,13 @@
 		<properties>
 			<property name="blank_line_check" value="true"/>
 		</properties>
+	</rule>
+	<rule ref="WordPress.WP.Capabilities">
+	    <properties>
+	        <property name="custom_capabilities" type="array">
+	            <element key="0" value="wp-piwik_read_stats" />
+	            <element key="1" value="wp-piwik_stealth" />
+	        </property>
+	    </properties>
 	</rule>
 </ruleset>

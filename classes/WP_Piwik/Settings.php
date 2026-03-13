@@ -7,6 +7,10 @@ namespace WP_Piwik;
  *
  * @author Andr&eacute; Br&auml;kling
  * @package WP_Piwik
+ *
+ * TODO: do not disable this at some point
+ * @phpcs:disable WordPress.DB.DirectDatabaseQuery.NoCaching
+ * @phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery
  */
 class Settings {
 
@@ -14,285 +18,289 @@ class Settings {
 	const TRACK_AI_BOTS_USING_ESI = 'track_ai_bots_using_esi';
 
 	/**
-	 *
-	 * @var Environment variables and default settings container
+	 * @var \WP_Piwik variables and default settings container
 	 */
-	private static $wpPiwik;
+	private static $wp_piwik;
 
-	private static $defaultSettings;
+	private static $default_settings;
 
 	/**
 	 *
-	 * @var Define callback functions for changed settings
+	 * @var array Define callback functions for changed settings
 	 */
-	private $checkSettings = array (
-		'piwik_url' => 'checkPiwikUrl',
-		'piwik_token' => 'checkPiwikToken',
-		'site_id' => 'requestPiwikSiteID',
-		'tracking_code' => 'prepareTrackingCode',
-		'noscript_code' => 'prepareNocscriptCode'
+	private $check_settings = array(
+		'piwik_url'     => 'check_piwik_url',
+		'piwik_token'   => 'check_piwik_token',
+		'site_id'       => 'request_piwik_site_id',
+		'tracking_code' => 'prepare_tracking_code',
+		'noscript_code' => 'prepare_nocscript_code',
 	);
 
 	/**
-	 *
-	 * @var Register default configuration set
+	 * @var array default configuration set
 	 */
-	private $globalSettings = array (
+	private $global_settings = array(
 		// Plugin settings
-		'revision' => 0,
-		'last_settings_update' => 0,
+		'revision'                    => 0,
+		'last_settings_update'        => 0,
 		// User settings: Piwik configuration
-		'piwik_mode' => 'http',
-		'piwik_url' => '',
-		'piwik_path' => '',
-		'piwik_user' => '',
-		'matomo_user' => '',
-		'piwik_token' => '',
-		'auto_site_config' => true,
+		'piwik_mode'                  => 'http',
+		'piwik_url'                   => '',
+		'piwik_path'                  => '',
+		'piwik_user'                  => '',
+		'matomo_user'                 => '',
+		'piwik_token'                 => '',
+		'auto_site_config'            => true,
 		// User settings: Stats configuration
-		'default_date' => 'yesterday',
-		'stats_seo' => false,
-		'stats_ecommerce' => false,
-		'dashboard_widget' => false,
-		'dashboard_ecommerce' => false,
-		'dashboard_chart' => false,
-		'dashboard_seo' => false,
-		'toolbar' => false,
-		'capability_read_stats' => array (
-				'administrator' => true
+		'default_date'                => 'yesterday',
+		'stats_seo'                   => false,
+		'stats_ecommerce'             => false,
+		'dashboard_widget'            => false,
+		'dashboard_ecommerce'         => false,
+		'dashboard_chart'             => false,
+		'dashboard_seo'               => false,
+		'toolbar'                     => false,
+		'capability_read_stats'       => array(
+			'administrator' => true,
 		),
-		'perpost_stats' => "disabled",
-		'plugin_display_name' => 'Connect Matomo',
-		'piwik_shortcut' => false,
-		'shortcodes' => false,
+		'perpost_stats'               => 'disabled',
+		'plugin_display_name'         => 'Connect Matomo',
+		'piwik_shortcut'              => false,
+		'shortcodes'                  => false,
 		// User settings: Tracking configuration
-		'track_mode' => 'disabled',
-		'track_codeposition' => 'footer',
-		'track_noscript' => false,
-		'track_nojavascript' => false,
-		'proxy_url' => '',
-		'track_content' => 'disabled',
-		'track_search' => false,
-		'track_404' => false,
-		'add_post_annotations' => array(),
-		'add_customvars_box' => false,
-		'add_download_extensions' => '',
-		'set_download_extensions' => '',
-		'set_link_classes' => '',
-		'set_download_classes' => '',
-		'require_consent' => 'disabled',
-		'disable_cookies' => false,
-		'limit_cookies' => false,
-		'limit_cookies_visitor' => 34186669, // Piwik default 13 months
-		'limit_cookies_session' => 1800, // Piwik default 30 minutes
-		'limit_cookies_referral' => 15778463, // Piwik default 6 months
-		'track_admin' => false,
-		'capability_stealth' => array (),
-		'track_across' => false,
-		'track_across_alias' => false,
-		'track_crossdomain_linking' => false,
-		'track_feed' => false,
-		'track_feed_addcampaign' => false,
-		'track_feed_campaign' => 'feed',
-		'track_heartbeat' => 0,
-		'track_user_id' => 'disabled',
+		'track_mode'                  => 'disabled',
+		'track_codeposition'          => 'footer',
+		'track_noscript'              => false,
+		'track_nojavascript'          => false,
+		'proxy_url'                   => '',
+		'track_content'               => 'disabled',
+		'track_search'                => false,
+		'track_404'                   => false,
+		'add_post_annotations'        => array(),
+		'add_customvars_box'          => false,
+		'add_download_extensions'     => '',
+		'set_download_extensions'     => '',
+		'set_link_classes'            => '',
+		'set_download_classes'        => '',
+		'require_consent'             => 'disabled',
+		'disable_cookies'             => false,
+		'limit_cookies'               => false,
+		'limit_cookies_visitor'       => 34186669, // Piwik default 13 months
+		'limit_cookies_session'       => 1800, // Piwik default 30 minutes
+		'limit_cookies_referral'      => 15778463, // Piwik default 6 months
+		'track_admin'                 => false,
+		'capability_stealth'          => array(),
+		'track_across'                => false,
+		'track_across_alias'          => false,
+		'track_crossdomain_linking'   => false,
+		'track_feed'                  => false,
+		'track_feed_addcampaign'      => false,
+		'track_feed_campaign'         => 'feed',
+		'track_heartbeat'             => 0,
+		'track_user_id'               => 'disabled',
 		// User settings: Expert configuration
-		'cache' => true,
-		'http_connection' => 'curl',
-		'http_method' => 'post',
-		'disable_timelimit' => false,
-		'filter_limit' => '',
-		'connection_timeout' => 5,
-		'disable_ssl_verify' => false,
-		'disable_ssl_verify_host' => false,
-		'piwik_useragent' => 'php',
-		'piwik_useragent_string' => 'WP-Piwik',
-		'dnsprefetch' => false,
-		'track_datacfasync' => false,
-		'track_cdnurl' => '',
-		'track_cdnurlssl' => '',
-		'force_protocol' => 'disabled',
-		'remove_type_attribute' => false,
-		'update_notice' => 'enabled',
+		'cache'                       => true,
+		'http_connection'             => 'curl',
+		'http_method'                 => 'post',
+		'disable_timelimit'           => false,
+		'filter_limit'                => '',
+		'connection_timeout'          => 5,
+		'disable_ssl_verify'          => false,
+		'disable_ssl_verify_host'     => false,
+		'piwik_useragent'             => 'php',
+		'piwik_useragent_string'      => 'WP-Piwik',
+		'dnsprefetch'                 => false,
+		'track_datacfasync'           => false,
+		'track_cdnurl'                => '',
+		'track_cdnurlssl'             => '',
+		'force_protocol'              => 'disabled',
+		'remove_type_attribute'       => false,
+		'update_notice'               => 'enabled',
 
-		self::TRACK_AI_BOTS => false,
+		self::TRACK_AI_BOTS           => false,
 		self::TRACK_AI_BOTS_USING_ESI => false,
 	);
 
-	private $settings = array (
-		'name' => '',
-		'site_id' => NULL,
-		'noscript_code' => '',
-		'tracking_code' => '',
+	private $settings = array(
+		'name'                      => '',
+		'site_id'                   => null,
+		'noscript_code'             => '',
+		'tracking_code'             => '',
 		'last_tracking_code_update' => 0,
-		'dashboard_revision' => 0
+		'dashboard_revision'        => 0,
 	);
 
-	private $settingsChanged = false;
+	private $settings_changed = false;
 
 	/**
 	 * Constructor class to prepare settings manager
 	 *
-	 * @param \WP_Piwik $wpPiwik
-	 *        	active WP-Piwik instance
+	 * @param \WP_Piwik $wp_piwik
+	 *          active WP-Piwik instance
 	 */
-	public function __construct($wpPiwik) {
-		self::$wpPiwik = $wpPiwik;
-		self::$wpPiwik->log ( 'Store default settings' );
-		self::$defaultSettings = array (
-				'globalSettings' => $this->globalSettings,
-				'settings' => $this->settings
+	public function __construct( $wp_piwik ) {
+		self::$wp_piwik = $wp_piwik;
+		self::$wp_piwik->log( 'Store default settings' );
+		self::$default_settings = array(
+			'globalSettings' => $this->global_settings,
+			'settings'       => $this->settings,
 		);
-		self::$wpPiwik->log ( 'Load settings' );
-		foreach ( $this->globalSettings as $key => $default ) {
-			$this->globalSettings [$key] = ($this->checkNetworkActivation () ? get_site_option ( 'wp-piwik_global-' . $key, $default ) : get_option ( 'wp-piwik_global-' . $key, $default ));
+		self::$wp_piwik->log( 'Load settings' );
+		foreach ( $this->global_settings as $key => $default ) {
+			$this->global_settings [ $key ] = ( $this->check_network_activation() ? get_site_option( 'wp-piwik_global-' . $key, $default ) : get_option( 'wp-piwik_global-' . $key, $default ) );
 		}
-		foreach ( $this->settings as $key => $default )
-			$this->settings [$key] = get_option ( 'wp-piwik-' . $key, $default );
+		foreach ( $this->settings as $key => $default ) {
+			$this->settings [ $key ] = get_option( 'wp-piwik-' . $key, $default );
+		}
 	}
 
 	/**
 	 * Save all settings as WordPress options
 	 */
 	public function save() {
-		if (! $this->settingsChanged) {
-			self::$wpPiwik->log ( 'No settings changed yet' );
+		global $wp_roles;
+
+		if ( ! $this->settings_changed ) {
+			self::$wp_piwik->log( 'No settings changed yet' );
 			return;
 		}
-		self::$wpPiwik->log ( 'Save settings' );
-        $this->globalSettings['plugin_display_name'] = htmlspecialchars($this->globalSettings['plugin_display_name'], ENT_QUOTES, 'utf-8');
-		foreach ( $this->globalSettings as $key => $value ) {
-			if ( $this->checkNetworkActivation() )
-				update_site_option ( 'wp-piwik_global-' . $key, $value );
-			else
-				update_option ( 'wp-piwik_global-' . $key, $value );
-		}
-		foreach ( $this->settings as $key => $value ) {
-			update_option ( 'wp-piwik-' . $key, $value );
-		}
-		global $wp_roles;
-		if (! is_object ( $wp_roles ))
-			$wp_roles = new \WP_Roles ();
-		if (! is_object ( $wp_roles ))
-			die ( "STILL NO OBJECT" );
-		foreach ( $wp_roles->role_names as $strKey => $strName ) {
-			$objRole = get_role ( $strKey );
-			foreach ( array (
-					'stealth',
-					'read_stats'
-			) as $strCap ) {
-				$aryCaps = $this->getGlobalOption ( 'capability_' . $strCap );
-				if (isset ( $aryCaps [$strKey] ) && $aryCaps [$strKey])
-					$wp_roles->add_cap ( $strKey, 'wp-piwik_' . $strCap );
-				else $wp_roles->remove_cap ( $strKey, 'wp-piwik_' . $strCap );
+		self::$wp_piwik->log( 'Save settings' );
+		$this->global_settings['plugin_display_name'] = htmlspecialchars( $this->global_settings['plugin_display_name'], ENT_QUOTES, 'utf-8' );
+		foreach ( $this->global_settings as $key => $value ) {
+			if ( $this->check_network_activation() ) {
+				update_site_option( 'wp-piwik_global-' . $key, $value );
+			} else {
+				update_option( 'wp-piwik_global-' . $key, $value );
 			}
 		}
-		$this->settingsChanged = false;
+		foreach ( $this->settings as $key => $value ) {
+			update_option( 'wp-piwik-' . $key, $value );
+		}
+		foreach ( $wp_roles->role_names as $str_key => $str_name ) {
+			$obj_role = get_role( $str_key );
+			$caps     = array( 'stealth', 'read_stats' );
+			foreach ( $caps as $str_cap ) {
+				$ary_caps = $this->get_global_option( 'capability_' . $str_cap );
+				if ( isset( $ary_caps [ $str_key ] ) && $ary_caps [ $str_key ] ) {
+					$wp_roles->add_cap( $str_key, 'wp-piwik_' . $str_cap );
+				} else {
+					$wp_roles->remove_cap( $str_key, 'wp-piwik_' . $str_cap );
+				}
+			}
+		}
+		$this->settings_changed = false;
 	}
 
-    /**
-     * Get a global option's value which should not be empty
-     *
-     * @param string $key
-     *        	option key
-     * @return string option value
-     */
-    public function getNotEmptyGlobalOption($key) {
-        return isset ( $this->globalSettings [$key] ) && !empty($this->globalSettings [$key]) ? $this->globalSettings [$key] : self::$defaultSettings ['globalSettings'] [$key];
-    }
+	/**
+	 * Get a global option's value which should not be empty
+	 *
+	 * @param string $key
+	 *          option key
+	 * @return string option value
+	 */
+	public function get_not_empty_global_option( $key ) {
+		return isset( $this->global_settings [ $key ] ) && ! empty( $this->global_settings [ $key ] ) ? $this->global_settings [ $key ] : self::$default_settings ['globalSettings'] [ $key ];
+	}
 
 	/**
 	 * Get a global option's value
 	 *
 	 * @param string $key
-	 *        	option key
+	 *          option key
 	 * @return string option value
 	 */
-	public function getGlobalOption($key) {
-		return isset ( $this->globalSettings [$key] ) ? $this->globalSettings [$key] : self::$defaultSettings ['globalSettings'] [$key];
+	public function get_global_option( $key ) {
+		return isset( $this->global_settings [ $key ] ) ? $this->global_settings [ $key ] : self::$default_settings ['globalSettings'] [ $key ];
 	}
 
 	/**
 	 * Get an option's value related to a specific blog
 	 *
 	 * @param string $key
-	 *        	option key
-	 * @param int $blogID
-	 *        	blog ID (default: current blog)
+	 *          option key
+	 * @param int    $blog_id
+	 *          blog ID (default: current blog)
 	 * @return mixed
 	 */
-	public function getOption($key, $blogID = null) {
-		if ($this->checkNetworkActivation () && ! empty ( $blogID )) {
-			return get_blog_option ( $blogID, 'wp-piwik-'.$key );
+	public function get_option( $key, $blog_id = null ) {
+		if ( $this->check_network_activation() && ! empty( $blog_id ) ) {
+			return get_blog_option( $blog_id, 'wp-piwik-' . $key );
 		}
-		return isset ( $this->settings [$key] ) ? $this->settings [$key] : self::$defaultSettings ['settings'] [$key];
+		return isset( $this->settings [ $key ] ) ? $this->settings [ $key ] : self::$default_settings ['settings'] [ $key ];
 	}
 
 	/**
 	 * Set a global option's value
 	 *
 	 * @param string $key
-	 *        	option key
+	 *          option key
 	 * @param string $value
-	 *        	new option value
+	 *          new option value
 	 */
-	public function setGlobalOption($key, $value) {
-		$this->settingsChanged = true;
-		self::$wpPiwik->log ( 'Changed global option ' . $key . ': ' . (is_array ( $value ) ? serialize ( $value ) : $value) );
-		$this->globalSettings [$key] = $value;
+	public function set_global_option( $key, $value ) {
+		$this->settings_changed = true;
+		self::$wp_piwik->log( 'Changed global option ' . $key . ': ' . ( is_array( $value ) ? wp_json_encode( $value ) : $value ) );
+		$this->global_settings [ $key ] = $value;
 	}
 
 	/**
 	 * Set an option's value related to a specific blog
 	 *
 	 * @param string $key
-	 *        	option key
+	 *          option key
 	 * @param string $value
-	 *        	new option value
-	 * @param int $blogID
-	 *        	blog ID (default: current blog)
+	 *          new option value
+	 * @param int    $blog_id
+	 *          blog ID (default: current blog)
 	 */
-	public function setOption($key, $value, $blogID = null) {
-		if (empty( $blogID )) {
-			$blogID = get_current_blog_id();
+	public function set_option( $key, $value, $blog_id = null ) {
+		if ( empty( $blog_id ) ) {
+			$blog_id = get_current_blog_id();
 		}
-		$this->settingsChanged = true;
-		self::$wpPiwik->log ( 'Changed option ' . $key . ': ' . $value );
-		if ($this->checkNetworkActivation ()) {
-			update_blog_option ( $blogID, 'wp-piwik-'.$key, $value );
+		$this->settings_changed = true;
+		self::$wp_piwik->log( 'Changed option ' . $key . ': ' . $value );
+		if ( $this->check_network_activation() ) {
+			update_blog_option( $blog_id, 'wp-piwik-' . $key, $value );
 		}
-		if ($blogID == get_current_blog_id()) {
-			$this->settings [$key] = $value;
+		if ( get_current_blog_id() === $blog_id ) {
+			$this->settings [ $key ] = $value;
 		}
 	}
 
 	/**
 	 * Reset settings to default
 	 */
-	public function resetSettings() {
-		self::$wpPiwik->log ( 'Reset WP-Piwik settings' );
+	public function reset_settings() {
+		self::$wp_piwik->log( 'Reset WP-Piwik settings' );
 		global $wpdb;
-		if ( $this->checkNetworkActivation() ) {
-			$aryBlogs = self::getBlogList();
-			if (is_array($aryBlogs))
-				foreach ($aryBlogs as $aryBlog) {
-                    switch_to_blog($aryBlog['blog_id']);
-					$wpdb->query("DELETE FROM $wpdb->options WHERE option_name LIKE 'wp-piwik-%'");
+		if ( $this->check_network_activation() ) {
+			$ary_blogs = self::get_blog_list();
+			if ( is_array( $ary_blogs ) ) {
+				foreach ( $ary_blogs as $ary_blog ) {
+					switch_to_blog( $ary_blog['blog_id'] );
+					$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE 'wp-piwik-%'" );
 					restore_current_blog();
 				}
-			$wpdb->query("DELETE FROM $wpdb->sitemeta WHERE meta_key LIKE 'wp-piwik_global-%'");
+			}
+			$wpdb->query( "DELETE FROM $wpdb->sitemeta WHERE meta_key LIKE 'wp-piwik_global-%'" );
+		} else {
+			$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE 'wp-piwik_global-%'" );
 		}
-		else $wpdb->query("DELETE FROM $wpdb->options WHERE option_name LIKE 'wp-piwik_global-%'");
 	}
 
 	/**
 	 * Get blog list
 	 */
-	public static function getBlogList($limit = null, $page = null, $search = '') {
-		if ($limit && $page)
-			$queryLimit = ' LIMIT '.(int) (($page - 1) * $limit).','.(int) $limit;
+	public static function get_blog_list( $limit = null, $page = null, $search = '' ) {
 		global $wpdb;
-		return $wpdb->get_results($wpdb->prepare('SELECT blog_id FROM '.$wpdb->blogs.' WHERE CONCAT(domain, path) LIKE "%%%s%%" AND spam = 0 AND deleted = 0 ORDER BY blog_id'.$queryLimit, $search), ARRAY_A);
+
+		if ( $limit && $page ) {
+			$query_limit = ' LIMIT ' . (int) ( ( $page - 1 ) * $limit ) . ',' . (int) $limit;
+		}
+
+		$like = '%' . $wpdb->esc_like( $search ) . '%';
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
+		return $wpdb->get_results( $wpdb->prepare( 'SELECT blog_id FROM %s WHERE CONCAT(domain, path) LIKE %s AND spam = 0 AND deleted = 0 ORDER BY blog_id' . $query_limit, $wpdb->blogs, $like ), ARRAY_A );
 	}
 
 	/**
@@ -300,48 +308,56 @@ class Settings {
 	 *
 	 * @return boolean Is network activated?
 	 */
-	public function checkNetworkActivation() {
-		if (! function_exists ( "is_plugin_active_for_network" ))
-			require_once (ABSPATH . 'wp-admin/includes/plugin.php');
-		return is_plugin_active_for_network ( 'wp-piwik/wp-piwik.php' );
+	public function check_network_activation() {
+		if ( ! function_exists( 'is_plugin_active_for_network' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+		return is_plugin_active_for_network( 'wp-piwik/wp-piwik.php' );
 	}
 
 	/**
 	 * Apply new configuration
 	 *
 	 * @param array $in
-	 *        	new configuration set
+	 *          new configuration set
 	 */
-	public function applyChanges($in) {
-		if (!self::$wpPiwik->isValidOptionsPost())
-			die("Invalid config changes.");
-		$in = $this->checkSettings ( $in );
-		self::$wpPiwik->log ( 'Apply changed settings:' );
-		foreach ( self::$defaultSettings ['globalSettings'] as $key => $val )
-			$this->setGlobalOption ( $key, isset ( $in [$key] ) ? $in [$key] : $val );
-		foreach ( self::$defaultSettings ['settings'] as $key => $val )
-			$this->setOption ( $key, isset ( $in [$key] ) ? $in [$key] : $val );
-		$this->setGlobalOption ( 'last_settings_update', time () );
-		$this->save ();
+	public function apply_changes( $in ) {
+		if ( ! self::$wp_piwik->is_valid_options_post() ) {
+			die( 'Invalid config changes.' );
+		}
+		$in = $this->check_settings( $in );
+		self::$wp_piwik->log( 'Apply changed settings:' );
+		foreach ( self::$default_settings ['globalSettings'] as $key => $val ) {
+			$this->set_global_option( $key, isset( $in [ $key ] ) ? $in [ $key ] : $val );
+		}
+		foreach ( self::$default_settings ['settings'] as $key => $val ) {
+			$this->set_option( $key, isset( $in [ $key ] ) ? $in [ $key ] : $val );
+		}
+		$this->set_global_option( 'last_settings_update', time() );
+		$this->save();
 	}
 
 	/**
 	 * Apply callback function on new settings
 	 *
-	 * @param array $in
-	 *        	new configuration set
+	 * @param array $in new configuration set
 	 * @return array configuration set after callback functions were applied
 	 */
-	private function checkSettings($in) {
-		foreach ( $this->checkSettings as $key => $value )
-			if (isset ( $in [$key] ))
-				$in [$key] = call_user_func_array ( array (
+	private function check_settings( $in ) {
+		foreach ( $this->check_settings as $key => $value ) {
+			if ( isset( $in [ $key ] ) ) {
+				$in [ $key ] = call_user_func_array(
+					array(
 						$this,
-						$value
-				), array (
-						$in [$key],
-						$in
-				) );
+						$value,
+					),
+					array(
+						$in [ $key ],
+						$in,
+					)
+				);
+			}
+		}
 		return $in;
 	}
 
@@ -349,40 +365,37 @@ class Settings {
 	 * Add slash to Piwik URL if necessary
 	 *
 	 * @param string $value
-	 *        	Piwik URL
-	 * @param array $in
-	 *        	configuration set
+	 *          Piwik URL
 	 * @return string Piwik URL
 	 */
-	private function checkPiwikUrl($value, $in) {
-		return substr ( $value, - 1, 1 ) != '/' ? $value . '/' : $value;
+	private function check_piwik_url( $value ) {
+		return substr( $value, - 1, 1 ) !== '/' ? $value . '/' : $value;
 	}
 
 	/**
 	 * Remove &amp;token_auth= from auth token
 	 *
 	 * @param string $value
-	 *        	Piwik auth token
-	 * @param array $in
-	 *        	configuration set
+	 *          Piwik auth token
 	 * @return string Piwik auth token
 	 */
-	private function checkPiwikToken($value, $in) {
-		return str_replace ( '&token_auth=', '', $value );
+	private function check_piwik_token( $value ) {
+		return str_replace( '&token_auth=', '', $value );
 	}
 
 	/**
 	 * Request the site ID (if not set before)
 	 *
 	 * @param string $value
-	 *        	tracking code
-	 * @param array $in
-	 *        	configuration set
+	 *          tracking code
+	 * @param array  $in
+	 *          configuration set
 	 * @return int Piwik site ID
 	 */
-	private function requestPiwikSiteID($value, $in) {
-		if ($in ['auto_site_config'] && ! $value)
-			return self::$wpPiwik->getPiwikSiteId();
+	private function request_piwik_site_id( $value, $in ) {
+		if ( $in ['auto_site_config'] && ! $value ) {
+			return self::$wp_piwik->get_piwik_site_id();
+		}
 		return $value;
 	}
 
@@ -390,37 +403,35 @@ class Settings {
 	 * Prepare the tracking code
 	 *
 	 * @param string $value
-	 *        	tracking code
-	 * @param array $in
-	 *        	configuration set
+	 *          tracking code
+	 * @param array  $in
+	 *          configuration set
 	 * @return string tracking code
 	 */
-	private function prepareTrackingCode($value, $in) {
-		if ($in ['track_mode'] == 'manually' || $in ['track_mode'] == 'disabled') {
-			$value = stripslashes ( $value );
-			if ($this->checkNetworkActivation ())
-				update_site_option ( 'wp-piwik-manually', $value );
+	private function prepare_tracking_code( $value, $in ) {
+		if ( 'manually' === $in['track_mode'] || 'disabled' === $in['track_mode'] ) {
+			$value = stripslashes( $value );
+			if ( $this->check_network_activation() ) {
+				update_site_option( 'wp-piwik-manually', $value );
+			}
 			return $value;
 		}
-		/*$result = self::$wpPiwik->updateTrackingCode ();
-		echo '<pre>'; print_r($result); echo '</pre>';
-		$this->setOption ( 'noscript_code', $result ['noscript'] );*/
-		return; // $result ['script'];
 	}
 
 	/**
 	 * Prepare the nocscript code
 	 *
 	 * @param string $value
-	 *        	noscript code
-	 * @param array $in
-	 *        	configuration set
+	 *          noscript code
+	 * @param array  $in
+	 *          configuration set
 	 * @return string noscript code
 	 */
-	private function prepareNocscriptCode($value, $in) {
-		if ($in ['track_mode'] == 'manually')
-			return stripslashes ( $value );
-		return $this->getOption ( 'noscript_code' );
+	private function prepare_nocscript_code( $value, $in ) {
+		if ( 'manually' === $in['track_mode'] ) {
+			return stripslashes( $value );
+		}
+		return $this->get_option( 'noscript_code' );
 	}
 
 	/**
@@ -428,40 +439,40 @@ class Settings {
 	 *
 	 * @return array WP-Piwik settings for debug output
 	 */
-	public function getDebugData() {
-		$debug = array(
-			'global_settings' => $this->globalSettings,
-			'settings' => $this->settings
+	public function get_debug_data() {
+		$debug                                   = array(
+			'global_settings' => $this->global_settings,
+			'settings'        => $this->settings,
 		);
-		$debug['global_settings']['piwik_token'] = !empty($debug['global_settings']['piwik_token'])?'set':'not set';
+		$debug['global_settings']['piwik_token'] = ! empty( $debug['global_settings']['piwik_token'] ) ? 'set' : 'not set';
 		return $debug;
 	}
 
-	public function isAiBotTrackingEnabled() {
-		return (bool) $this->getGlobalOption( self::TRACK_AI_BOTS );
+	public function is_ai_bot_tracking_enabled() {
+		return (bool) $this->get_global_option( self::TRACK_AI_BOTS );
 	}
 
-	public function isAiBotTrackingEnabledViaEsiIncludes() {
-		return (bool) $this->getGlobalOption( self::TRACK_AI_BOTS_USING_ESI );
+	public function is_ai_bot_tracking_enabled_via_esi_includes() {
+		return (bool) $this->get_global_option( self::TRACK_AI_BOTS_USING_ESI );
 	}
 
-	public function isTrackViaEsiEnabled() {
-		return ( (bool) $this->getGlobalOption( 'track_ai_bots_using_esi' ) ) === true;
+	public function is_track_via_esi_enabled() {
+		return true === (bool) $this->get_global_option( 'track_ai_bots_using_esi' );
 	}
 
-	public function getMatomoUrl() {
-		if ($this->getGlobalOption('piwik_mode') == 'http') {
-			return $this->getGlobalOption('piwik_url');
+	public function get_matomo_url() {
+		if ( 'http' === $this->get_global_option( 'piwik_mode' ) ) {
+			return $this->get_global_option( 'piwik_url' );
 		}
 
-		if ($this->getGlobalOption('piwik_mode') == 'cloud') {
-			return 'https://' . $this->getGlobalOption('piwik_user') . '.innocraft.cloud/';
+		if ( 'cloud' === $this->get_global_option( 'piwik_mode' ) ) {
+			return 'https://' . $this->get_global_option( 'piwik_user' ) . '.innocraft.cloud/';
 		}
 
-		return 'https://'.$this->getGlobalOption('matomo_user').'.matomo.cloud/';
+		return 'https://' . $this->get_global_option( 'matomo_user' ) . '.matomo.cloud/';
 	}
 
-	public function isTrackingEnabled() {
-		return $this->getGlobalOption('track_mode') !== 'disabled';
+	public function is_tracking_enabled() {
+		return 'disabled' !== $this->get_global_option( 'track_mode' );
 	}
 }

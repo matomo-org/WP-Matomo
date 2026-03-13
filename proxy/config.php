@@ -11,29 +11,29 @@ $settings = new WP_Piwik\Settings ( $logger );
 
 $protocol = (isset ( $_SERVER ['HTTPS'] ) && $_SERVER ['HTTPS'] != 'off') ? 'https' : 'http';
 
-switch ($settings->getGlobalOption ( 'piwik_mode' )) {
+switch ($settings->get_global_option ( 'piwik_mode' )) {
 	case 'php' :
-		$PIWIK_URL = $settings->getGlobalOption ( 'proxy_url' );
+		$PIWIK_URL = $settings->get_global_option ( 'proxy_url' );
 		break;
 	case 'cloud' :
-		$PIWIK_URL = 'https://' . $settings->getGlobalOption ( 'piwik_user' ) . '.innocraft.cloud/';
+		$PIWIK_URL = 'https://' . $settings->get_global_option ( 'piwik_user' ) . '.innocraft.cloud/';
 		break;
     case 'cloud-matomo' :
-        $PIWIK_URL = 'https://' . $settings->getGlobalOption ( 'matomo_user' ) . '.matomo.cloud/';
+        $PIWIK_URL = 'https://' . $settings->get_global_option ( 'matomo_user' ) . '.matomo.cloud/';
         break;
 	default :
-		$PIWIK_URL = $settings->getGlobalOption ( 'piwik_url' );
+		$PIWIK_URL = $settings->get_global_option ( 'piwik_url' );
 }
 
 if (substr ( $PIWIK_URL, 0, 2 ) == '//')
 	$PIWIK_URL = $protocol . ':' . $PIWIK_URL;
 
-$TOKEN_AUTH = $settings->getGlobalOption ( 'piwik_token' );
-$timeout = $settings->getGlobalOption ( 'connection_timeout' );
+$TOKEN_AUTH = $settings->get_global_option ( 'piwik_token' );
+$timeout = $settings->get_global_option ( 'connection_timeout' );
 $useCurl = (
-	(function_exists('curl_init') && ini_get('allow_url_fopen') && $settings->getGlobalOption('http_connection') == 'curl') || (function_exists('curl_init') && !ini_get('allow_url_fopen'))
+	(function_exists('curl_init') && ini_get('allow_url_fopen') && $settings->get_global_option('http_connection') == 'curl') || (function_exists('curl_init') && !ini_get('allow_url_fopen'))
 );
 
-$settings->getGlobalOption ( 'http_connection' );
+$settings->get_global_option ( 'http_connection' );
 
 ini_set ( 'display_errors', 0 );

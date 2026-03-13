@@ -1,9 +1,10 @@
 <?php
 
-	namespace WP_Piwik\Logger;
-	
-	class Dummy extends \WP_Piwik\Logger {
+namespace WP_Piwik\Logger;
 
-		public function loggerOutput($loggerTime, $loggerMessage) {}
-		
-    }
+class Dummy extends \WP_Piwik\Logger {
+
+	public function logger_output( $logger_time, $logger_message ) {
+		// empty
+	}
+}

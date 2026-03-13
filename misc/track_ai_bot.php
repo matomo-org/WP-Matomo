@@ -7,7 +7,7 @@
  * @package matomo
  */
 
-/*
+/**
  * This script, when included or visited, will send an AI bot tracking
  * request to Matomo in a shutdown function.
  *
@@ -17,8 +17,9 @@
  * This script can be added to a user's wp-config.php or be executed
  * via an HTTP request in an <esi:include> directive. It should have as
  * few dependencies as possible, and load as few PHP files as possible.
+ *
+ * phpcs:disable WordPress.WP.GlobalVariablesOverride.Prohibited
  */
-
 function wp_piwik_track_if_ai_bot() {
 	global $wpdb;
 
@@ -30,30 +31,34 @@ function wp_piwik_track_if_ai_bot() {
 	}
 
 	if ( isset( $_GET['mtm_esi'] ) ) { // executing via esi:include directive
-		$GLOBALS['MATOMO_IN_AI_ESI'] = true;
+		$GLOBALS['WP_PIWIK_IN_ESI'] = true;
 	}
 
 	require_once __DIR__ . '/../libs/matomo-php-tracker/MatomoTracker.php';
 
 	// check user agent is AI bot first thing, so if it is a normal request we do
 	// as little extra work as possible
-	$userAgent = ! empty( $_SERVER['HTTP_USER_AGENT'] ) ? $_SERVER['HTTP_USER_AGENT'] : '';
-	if ( ! \WP_Piwik\MatomoTracker::isUserAgentAIBot( $userAgent ) ) {
+	// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+	$user_agent = ! empty( $_SERVER['HTTP_USER_AGENT'] ) ? wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) : '';
+	if ( ! \WP_Piwik\MatomoTracker::isUserAgentAIBot( $user_agent ) ) {
 		return;
 	}
 
-	$GLOBALS['wp_plugin_paths'] = [];
+	// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
+	$GLOBALS['wp_plugin_paths'] = array();
 
 	if ( ! defined( 'ABSPATH' ) ) {
 		// being called from a esi:include directive
 		define( 'SHORTINIT', true );
 
-		$wpConfigFile = dirname( dirname( dirname( dirname( __DIR__ ) ) ) ) . '/wp-config.php';
-		if ( ! is_file( $wpConfigFile ) ) {
-			$wpConfigFile = dirname( dirname( dirname( dirname( dirname( $_SERVER['SCRIPT_FILENAME'] ) ) ) ) ) . '/wp-config.php';
+		$wp_config_file = dirname( dirname( dirname( dirname( __DIR__ ) ) ) ) . '/wp-config.php';
+		if ( ! is_file( $wp_config_file ) && ! empty( $_SERVER['SCRIPT_FILENAME'] ) ) {
+			// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$script_filename = wp_unslash( $_SERVER['SCRIPT_FILENAME'] );
+			$wp_config_file  = dirname( dirname( dirname( dirname( dirname( $script_filename ) ) ) ) ) . '/wp-config.php';
 		}
 
-		require_once $wpConfigFile;
+		require_once $wp_config_file;
 	} else {
 		// being called from request that uses advanced-cache.php
 		require_once ABSPATH . WPINC . '/class-wp-list-util.php';
@@ -88,12 +93,14 @@ function wp_piwik_track_if_ai_bot() {
 		wp_plugin_directory_constants();
 	}
 
-	$url = !empty( $_REQUEST['mtm_url'] ) ? $_REQUEST['mtm_url'] : null;
+	// url is passed to tracker so we don't want to modify it
+	// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+	$url = ! empty( $_REQUEST['mtm_url'] ) ? wp_unslash( $_REQUEST['mtm_url'] ) : null;
 
-	$wpPiwik       = new \WP_Piwik();
-	$settings      = new \WP_Piwik\Settings( $wpPiwik );
-	$aiBotTracking = new \WP_Piwik\AIBotTracking( $settings, \WP_Piwik::getLogger() );
-	$aiBotTracking->doAiBotTracking( $url );
+	$wp_piwik        = new \WP_Piwik();
+	$settings        = new \WP_Piwik\Settings( $wp_piwik );
+	$ai_bot_tracking = new \WP_Piwik\AIBotTracking( $settings, \WP_Piwik::get_logger() );
+	$ai_bot_tracking->do_ai_bot_tracking( $url );
 }
 
 register_shutdown_function( 'wp_piwik_track_if_ai_bot' );
