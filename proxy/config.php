@@ -1,5 +1,8 @@
 <?php
-$wpRootDir = isset($wpRootDir)?$wpRootDir:'../../../../';
+// Get the install directory of WP.
+// Usefull for immutable WP install, like : https://github.com/zorglube/clever-wordpress OR https://github.com/CleverCloud/wordpress-bedrock-example where WP core and Plugins are in separate directories
+$wpRootDir = getenv('WP_MATOMO_WP_ROOT_DIR');
+$wpRootDir = !empty($wpRootDir)?$wpRootDir:'../../../../';
 require ($wpRootDir.'wp-load.php');
 
 require_once ('../classes/WP_Piwik/Settings.php');
@@ -23,10 +26,12 @@ switch ($settings->get_global_option ( 'piwik_mode' )) {
         break;
 	default :
 		$PIWIK_URL = $settings->get_global_option ( 'piwik_url' );
+		break;
 }
 
-if (substr ( $PIWIK_URL, 0, 2 ) == '//')
+if ( substr ( $PIWIK_URL, 0, 2 ) == '//' ) {
 	$PIWIK_URL = $protocol . ':' . $PIWIK_URL;
+}
 
 $TOKEN_AUTH = $settings->get_global_option ( 'piwik_token' );
 $timeout = $settings->get_global_option ( 'connection_timeout' );
