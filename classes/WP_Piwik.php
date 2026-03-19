@@ -17,7 +17,7 @@ class WP_Piwik {
 	private static $logger;
 
 	/**
-	 * @var \WP_Piwik\Admin\Settings
+	 * @var \WP_Piwik\Settings
 	 */
 	private static $settings;
 
@@ -320,7 +320,7 @@ class WP_Piwik {
 			exit();
 		}
 		self::delete_word_press_option( 'wp-piwik-notices' );
-		self::$settings->resetSettings( true );
+		self::$settings->reset_settings();
 	}
 
 	/**
@@ -783,7 +783,7 @@ class WP_Piwik {
 	 *
 	 * @param string $content
 	 *          post content
-	 * @return string post content extended by tracking pixel
+	 * @return string|false post content extended by tracking pixel
 	 */
 	public function add_feed_tracking( $content ) {
 		global $post;
@@ -797,7 +797,7 @@ class WP_Piwik {
 					return false;
 				}
 			}
-			$title   = the_title( null, null, false );
+			$title   = the_title( '', '', false );
 			$posturl = get_permalink( $post->ID );
 			$urlref  = get_bloginfo( 'rss2_url' );
 			if ( 'proxy' === self::$settings->get_global_option( 'track_mode' ) ) {
@@ -920,13 +920,13 @@ class WP_Piwik {
 	 * @phpcs:disable WordPress.Security.NonceVerification.Missing
 	 */
 	public static function is_config_submitted() {
-		return isset( $_POST ) && isset( $_POST ['wp-piwik'] ) && self::is_valid_options_post();
+		return isset( $_POST ['wp-piwik'] ) && self::is_valid_options_post();
 	}
 
 	/**
 	 * Check if PHP mode is chosen
 	 *
-	 * @return Is PHP mode chosen?
+	 * @return bool Is PHP mode chosen?
 	 */
 	public function is_php_mode() {
 		return self::$settings->get_global_option( 'piwik_mode' ) && 'php' === self::$settings->get_global_option( 'piwik_mode' );
@@ -1068,7 +1068,7 @@ class WP_Piwik {
 	 * Load WP-Piwik settings
 	 */
 	private function open_settings() {
-		self::$settings = new WP_Piwik\Settings( $this, self::$logger );
+		self::$settings = new WP_Piwik\Settings( $this );
 		if ( ! $this->is_config_submitted() && $this->is_php_mode() && ! defined( 'PIWIK_INCLUDE_PATH' ) ) {
 			self::define_piwik_constants();
 		}
@@ -1079,7 +1079,7 @@ class WP_Piwik {
 	 */
 	private function include_file( $str_file ) {
 		self::$logger->log( 'Include ' . $str_file . '.php' );
-		if ( WP_PIWIK_PATH . $str_file . '.php' ) {
+		if ( is_file( WP_PIWIK_PATH . $str_file . '.php' ) ) {
 			include WP_PIWIK_PATH . $str_file . '.php';
 		}
 	}
@@ -1137,7 +1137,7 @@ class WP_Piwik {
 	 *
 	 * @param string $new_status
 	 *          new post status
-	 * @param strint $old_status
+	 * @param string $old_status
 	 *          new post status
 	 * @param object $post
 	 *          current post object
@@ -1226,22 +1226,6 @@ class WP_Piwik {
 	}
 
 	/**
-	 * Execute WP-Piwik test script
-	 */
-	private function load_testscript() {
-		$this->include_file( 'debug' . DIRECTORY_SEPARATOR . 'testscript' );
-	}
-
-	/**
-	 * Echo an error message
-	 *
-	 * @param string $message message content
-	 */
-	private static function show_error_message( $message ) {
-		echo '<strong class="wp-piwik-error">' . esc_html__( 'An error occured', 'wp-piwik' ) . ':</strong> ' . esc_html( $message ) . ' [<a href="' . esc_attr( self::$settings->check_network_activation() ? 'network/settings' : 'options-general' ) . '.php?page=wp-piwik/classes/WP_Piwik.php&amp;tab=support">' . esc_html__( 'Support', 'wp-piwik' ) . '</a>]';
-	}
-
-	/**
 	 * Perform a Piwik request
 	 *
 	 * @param string $id
@@ -1301,7 +1285,7 @@ class WP_Piwik {
 	/**
 	 * Get Piwik site ID by blog ID
 	 *
-	 * @param int $blog_id
+	 * @param int|string $blog_id
 	 *          which blog's Piwik site ID to get, default is the current blog
 	 * @return mixed Piwik site ID or n/a
 	 */
@@ -1317,7 +1301,7 @@ class WP_Piwik {
 	/**
 	 * Get a detailed list of all Piwik sites
 	 *
-	 * @return array Piwik sites
+	 * @return mixed Piwik sites
 	 */
 	public function get_piwik_site_details() {
 		$id                 = WP_Piwik\Request::register( 'SitesManager.getSitesWithAtLeastViewAccess', array() );
@@ -1370,7 +1354,7 @@ class WP_Piwik {
 	 *
 	 * @param int $blog_id
 	 *          which blog's Piwik site to create, default is the current blog
-	 * @return int Piwik site ID
+	 * @return int|null Piwik site ID
 	 * @phpcs:disable WordPress.NamingConventions.ValidHookName.UseUnderscores
 	 * @phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 	 */
@@ -1428,11 +1412,11 @@ class WP_Piwik {
 	/**
 	 * Update a site's tracking code
 	 *
-	 * @param int $site_id
+	 * @param int|false $site_id
 	 *          which Piwik site to updated
-	 * @param int $blog_id
+	 * @param int|null  $blog_id
 	 *          which blog's Piwik site ID to get, default is the current blog
-	 * @return string tracking code
+	 * @return string|false tracking code
 	 */
 	public function update_tracking_code( $site_id = false, $blog_id = null ) {
 		if ( ! $site_id ) {
@@ -1458,13 +1442,14 @@ class WP_Piwik {
 		}
 		$result = ! is_array( $code ) ? html_entity_decode( $code ) : '<!-- ' . wp_json_encode( $code ) . ' -->';
 		self::$logger->log( 'Delivered tracking code: ' . $result );
-		$result = WP_Piwik\TrackingCode::prepare_tracking_code( $result, self::$settings, self::$logger, true );
+		$result = WP_Piwik\TrackingCode::prepare_tracking_code( $result, self::$settings, self::$logger );
 		if ( isset( $result ['script'] ) && ! empty( $result ['script'] ) ) {
 			self::$settings->set_option( 'tracking_code', $result ['script'], $blog_id );
 			self::$settings->set_option( 'noscript_code', $result ['noscript'], $blog_id );
 			self::$settings->set_global_option( 'proxy_url', $result ['proxy'] );
+			return $result['script'];
 		}
-		return $result;
+		return false;
 	}
 
 	/**

@@ -4,6 +4,9 @@ namespace WP_Piwik\Request;
 
 class Php extends \WP_Piwik\Request {
 
+	/**
+	 * @var mixed
+	 */
 	private static $piwik_environment = false;
 
 	protected function request( $id ) {
@@ -60,11 +63,9 @@ class Php extends \WP_Piwik\Request {
 				'message' => __( 'Class Piwik\API\Request does not exists.', 'wp-piwik' ),
 			);
 		}
-		if ( isset( $request ) ) {
-			$result = $request->process();
-		} else {
-			$result = null;
-		}
+
+		$result = $request->process();
+
 		if ( ! headers_sent() ) {
 			header( 'Content-Type: text/html', true );
 		}
@@ -76,7 +77,10 @@ class Php extends \WP_Piwik\Request {
 	}
 
 	public function reset() {
-		if ( class_exists( '\Piwik\Application\Environment' ) && ! self::$piwik_environment ) {
+		if (
+			class_exists( '\Piwik\Application\Environment' )
+			&& self::$piwik_environment instanceof \Piwik\Application\Environment
+		) {
 			self::$piwik_environment->destroy();
 		}
 		if ( class_exists( 'Piwik\FrontController' ) ) {

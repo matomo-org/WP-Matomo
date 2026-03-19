@@ -172,22 +172,24 @@ abstract class Widget {
 	/**
 	 * Display a HTML table
 	 *
-	 * @param array  $thead
+	 * @param array|null   $thead
 	 *            table header content (array of cells)
-	 * @param array  $tbody
+	 * @param array        $tbody
 	 *            table body content (array of rows)
-	 * @param array  $tfoot
+	 * @param array|null   $tfoot
 	 *            table footer content (array of cells)
-	 * @param string $css_class
-	 *            CSSclass name to apply on table sections
-	 * @param string $java_script
+	 * @param string|false $css_class
+	 *            CSS class name to apply on table sections
+	 * @param array        $java_script
 	 *            array of javascript code to apply on body rows
+	 * @param array        $css_classes
+	 *            array mapping keys in $tbody to css classes to apply on table rows.
 	 */
 	protected function table( $thead, $tbody = array(), $tfoot = array(), $css_class = false, $java_script = array(), $css_classes = array() ) {
 		$this->out( '<div class="table"><table class="widefat wp-piwik-table">' );
 		if ( $this->is_shortcode && $this->title ) {
 			$colspan = ! empty( $tbody ) ? count( $tbody[0] ) : 2;
-			$this->out( '<tr><th colspan="' . esc_attr( $colspan ) . '">' . esc_html( $this->title ) . '</th></tr>' );
+			$this->out( '<tr><th colspan="' . $colspan . '">' . esc_html( $this->title ) . '</th></tr>' );
 		}
 		if ( ! empty( $thead ) ) {
 			$this->tab_head( $thead, $css_class );
@@ -206,9 +208,9 @@ abstract class Widget {
 	/**
 	 * Display a HTML table header
 	 *
-	 * @param array  $thead
+	 * @param array        $thead
 	 *            array of cells.
-	 * @param string $css_class
+	 * @param string|false $css_class
 	 *            CSS class to apply
 	 */
 	private function tab_head( $thead, $css_class = false ) {
@@ -241,9 +243,9 @@ abstract class Widget {
 	/**
 	 * Display a HTML table footer
 	 *
-	 * @param array  $tfoot
+	 * @param array        $tfoot
 	 *            array of cells
-	 * @param string $css_class
+	 * @param string|false $css_class
 	 *            CSS class to apply
 	 */
 	private function tab_foot( $tfoot, $css_class = false ) {
@@ -306,17 +308,17 @@ abstract class Widget {
 				$description = __( 'last week', 'wp-piwik' );
 				break;
 			case 'yesterday':
+			default:
 				$period      = 'day';
 				$date        = 'yesterday';
 				$description = __( 'yesterday', 'wp-piwik' );
 				break;
-			default:
-				break;
 		}
 
 		if ( isset( $_GET['date'] ) ) {
-			$date        = intval( wp_unslash( $_GET['date'] ) );
-			$description = $this->date_format( $date, $period );
+			$date = intval( wp_unslash( $_GET['date'] ) );
+			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+			$description = $this->date_format( wp_unslash( $_GET['date'] ), $period );
 		}
 
 		return array(
@@ -466,7 +468,7 @@ abstract class Widget {
 	 *            array to get a value from
 	 * @param string $key
 	 *            key of the value to get from array
-	 * @return string found value or '-' as a placeholder
+	 * @return string|float found value or '-' as a placeholder
 	 */
 	protected function value( $values, $key ) {
 		return isset( $values[ $key ] ) ? $values[ $key ] : '-';

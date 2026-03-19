@@ -24,9 +24,9 @@ class Ecommerce extends \WP_Piwik\Widget {
 			echo '<strong>' . esc_html__( 'Piwik error', 'wp-piwik' ) . ':</strong> ' . esc_html( $response['message'] );
 		} else {
 			$table_head     = null;
-			$revenue        = is_float( $this->value( $response, 'revenue' ) ) ? number_format( $this->value( $response, 'revenue' ), 2 ) : '';
-			$revenue_new    = is_float( $this->value( $response, 'revenue_new_visit' ) ) ? number_format( $this->value( $response, 'revenue_new_visit' ), 2 ) : '';
-			$revenue_return = is_float( $this->value( $response, 'revenue_returning_visit' ) ) ? number_format( $this->value( $response, 'revenue_returning_visit' ), 2 ) : '';
+			$revenue        = is_numeric( $this->value( $response, 'revenue' ) ) ? number_format( (float) $this->value( $response, 'revenue' ), 2 ) : '';
+			$revenue_new    = is_numeric( $this->value( $response, 'revenue_new_visit' ) ) ? number_format( (float) $this->value( $response, 'revenue_new_visit' ), 2 ) : '';
+			$revenue_return = is_numeric( $this->value( $response, 'revenue_returning_visit' ) ) ? number_format( (float) $this->value( $response, 'revenue_returning_visit' ), 2 ) : '';
 			$table_body     = array(
 				array( __( 'Conversions', 'wp-piwik' ) . ':', $this->value( $response, 'nb_conversions' ) ),
 				array( __( 'Visits converted', 'wp-piwik' ) . ':', $this->value( $response, 'nb_visits_converted' ) ),
@@ -44,8 +44,7 @@ class Ecommerce extends \WP_Piwik\Widget {
 			$table_foot     = self::$settings->get_global_option( 'piwik_shortcut' )
 				? array(
 					esc_html__( 'Shortcut', 'wp-piwik' ) . ':',
-					'<a href="' . esc_attr( self::$settings->get_global_option( 'piwik_url' ) ) . '">Piwik</a>'
-						. ( isset( $ary_conf['inline'] ) && $ary_conf['inline'] ? ' - <a href="?page=wp-piwik_stats">WP-Piwik</a>' : '' ),
+					'<a href="' . esc_attr( self::$settings->get_global_option( 'piwik_url' ) ) . '">Piwik</a>',
 				)
 				: null;
 			$this->table( $table_head, $table_body, $table_foot );

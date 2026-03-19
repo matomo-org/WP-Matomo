@@ -13,8 +13,8 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // if accessed directly
 }
 
-if ( ! class_exists( '\WP_Piwik\PiwikTracker' ) ) {
-	include_once __DIR__ . '/../../libs/matomo-php-tracker/MatomoTracker.php';
+if ( ! class_exists( '\WP_Piwik\MatomoTracker' ) ) {
+	require_once __DIR__ . '/../../libs/matomo-php-tracker/MatomoTracker.php';
 }
 
 /**
@@ -73,8 +73,9 @@ class AjaxTracker extends \WP_Piwik\MatomoTracker {
 			// this way we will track all cart updates and orders into the same visitor on following requests.
 			// If we recognized the visitor before via cookie we want in our case to make sure to not overwrite
 			// any cookie
-			parent::setCookie( $cookieName, $cookieValue, $cookieTTL );
+			return parent::setCookie( $cookieName, $cookieValue, $cookieTTL );
 		}
+		return $this;
 	}
 
 	protected function sendRequest( string $url, string $method = 'GET', $data = null, bool $force = false ): string {
@@ -147,10 +148,11 @@ class AjaxTracker extends \WP_Piwik\MatomoTracker {
 	 * In Connect Matomo we want to rely entirely on JavaScript tracker
 	 * for creating cookies.
 	 *
-	 * @return void
+	 * @return self
 	 */
 	protected function setFirstPartyCookies() {
 		// disabled
+		return $this;
 	}
 
 	public static function getCurrentUrl(): string {

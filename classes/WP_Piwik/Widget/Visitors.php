@@ -45,7 +45,20 @@ class Visitors extends Widget {
 		$result   = $this->request_data();
 		$response = $result['response'];
 		if ( ! $result['success'] ) {
-			echo '<strong>' . esc_html__( 'Piwik error', 'wp-piwik' ) . ':</strong> ' . esc_html( $response[ $method ]['message'] );
+			$message = '';
+			if ( is_array( $this->method ) ) {
+				foreach ( $this->method as $m ) {
+					if ( empty( $response[ $m ]['message'] ) ) {
+						continue;
+					}
+
+					$message .= ' ' . $m . ' - ' . $response[ $m ]['message'];
+				}
+			} else {
+				$message = $response[ $this->method ]['message'];
+			}
+
+			echo '<strong>' . esc_html__( 'Piwik error', 'wp-piwik' ) . ':</strong> ' . esc_html( $message );
 		} else {
 			$data = array();
 			if ( is_array( $response ) && is_array( $response['VisitsSummary.getVisits'] ) ) {

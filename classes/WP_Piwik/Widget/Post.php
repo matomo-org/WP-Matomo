@@ -86,8 +86,7 @@ class Post extends \WP_Piwik\Widget {
 			$table_foot = self::$settings->get_global_option( 'piwik_shortcut' )
 				? array(
 					esc_html__( 'Shortcut', 'wp-piwik' ) . ':',
-					'<a href="' . esc_attr( self::$settings->get_global_option( 'piwik_url' ) ) . '">Piwik</a>'
-						. ( isset( $ary_conf['inline'] ) && $ary_conf['inline'] ? ' - <a href="?page=wp-piwik_stats">WP-Piwik</a>' : '' ),
+					'<a href="' . esc_attr( self::$settings->get_global_option( 'piwik_url' ) ) . '">Piwik</a>',
 				)
 				: null;
 			$this->table( $table_head, $table_body, $table_foot );

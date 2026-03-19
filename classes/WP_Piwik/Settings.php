@@ -207,7 +207,7 @@ class Settings {
 	 *
 	 * @param string $key
 	 *          option key
-	 * @return string option value
+	 * @return mixed option value
 	 */
 	public function get_global_option( $key ) {
 		return isset( $this->global_settings [ $key ] ) ? $this->global_settings [ $key ] : self::$default_settings ['globalSettings'] [ $key ];
@@ -234,7 +234,7 @@ class Settings {
 	 *
 	 * @param string $key
 	 *          option key
-	 * @param string $value
+	 * @param mixed  $value
 	 *          new option value
 	 */
 	public function set_global_option( $key, $value ) {
@@ -294,6 +294,7 @@ class Settings {
 	public static function get_blog_list( $limit = null, $page = null, $search = '' ) {
 		global $wpdb;
 
+		$query_limit = '';
 		if ( $limit && $page ) {
 			$query_limit = ' LIMIT ' . (int) ( ( $page - 1 ) * $limit ) . ',' . (int) $limit;
 		}
@@ -333,7 +334,7 @@ class Settings {
 		foreach ( self::$default_settings ['settings'] as $key => $val ) {
 			$this->set_option( $key, isset( $in [ $key ] ) ? $in [ $key ] : $val );
 		}
-		$this->set_global_option( 'last_settings_update', time() );
+		$this->set_global_option( 'last_settings_update', (string) time() );
 		$this->save();
 	}
 
@@ -367,6 +368,7 @@ class Settings {
 	 * @param string $value
 	 *          Piwik URL
 	 * @return string Piwik URL
+	 * @phpstan-ignore method.unused
 	 */
 	private function check_piwik_url( $value ) {
 		return substr( $value, - 1, 1 ) !== '/' ? $value . '/' : $value;
@@ -378,6 +380,7 @@ class Settings {
 	 * @param string $value
 	 *          Piwik auth token
 	 * @return string Piwik auth token
+	 * @phpstan-ignore method.unused
 	 */
 	private function check_piwik_token( $value ) {
 		return str_replace( '&token_auth=', '', $value );
@@ -386,17 +389,18 @@ class Settings {
 	/**
 	 * Request the site ID (if not set before)
 	 *
-	 * @param string $value
-	 *          tracking code
-	 * @param array  $in
+	 * @param string|int $value
+	 *          site ID setting value
+	 * @param array      $in
 	 *          configuration set
 	 * @return int Piwik site ID
+	 * @phpstan-ignore method.unused
 	 */
 	private function request_piwik_site_id( $value, $in ) {
 		if ( $in ['auto_site_config'] && ! $value ) {
 			return self::$wp_piwik->get_piwik_site_id();
 		}
-		return $value;
+		return intval( $value );
 	}
 
 	/**
@@ -407,6 +411,7 @@ class Settings {
 	 * @param array  $in
 	 *          configuration set
 	 * @return string tracking code
+	 * @phpstan-ignore method.unused
 	 */
 	private function prepare_tracking_code( $value, $in ) {
 		if ( 'manually' === $in['track_mode'] || 'disabled' === $in['track_mode'] ) {
@@ -416,6 +421,8 @@ class Settings {
 			}
 			return $value;
 		}
+
+		return '';
 	}
 
 	/**
@@ -426,6 +433,7 @@ class Settings {
 	 * @param array  $in
 	 *          configuration set
 	 * @return string noscript code
+	 * @phpstan-ignore method.unused
 	 */
 	private function prepare_nocscript_code( $value, $in ) {
 		if ( 'manually' === $in['track_mode'] ) {

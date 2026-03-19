@@ -11,6 +11,6 @@ class Network extends \WP_Piwik\Admin\Statistics {
 	}
 
 	public function on_load() {
-		self::$wp_piwik->onload_stats_page( self::$page_id );
+		self::$wp_piwik->onload_stats_page();
 	}
 }

@@ -21,9 +21,9 @@ class MetaBoxCustomVars extends \WP_Piwik\Template {
 				<tr><th></th><th><?php esc_html_e( 'Name', 'wp-piwik' ); ?></th><th><?php esc_html_e( 'Value', 'wp-piwik' ); ?></th></tr>
 				<?php for ( $i = 1; $i <= 5; $i++ ) { ?>
 				<tr>
-					<th><label for="wp-piwik_customvar1"><?php echo esc_html( $i ); ?>: </label></th>
-					<td><input class="widefat" type="text" name="wp-piwik_custom_cat<?php echo esc_attr( $i ); ?>" value="<?php echo esc_attr( get_post_meta( $obj_post->ID, 'wp-piwik_custom_cat' . $i, true ) ); ?>" size="200" /></td>
-					<td><input class="widefat" type="text" name="wp-piwik_custom_val<?php echo esc_attr( $i ); ?>" value="<?php echo esc_attr( get_post_meta( $obj_post->ID, 'wp-piwik_custom_val' . $i, true ) ); ?>" size="200" /></td>
+					<th><label for="wp-piwik_customvar1"><?php echo esc_attr( $i ); // @phpstan-ignore-line ?>: </label></th>
+					<td><input class="widefat" type="text" name="wp-piwik_custom_cat<?php echo esc_attr( $i ); // @phpstan-ignore-line ?>" value="<?php echo esc_attr( get_post_meta( $obj_post->ID, 'wp-piwik_custom_cat' . $i, true ) ); ?>" size="200" /></td>
+					<td><input class="widefat" type="text" name="wp-piwik_custom_val<?php echo esc_attr( $i ); // @phpstan-ignore-line ?>" value="<?php echo esc_attr( get_post_meta( $obj_post->ID, 'wp-piwik_custom_val' . $i, true ) ); ?>" size="200" /></td>
 				</tr>
 			<?php } ?>
 			</table>
@@ -38,7 +38,7 @@ class MetaBoxCustomVars extends \WP_Piwik\Template {
 			? wp_unslash( $_POST['wp-piwik_post_customvars_nonce'] )
 			: '';
 		if (
-			! isset( $nonce )
+			empty( $nonce )
 			|| ! wp_verify_nonce( $nonce, basename( __FILE__ ) )
 		) {
 			return $int_id;

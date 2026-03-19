@@ -60,9 +60,9 @@ class AIBotTracking {
 	private $logger;
 
 	/**
-	 * @var AjaxTracker
+	 * @var AjaxTracker|null
 	 */
-	private $tracker;
+	private $tracker = null;
 
 	/**
 	 * @param Settings $settings
@@ -153,7 +153,7 @@ class AIBotTracking {
 			return false;
 		}
 
-		if ( defined( 'DOING_AJAX' ) && DOING_AJAX ) {
+		if ( wp_doing_ajax() ) {
 			return false;
 		}
 

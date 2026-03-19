@@ -162,13 +162,17 @@ class Settings extends \WP_Piwik\Admin {
 					__( 'Check this to automatically choose your blog from your Matomo sites by URL. If your blog is not added to Matomo yet, WP-Matomo will add a new site.', 'wp-piwik' ),
 					false,
 					'',
-					'',
+					false,
 					'jQuery(\'tr.wp-piwik-auto-option\').toggle(\'hidden\');' . ( $piwik_site_id ? 'jQuery(\'#site_id\').val(' . $piwik_site_id . ');' : '' )
 				);
 				if ( self::$wp_piwik->is_configured() ) {
 					$piwik_site_list = self::$wp_piwik->get_piwik_site_details();
 					if ( isset( $piwik_site_list['result'] ) && 'error' === $piwik_site_list['result'] ) {
-						$this->show_box( 'error', 'no', esc_html( sprintf( __( 'WP-Matomo %1$s was not able to get sites with at least view access: ', 'wp-piwik' ), self::$wp_piwik->get_plugin_version() ) ) . '<br /><code>' . esc_html( $error_message ) . '</code>' );
+						$this->show_box(
+							'error',
+							'no',
+							esc_html( sprintf( __( 'WP-Matomo %1$s was not able to get sites with at least view access: ', 'wp-piwik' ), self::$wp_piwik->get_plugin_version() ) ) . '<br /><code>' . esc_html( $piwik_site_list['message'] ) . '</code>'
+						);
 					} else {
 						if ( is_array( $piwik_site_list ) ) {
 							foreach ( $piwik_site_list as $details ) {
@@ -176,19 +180,29 @@ class Settings extends \WP_Piwik\Admin {
 							}
 						}
 						unset( $piwik_site_list );
-						if ( 'n/a' !== $piwik_site_id && isset( $piwik_site_details ) && is_array( $piwik_site_details ) ) {
+						if ( 'n/a' !== $piwik_site_id && isset( $piwik_site_details ) ) {
 							$piwik_site_description = $piwik_site_details [ $piwik_site_id ] ['name'] . ' (' . $piwik_site_details [ $piwik_site_id ] ['main_url'] . ')';
 						} else {
 							$piwik_site_description = 'n/a';
 						}
 						echo '<tr class="wp-piwik-auto-option' . esc_attr( ! self::$settings->get_global_option( 'auto_site_config' ) ? ' hidden' : '' ) . '"><th scope="row">' . esc_html__( 'Determined site', 'wp-piwik' ) . ':</th><td>' . esc_html( $piwik_site_description ) . '</td></tr>';
-						if ( isset( $piwik_site_details ) && is_array( $piwik_site_details ) ) {
+						if ( isset( $piwik_site_details ) ) {
 							foreach ( $piwik_site_details as $key => $site_data ) {
 								$site_list[ $site_data['idsite'] ] = $site_data['name'] . ' (' . $site_data ['main_url'] . ')';
 							}
 						}
 						if ( isset( $site_list ) ) {
-							$this->show_select( 'site_id', __( 'Select site', 'wp-piwik' ), $site_list, __( 'Choose the Matomo site corresponding to this blog.', 'wp-piwik' ), '', self::$settings->get_global_option( 'auto_site_config' ), 'wp-piwik-auto-option', true, false );
+							$this->show_select(
+								'site_id',
+								__( 'Select site', 'wp-piwik' ),
+								$site_list,
+								__( 'Choose the Matomo site corresponding to this blog.', 'wp-piwik' ),
+								'',
+								(int) self::$settings->get_global_option( 'auto_site_config' ) === 1,
+								'wp-piwik-auto-option',
+								true,
+								false
+							);
 						}
 					}
 				}
@@ -738,14 +752,14 @@ class Settings extends \WP_Piwik\Admin {
 	/**
 	 * Display the input with the extra elements around it
 	 *
-	 * @param string   $id option id
-	 * @param string   $name descriptive option name
-	 * @param string   $description option description
-	 * @param boolean  $is_hidden set to true to initially hide the option (default: false)
-	 * @param string   $group_name define a class name to access a group of option rows by javascript (default: empty)
-	 * @param boolean  $hide_description $hideDescription set to false to show description initially (default: true)
-	 * @param callable $input function to inject the input into the wrapper
-	 * @param string   $row_name define a class name to access the specific option row by javascript (default: empty)
+	 * @param string       $id option id
+	 * @param string       $name descriptive option name
+	 * @param string       $description option description
+	 * @param boolean      $is_hidden set to true to initially hide the option (default: false)
+	 * @param string       $group_name define a class name to access a group of option rows by javascript (default: empty)
+	 * @param boolean      $hide_description $hideDescription set to false to show description initially (default: true)
+	 * @param callable     $input function to inject the input into the wrapper
+	 * @param string|false $row_name define a class name to access the specific option row by javascript (default: empty)
 	 *
 	 * @return void
 	 */
@@ -772,16 +786,16 @@ class Settings extends \WP_Piwik\Admin {
 	/**
 	 * Show a textarea option
 	 *
-	 * @param string  $id option id
-	 * @param string  $name descriptive option name
-	 * @param int     $rows number of rows to show
-	 * @param string  $description option description
-	 * @param boolean $is_hidden set to true to initially hide the option (default: false)
-	 * @param string  $group_name define a class name to access a group of option rows by javascript (default: empty)
-	 * @param boolean $hide_description $hideDescription set to false to show description initially (default: true)
-	 * @param string  $on_change javascript for onchange event (default: empty)
-	 * @param boolean $is_readonly set textarea to read only (default: false)
-	 * @param boolean $is_global set to false if the textarea shows a site-specific option (default: true)
+	 * @param string     $id option id
+	 * @param string     $name descriptive option name
+	 * @param int|string $rows number of rows to show
+	 * @param string     $description option description
+	 * @param boolean    $is_hidden set to true to initially hide the option (default: false)
+	 * @param string     $group_name define a class name to access a group of option rows by javascript (default: empty)
+	 * @param boolean    $hide_description $hideDescription set to false to show description initially (default: true)
+	 * @param string     $on_change javascript for onchange event (default: empty)
+	 * @param boolean    $is_readonly set textarea to read only (default: false)
+	 * @param boolean    $is_global set to false if the textarea shows a site-specific option (default: true)
 	 */
 	private function show_textarea( $id, $name, $rows, $description, $is_hidden, $group_name, $hide_description = true, $on_change = '', $is_readonly = false, $is_global = true ) {
 		$this->show_input_wrapper(
@@ -813,14 +827,14 @@ class Settings extends \WP_Piwik\Admin {
 	/**
 	 * Show an input option
 	 *
-	 * @param string  $id option id
-	 * @param string  $name descriptive option name
-	 * @param string  $description option description
-	 * @param boolean $is_hidden set to true to initially hide the option (default: false)
-	 * @param string  $group_name define a class name to access a group of option rows by javascript (default: empty)
-	 * @param string  $row_name define a class name to access the specific option row by javascript (default: empty)
-	 * @param boolean $hide_description $hideDescription set to false to show description initially (default: true)
-	 * @param boolean $wide Create a wide box (default: false)
+	 * @param string       $id option id
+	 * @param string       $name descriptive option name
+	 * @param string|false $description option description
+	 * @param boolean      $is_hidden set to true to initially hide the option (default: false)
+	 * @param string       $group_name define a class name to access a group of option rows by javascript (default: empty)
+	 * @param string|false $row_name define a class name to access the specific option row by javascript (default: empty)
+	 * @param boolean      $hide_description $hideDescription set to false to show description initially (default: true)
+	 * @param boolean      $wide Create a wide box (default: false)
 	 */
 	private function show_input( $id, $name, $description, $is_hidden = false, $group_name = '', $row_name = false, $hide_description = true, $wide = false, $type = false ) {
 		$this->show_input_wrapper(
@@ -889,10 +903,10 @@ class Settings extends \WP_Piwik\Admin {
 	/**
 	 * Show headline
 	 *
-	 * @param int    $order headline order (h?-tag), set to 0 to avoid headline-tagging
-	 * @param string $icon headline icon, see https://developer.wordpress.org/resource/dashicons/
-	 * @param string $headline headline text
-	 * @param string $add_plugin_name set to true to add the plugin name to the headline (default: false)
+	 * @param int         $order headline order (h?-tag), set to 0 to avoid headline-tagging
+	 * @param string      $icon headline icon, see https://developer.wordpress.org/resource/dashicons/
+	 * @param string      $headline headline text
+	 * @param string|bool $add_plugin_name set to true to add the plugin name to the headline (default: false)
 	 */
 	private function show_headline( $order, $icon, $headline, $add_plugin_name = false ) {
 		$this->get_headline( $order, $icon, $headline, $add_plugin_name );
@@ -904,7 +918,7 @@ class Settings extends \WP_Piwik\Admin {
 	 * @param int    $order headline order (h?-tag), set to 0 to avoid headline-tagging
 	 * @param string $icon headline icon, see https://developer.wordpress.org/resource/dashicons/
 	 * @param string $headline headline text
-	 * @param string $add_plugin_name set to true to add the plugin name to the headline (default: false)
+	 * @param bool   $add_plugin_name set to true to add the plugin name to the headline (default: false)
 	 */
 	private function get_headline( $order, $icon, $headline, $add_plugin_name = false ) {
 		echo ( $order > 0 ? '<h' . intval( $order ) . '>' : '' )

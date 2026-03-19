@@ -8,7 +8,6 @@ class TrackingCode {
 	 * @var \WP_Piwik
 	 */
 	private static $wp_piwik;
-	private static $piwik_url = false;
 
 	private $tracking_code;
 
@@ -53,7 +52,7 @@ class TrackingCode {
 	public static function prepare_tracking_code( $code, $settings, $logger ) {
 		global $current_user;
 		$logger->log( 'Apply tracking code changes:' );
-		$settings->set_option( 'last_tracking_code_update', time() );
+		$settings->set_option( 'last_tracking_code_update', (string) time() );
 		if ( preg_match( '/var u="([^"]*)";/', $code, $hits ) ) {
 			$fetched_proxy_url = $hits [1];
 		} else {

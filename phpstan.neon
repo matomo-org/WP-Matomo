@@ -1,0 +1,12 @@
+parameters:
+    level: 5
+    phpVersion: 70200
+    tmpDir: /tmp/phpstan/wp-matomo/main
+    paths:
+        - ./classes
+        - ./wp-piwik.php
+    bootstrapFiles:
+    universalObjectCratesClasses:
+    scanDirectories:
+        - ./classes
+        - ./libs

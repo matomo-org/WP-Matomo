@@ -5,7 +5,6 @@ namespace WP_Piwik;
 abstract class Logger {
 
 	private $logger_name     = 'unnamed';
-	private $logger_content  = array();
 	private $start_microtime = null;
 
 	abstract public function logger_output( $logger_time, $logger_message );
@@ -17,7 +16,8 @@ abstract class Logger {
 	}
 
 	public static function make_logger() {
-		switch ( WP_PIWIK_ACTIVATE_LOGGER ) {
+		$logger = defined( 'WP_PIWIK_ACTIVATE_LOGGER' ) ? WP_PIWIK_ACTIVATE_LOGGER : 0;
+		switch ( $logger ) {
 			case 1:
 				return new \WP_Piwik\Logger\Screen( __CLASS__ );
 			case 2:

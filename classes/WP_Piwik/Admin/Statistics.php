@@ -33,6 +33,7 @@ class Statistics extends \WP_Piwik\Admin {
 		wp_nonce_field( 'meta-box-order', 'meta-box-order-nonce', false );
 		$columns = array( 'normal', 'side', 'column3' );
 		for ( $i = 0; $i < 3; $i++ ) {
+			// @phpstan-ignore-next-line
 			echo '<div id="postbox-container-' . esc_attr( $i + 1 ) . '" class="postbox-container">';
 			do_meta_boxes( self::$wp_piwik->stats_page_id, $columns[ $i ], null );
 			echo '</div>';

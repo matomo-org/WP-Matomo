@@ -12,7 +12,20 @@ class Chart extends Visitors {
 		$result   = $this->request_data();
 		$response = $result['response'];
 		if ( ! $result['success'] ) {
-			echo '<strong>' . esc_html__( 'Piwik error', 'wp-piwik' ) . ':</strong> ' . esc_html( $response[ $method ]['message'] );
+			$message = '';
+			if ( is_array( $this->method ) ) {
+				foreach ( $this->method as $m ) {
+					if ( empty( $response[ $m ]['message'] ) ) {
+						continue;
+					}
+
+					$message .= ' ' . $m . ' - ' . $response[ $m ]['message'];
+				}
+			} else {
+				$message = $response[ $this->method ]['message'];
+			}
+
+			echo '<strong>' . esc_html__( 'Piwik error', 'wp-piwik' ) . ':</strong> ' . esc_html( $message );
 		} else {
 			$values     = array();
 			$labels     = array();
@@ -28,7 +41,7 @@ class Chart extends Visitors {
 					$bounced [] = $response['VisitsSummary.getBounceCount'][ $date ];
 					if ( 'week' === $this->parameter['period'] ) {
 						preg_match( '/[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[1-2][0-9]|3[0-1])/', $date, $date_list );
-						$text_key = $this->dateFormat( $date_list[0], 'short_week' );
+						$text_key = $this->date_format( $date_list[0], 'short_week' );
 					} else {
 						$text_key = substr( $date, -2 );
 					}
