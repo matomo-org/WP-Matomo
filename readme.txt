@@ -3,7 +3,7 @@
 Contributors: Braekling
 Requires at least: 5.0
 Tested up to: 6.9.1
-Stable tag: 1.1.1
+Stable tag: 1.1.2
 Donate link: https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=6046779
 Tags: matomo, tracking, statistics, stats, analytics
 
@@ -11,7 +11,7 @@ Adds Matomo (former Piwik) statistics to your WordPress dashboard and is also ab
 
 == Description ==
 
-**Version 1.1.1 includes an important security related fix, it is highly recommended to update to this version.**
+**Version 1.1.2 includes several important security related fixes, it is highly recommended to update to this version.**
 
 If you are not yet using Matomo On-Premise, Matomo Cloud or hosting your own instance of Matomo, please use the [Matomo for WordPress plugin](https://wordpress.org/plugins/matomo/). 
 
@@ -146,6 +146,10 @@ Add WP-Matomo to your /wp-content/plugins folder and enable it as [Network Plugi
 5. Matomo: Here you'll find your auth token.
 
 == Changelog ==
+
+= 1.1.2 =
+* Allow $wpRootDir variable in the proxy config.php file to be defined by the WP_MATOMO_WP_ROOT_DIR environment variable if present.
+* Using phpcs and phpstan fix several issues including several vulnerabilities.
 
 = 1.1.1 =
 * Security bug fix: convert custom variable name and values to JSON before using in tracking code.
