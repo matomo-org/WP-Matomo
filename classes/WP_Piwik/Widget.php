@@ -267,7 +267,7 @@ abstract class Widget {
 	 *            javascript code to apply
 	 */
 	private function tab_row( $trow, $java_script = '', $css_class = '' ) {
-		$this->out( '<tr' . ( ! empty( $java_script ) ? ' onclick="' . esc_attr( esc_js( $java_script ) ) . '"' : '' ) . ( ! empty( $css_class ) ? ' class="' . $css_class . '"' : '' ) . '>' );
+		$this->out( '<tr' . ( ! empty( $java_script ) ? ' onclick="' . esc_attr( esc_js( $java_script ) ) . '"' : '' ) . ( ! empty( $css_class ) ? ' class="' . esc_attr( $css_class ) . '"' : '' ) . '>' );
 		$count = 0;
 		foreach ( $trow as $tcell ) {
 			$this->out( '<td' . ( $count++ ? ' class="right"' : '' ) . '>' . esc_html( $tcell ) . '</td>' );

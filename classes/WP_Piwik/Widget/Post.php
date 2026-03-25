@@ -58,7 +58,7 @@ class Post extends \WP_Piwik\Widget {
 					$response = $response[0];
 				}
 				if ( $this->parameter['key'] ) {
-					$this->out( isset( $response[ $this->parameter['key'] ] ) ? $response[ $this->parameter['key'] ] : '<em>not defined</em>' );
+					$this->out( isset( $response[ $this->parameter['key'] ] ) ? esc_html( $response[ $this->parameter['key'] ] ) : '<em>not defined</em>' );
 					return;
 				}
 			}
