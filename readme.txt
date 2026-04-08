@@ -3,7 +3,7 @@
 Contributors: Braekling
 Requires at least: 5.0
 Tested up to: 6.9.1
-Stable tag: 1.1.2
+Stable tag: 1.1.3
 Donate link: https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=6046779
 Tags: matomo, tracking, statistics, stats, analytics
 
@@ -146,6 +146,9 @@ Add WP-Matomo to your /wp-content/plugins folder and enable it as [Network Plugi
 5. Matomo: Here you'll find your auth token.
 
 == Changelog ==
+
+= 1.1.3 =
+* Replaced wp_unslash with stripslashes to address cases where wp_unslash may be undefined.
 
 = 1.1.2 =
 * Allow $wpRootDir variable in the proxy config.php file to be defined by the WP_MATOMO_WP_ROOT_DIR environment variable if present.

@@ -3,7 +3,7 @@
  * Plugin Name: Connect Matomo
  * Plugin URI: http://wordpress.org/extend/plugins/wp-piwik/
  * Description: Adds Matomo statistics to your WordPress dashboard and is also able to add the Matomo Tracking Code to your blog.
- * Version: 1.1.2
+ * Version: 1.1.3
  * Author: Matomo, Andr&eacute; Br&auml;kling
  * Author URI: https://matomo.org
  * Text Domain: wp-piwik
