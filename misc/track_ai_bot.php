@@ -39,7 +39,7 @@ function wp_piwik_track_if_ai_bot() {
 	// check user agent is AI bot first thing, so if it is a normal request we do
 	// as little extra work as possible
 	// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-	$user_agent = ! empty( $_SERVER['HTTP_USER_AGENT'] ) ? wp_unslash( $_SERVER['HTTP_USER_AGENT'] ) : '';
+	$user_agent = ! empty( $_SERVER['HTTP_USER_AGENT'] ) ? stripslashes( $_SERVER['HTTP_USER_AGENT'] ) : '';
 	if ( ! \WP_Piwik\MatomoTracker::isUserAgentAIBot( $user_agent ) ) {
 		return;
 	}
@@ -54,7 +54,7 @@ function wp_piwik_track_if_ai_bot() {
 		$wp_config_file = dirname( dirname( dirname( dirname( __DIR__ ) ) ) ) . '/wp-config.php';
 		if ( ! is_file( $wp_config_file ) && ! empty( $_SERVER['SCRIPT_FILENAME'] ) ) {
 			// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
-			$script_filename = wp_unslash( $_SERVER['SCRIPT_FILENAME'] );
+			$script_filename = stripslashes( $_SERVER['SCRIPT_FILENAME'] );
 			$wp_config_file  = dirname( dirname( dirname( dirname( dirname( $script_filename ) ) ) ) ) . '/wp-config.php';
 		}
 
