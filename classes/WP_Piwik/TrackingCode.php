@@ -168,7 +168,7 @@ EOF;
 			$code = str_replace( "_paq.push(['trackPageView']);", "_paq.push(['setLinkClasses', " . wp_json_encode( $settings->get_global_option( 'set_link_classes' ) ) . "]);\n_paq.push(['trackPageView']);", $code );
 		}
 		if ( $settings->get_global_option( 'limit_cookies' ) ) {
-			$code = str_replace( "_paq.push(['trackPageView']);", "_paq.push(['setVisitorCookieTimeout', " . wp_json_encode( $settings->get_global_option( 'limit_cookies_visitor' ) ) . "]);\n_paq.push(['setSessionCookieTimeout', '" . $settings->get_global_option( 'limit_cookies_session' ) . "']);\n_paq.push(['setReferralCookieTimeout', '" . $settings->get_global_option( 'limit_cookies_referral' ) . "']);\n_paq.push(['trackPageView']);", $code );
+			$code = str_replace( "_paq.push(['trackPageView']);", "_paq.push(['setVisitorCookieTimeout', " . wp_json_encode( $settings->get_global_option( 'limit_cookies_visitor' ) ) . "]);\n_paq.push(['setSessionCookieTimeout', " . wp_json_encode( $settings->get_global_option( 'limit_cookies_session' ) ) . "]);\n_paq.push(['setReferralCookieTimeout', " . wp_json_encode( $settings->get_global_option( 'limit_cookies_referral' ) ) . "]);\n_paq.push(['trackPageView']);", $code );
 		}
 		if ( 'disabled' !== $settings->get_global_option( 'force_protocol' ) ) {
 			$code = str_replace( '"//', '"' . $settings->get_global_option( 'force_protocol' ) . '://', $code );
