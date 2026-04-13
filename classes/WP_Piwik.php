@@ -406,7 +406,7 @@ class WP_Piwik {
 	 * @return string settings page URL
 	 */
 	private function get_settings_url() {
-		return ( self::$settings->check_network_activation() ? 'settings' : 'options-general' ) . '.php?page=' . self::$plugin_basename;
+		return ( self::$settings->check_network_activation() ? 'settings' : 'options-general' ) . '.php?page=wp-matomo-settings';
 	}
 
 	/**
