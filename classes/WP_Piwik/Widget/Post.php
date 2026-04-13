@@ -14,7 +14,7 @@ class Post extends \WP_Piwik\Widget {
 			'period'      => isset( $params['period'] ) ? $params['period'] : $time_settings['period'],
 			'date'        => isset( $params['date'] ) ? $params['date'] : $time_settings['date'],
 			'key'         => isset( $params['key'] ) ? $params['key'] : null,
-			'pageUrl'     => isset( $params['url'] ) ? $params['url'] : rawurlencode( get_permalink( $post->ID ) ),
+			'pageUrl'     => isset( $params['url'] ) ? $params['url'] : get_permalink( $post->ID ),
 			'description' => $time_settings['description'],
 		);
 		$this->title     = $prefix . esc_html__( 'Overview', 'wp-piwik' ) . ' (' . $this->parameter['date'] . ')';

@@ -58,7 +58,7 @@
 		<exclude name="WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedClassFound"/>
 		<exclude name="Squiz.Commenting.InlineComment.InvalidEndChar"/>
 		<exclude name="WordPress.WP.I18n.MissingTranslatorsComment"/>
-		<exclude name="Generic.Arrays.DisallowShortArraySyntax.Found"/>
+		<exclude name="Universal.Arrays.DisallowShortArraySyntax.Found"/>
 		<exclude name="PHPCompatibility.Lists.NewShortList.Found"/>
 		<exclude name="PHPCompatibility.Classes.NewAnonymousClasses.Found"/>
 		<exclude name="PHPCompatibility.InitialValue.NewConstantScalarExpressions.constFound"/>
