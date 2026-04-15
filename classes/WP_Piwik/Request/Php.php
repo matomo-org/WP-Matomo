@@ -17,7 +17,9 @@ class Php extends \WP_Piwik\Request {
 				if ( '' !== self::$settings->get_global_option( 'filter_limit' ) && is_numeric( self::$settings->get_global_option( 'filter_limit' ) ) ) {
 					$config['parameter']['filter_limit'] = self::$settings->get_global_option( 'filter_limit' );
 				}
-				$params                          = 'module=API&format=json&' . $this->build_url( $config, true );
+				$params                          = $this->get_url_params( $config );
+				$params['module']                = 'API';
+				$params['format']                = 'json';
 				$map[ $count ]                   = $request_id;
 				$result                          = $this->call( $id, $url, $params );
 				self::$results[ $map[ $count ] ] = $result;
@@ -56,7 +58,8 @@ class Php extends \WP_Piwik\Request {
 			);
 		}
 		if ( class_exists( 'Piwik\API\Request' ) ) {
-			$request = new \Piwik\API\Request( $params . '&token_auth=' . self::$settings->get_global_option( 'piwik_token' ) );
+			$params['token_auth'] = self::$settings->get_global_option( 'piwik_token' );
+			$request              = new \Piwik\API\Request( $params );
 		} else {
 			return array(
 				'result'  => 'error',

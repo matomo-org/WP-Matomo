@@ -105,12 +105,17 @@ abstract class Request {
 		return isset( self::$debug[ $id ] ) ? self::$debug[ $id ] : false;
 	}
 
-	protected function build_url( $config, $url_decode = false ) {
-		$url = 'method=' . ( $config['method'] ) . '&idSite=' . self::$settings->get_option( 'site_id' );
-		foreach ( $config['parameter'] as $key => $value ) {
-			$url .= '&' . $key . '=' . ( $url_decode ? rawurldecode( $value ) : $value );
-		}
-		return $url;
+	protected function build_url( $config ) {
+		return http_build_query( $this->get_url_params( $config ) );
+	}
+
+	protected function get_url_params( $config ) {
+		$params = [
+			'method' => $config['method'],
+			'idSite' => self::$settings->get_option( 'site_id' ),
+		];
+		$params = array_merge( $params, $config['parameter'] );
+		return $params;
 	}
 
 	protected function unserialize( $str ) {

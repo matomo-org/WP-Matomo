@@ -56,9 +56,6 @@ class Settings extends \WP_Piwik\Admin {
 			if ( is_array( $piwik_version ) && isset( $piwik_version['value'] ) ) {
 				$piwik_version = $piwik_version['value'];
 			}
-			if ( ! empty( $piwik_version ) && ! is_array( $piwik_version ) ) {
-				$this->show_donation();
-			}
 		}
 		$page = sanitize_key( wp_unslash( $_GET['page'] ) );
 		?>
@@ -929,38 +926,6 @@ class Settings extends \WP_Piwik\Admin {
 				esc_html( $headline )
 			)
 			. ( $order > 0 ? '</h' . intval( $order ) . '>' : '' );
-	}
-
-	/**
-	 * Show donation info
-	 */
-	private function show_donation() {
-		?>
-<div class="wp-piwik-donate">
-	<p>
-		<strong><?php esc_html_e( 'Donate', 'wp-piwik' ); ?></strong>
-	</p>
-	<p>
-		<?php esc_html_e( 'If you like WP-Matomo, you can support its development by a donation:', 'wp-piwik' ); ?>
-	</p>
-	<div>
-		Paypal
-		<form action="https://www.paypal.com/cgi-bin/webscr" method="post">
-			<input type="hidden" name="cmd" value="_s-xclick" />
-			<input type="hidden" name="hosted_button_id" value="6046779" />
-			<input type="image" src="https://www.paypal.com/en_GB/i/btn/btn_donateCC_LG.gif" name="submit" alt="PayPal - The safer, easier way to pay online." />
-			<img alt="" border="0" src="https://www.paypal.com/de_DE/i/scr/pixel.gif" width="1" height="1" />
-		</form>
-	</div>
-	<div>
-		<a href="bitcoin:32FMBngRne9wQ7XPFP2CfR25tjp3oa4roN">Bitcoin<br />
-		<img style="border:none;" src="<?php echo esc_attr( self::$wp_piwik->get_plugin_url() ); ?>bitcoin.png" width="100" height="100" alt="Bitcoin Address" title="32FMBngRne9wQ7XPFP2CfR25tjp3oa4roN" /></a>
-	</div>
-	<div>
-		<a href="http://www.amazon.de/gp/registry/wishlist/111VUJT4HP1RA?reveal=unpurchased&amp;filter=all&amp;sort=priority&amp;layout=standard&amp;x=12&amp;y=14"><?php esc_html_e( 'My Amazon.de wishlist', 'wp-piwik' ); ?></a>
-	</div>
-</div>
-		<?php
 	}
 
 	/**
