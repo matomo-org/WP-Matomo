@@ -106,7 +106,7 @@ abstract class Request {
 	}
 
 	protected function build_url( $config ) {
-		return http_build_query( $this->get_url_params( $config ) );
+		return http_build_query( $this->get_url_params( $config ), '', '&' );
 	}
 
 	protected function get_url_params( $config ) {
