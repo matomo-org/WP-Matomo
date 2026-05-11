@@ -126,6 +126,10 @@ if (strpos($path, 'piwik.php') === 0 || strpos($path, 'matomo.php') === 0) {
         'cip' => getVisitIp(),
         'token_auth' => $TOKEN_AUTH,
     );
+
+    if (!isset($_GET['token_auth']) && !isset($_POST['token_auth'])) {
+        sanitizeTrackingOverrideParams($_GET);
+    }
 }
 
 $url = $MATOMO_URL . $path;
@@ -293,8 +297,14 @@ function getHttpContentAndStatus($url, $timeout, $user_agent)
     // if there's POST data, send our proxy request as a POST
     if (!empty($_POST)) {
         $postBody = file_get_contents("php://input");
+        if (!isset($_GET['token_auth']) && !isset($_POST['token_auth'])) {
+            $didSanitizePostParams = sanitizeTrackingOverrideParams($_POST);
+            if ($didSanitizePostParams) {
+                $postBody = http_build_query($_POST);
+            }
+        }
 
-        $stream_options['http']['method'] = 'POST';
+		$stream_options['http']['method'] = 'POST';
         $stream_options['http']['header'][] = "Content-type: application/x-www-form-urlencoded";
         $stream_options['http']['header'][] = "Content-Length: " . strlen($postBody);
         $stream_options['http']['content'] = $postBody;
@@ -363,6 +373,20 @@ function getHttpContentAndStatus($url, $timeout, $user_agent)
         $httpStatus,
     );
 
+}
+
+function sanitizeTrackingOverrideParams(&$params)
+{
+    $didSanitizeParams = false;
+    $queryParamsToUnset = ['cdt', 'country', 'region', 'city', 'lat', 'long', 'cip'];
+    foreach ($queryParamsToUnset as $queryParamToUnset) {
+        if (isset($params[$queryParamToUnset])) {
+            unset($params[$queryParamToUnset]);
+            $didSanitizeParams = true;
+        }
+    }
+
+    return $didSanitizeParams;
 }
 
 function sendHeader($header, $replace = true)
