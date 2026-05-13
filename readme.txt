@@ -2,8 +2,8 @@
 
 Contributors: Braekling
 Requires at least: 5.0
-Tested up to: 6.9.1
-Stable tag: 1.1.4
+Tested up to: 6.9.4
+Stable tag: 1.1.5
 Donate link: https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=6046779
 Tags: matomo, tracking, statistics, stats, analytics
 
@@ -13,14 +13,14 @@ Adds Matomo (former Piwik) statistics to your WordPress dashboard and is also ab
 
 **Version 1.1.4 includes several important security related fixes, it is highly recommended to update to this version.**
 
-If you are not yet using Matomo On-Premise, Matomo Cloud or hosting your own instance of Matomo, please use the [Matomo for WordPress plugin](https://wordpress.org/plugins/matomo/). 
+If you are not yet using Matomo On-Premise, Matomo Cloud or hosting your own instance of Matomo, please use the [Matomo for WordPress plugin](https://wordpress.org/plugins/matomo/).
 
 This plugin uses the Matomo API to show your Matomo statistics in your WordPress dashboard. It's also able to add the Matomo tracking code to your blog and to do some modifications to the tracking code. Additionally, WP-Matomo supports WordPress networks and manages multiple sites and their tracking codes.
 
 To use this plugin the Matomo web analytics application is required. If you do not already have a Matomo setup (e.g., provided by your web hosting service), you have two simple options: use either a [self-hosted Matomo](http://matomo.org/) or a [cloud-hosted Matomo by InnoCraft](https://www.innocraft.cloud/?pk_campaign=WP-Piwik).
 
 **Requirements:** PHP 7.0 (or higher), WordPress 5.0 (or higher), Matomo 4.0 (or higher)
- 
+
 **Languages:** English, Albanian, Chinese, Dutch, French, German, Greek, Hungarian, Italian, Polish, Portuguese (Brazil). Partially supported: Azerbaijani, Belarusian, Hindi, Lithuanian, Luxembourgish, Norwegian, Persian, Romanian, Russian, Spanish, Swedish, Turkish, Ukrainian
 
 = What is Matomo? =
@@ -124,7 +124,7 @@ Thank you very much! :-)
 
 There are two differents methods to use WP-Matomo in a multisite environment:
 
-* As a Site Specific Plugin it behaves like a plugin installed on a simple WordPress blog. Each user can enable, configure and use WP-Matomo on his own. Users can even use their own Matomo instances (and accordingly they have to). 
+* As a Site Specific Plugin it behaves like a plugin installed on a simple WordPress blog. Each user can enable, configure and use WP-Matomo on his own. Users can even use their own Matomo instances (and accordingly they have to).
 * Using WP-Matomo as a Network Plugin equates to a central approach. A single Matomo instance is used and the site admin configures the plugin completely. Users are just allowed to see their own statistics, site admins can see each blog's stats.
 
 *Site Specific Plugin*
@@ -146,6 +146,11 @@ Add WP-Matomo to your /wp-content/plugins folder and enable it as [Network Plugi
 5. Matomo: Here you'll find your auth token.
 
 == Changelog ==
+
+= 1.1.5 =
+* Update Matomo logo and screenshots.
+* Update tracker proxy code with latest changes.
+* Ensure query strings are correctly created when arg_separator.input is not '&'.
 
 = 1.1.4 =
 * Bug fix: fix URL to settings displayed upon installation.
@@ -192,7 +197,7 @@ Add WP-Matomo to your /wp-content/plugins folder and enable it as [Network Plugi
 * Fix JavaScript typos on settings page which broke some interface functionality
 * Fix proxy path on multisite networks (thanks to caveman99, [details](https://github.com/braekling/WP-Matomo/pull/98))
 * Fix array key warnings (thanks to goaround, [details](https://github.com/braekling/WP-Matomo/pull/102))
-* Fixed a bug in proxy config.php to avoid adding the protocol twice to the Matomo URL 
+* Fixed a bug in proxy config.php to avoid adding the protocol twice to the Matomo URL
 * Proxy script will run proxy/config.local.php before proxy/config.php to set an individual WordPress root directory via $wpRootDir
 
 = 1.0.26 =
@@ -382,7 +387,7 @@ Add WP-Matomo to your /wp-content/plugins folder and enable it as [Network Plugi
 * Bugfix: Keep sure the revision ID is stored and avoid re-installing the plugin again and again
 * Bugfix: http/pro - after configuration the settings page had to be reloaded once to start working
 * Typo fixes
- 
+
 = 0.10.0.6 =
 * Bugfix: Option storage bug if WP-Matomo is used as single site plugin on blog networks
 * Bugfix: WP-Matomo will work without Matomo superuser access, again
@@ -437,7 +442,7 @@ Add WP-Matomo to your /wp-content/plugins folder and enable it as [Network Plugi
 * Improvement: Only activate/ load admin components if an admin page is actually loaded. Thanks to Michael!
 * Bugfix: Proxy tracking will work again. Matomo 2.7 or higher is recommended.
 * Bugfix: Avoid a PHP notice in dashboard
-* NOTE: If you update Matomo and use the "add tracking code" feature, please also update your WP-Matomo tracking code: Just open the WP-Matomo tracking code settings and save them again. 
+* NOTE: If you update Matomo and use the "add tracking code" feature, please also update your WP-Matomo tracking code: Just open the WP-Matomo tracking code settings and save them again.
 
 = 0.9.9.12 =
 * Bugfix: Avoid forced relogin on site change (WP network)
@@ -494,7 +499,7 @@ Add WP-Matomo to your /wp-content/plugins folder and enable it as [Network Plugi
 * Use Transients API (one week caching)
 * Option: Track visitors without JavaScript, see http://piwik.org/faq/how-to/#faq_176
 
-= 0.9.9.3 = 
+= 0.9.9.3 =
 * Sparkline script update (IE 10 compatibility)
 * Syntax error fixes
 
@@ -510,7 +515,7 @@ Add WP-Matomo to your /wp-content/plugins folder and enable it as [Network Plugi
 * Made <noscript> code optional. Move <noscript> code to site footer.
 
 = 0.9.9.0 =
-* Matomo 1.11 compatibility fixes (Matomo 1.11 required now!) 
+* Matomo 1.11 compatibility fixes (Matomo 1.11 required now!)
 * Depending on Matomo 1.11 WP-Matomo will use async tracking now
 * CDN support added, see http://wordpress.org/support/topic/request-cdn-support-1
 
@@ -562,7 +567,7 @@ Add WP-Matomo to your /wp-content/plugins folder and enable it as [Network Plugi
 = 0.9.5 =
 * WordPress 3.4 compatible (workaround)
 
-= 0.9.4 = 
+= 0.9.4 =
 * Requires at least Matomo 1.8.2!
 * Choose between HTTP API or PHP API
 * Show graph on WordPress Toolbar
