@@ -1368,7 +1368,7 @@ class WP_Piwik {
 			'SitesManager.addSite',
 			array(
 				'urls'     => $is_current ? get_bloginfo( 'url' ) : get_blog_details( $blog_id )->siteurl,
-				'siteName' => rawurlencode( $is_current ? get_bloginfo( 'name' ) : get_blog_details( $blog_id )->blogname ),
+				'siteName' => $is_current ? get_bloginfo( 'name' ) : get_blog_details( $blog_id )->blogname,
 			)
 		);
 		$result = $this->request( $id );
