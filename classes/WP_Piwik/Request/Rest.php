@@ -84,7 +84,9 @@ class Rest extends \WP_Piwik\Request {
 		} else {
 			$result = $this->unserialize( $result );
 		}
-		curl_close( $c );
+		if ( version_compare( PHP_VERSION, '8', '<' ) ) {
+			curl_close( $c );
+		}
 		return $result;
 	}
 
