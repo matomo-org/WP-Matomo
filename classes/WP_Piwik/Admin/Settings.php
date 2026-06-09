@@ -1158,11 +1158,11 @@ class Settings extends \WP_Piwik\Admin {
 			$GLOBALS ['wp-piwik_debug'] = true;
 			$id                         = \WP_Piwik\Request::register( 'API.getPiwikVersion', array() );
 			echo "\n\n";
-			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_dump
-			var_dump( self::$wp_piwik->request( $id ) );
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_export
+			echo esc_textarea( var_export( self::$wp_piwik->request( $id ), true ) );
 			echo "\n";
-			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_dump
-			var_dump( self::$wp_piwik->request( $id, true ) );
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_export
+			echo esc_textarea( var_export( self::$wp_piwik->request( $id, true ), true ) );
 			echo "\n";
 			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
 			$GLOBALS ['wp-piwik_debug'] = false;
@@ -1173,11 +1173,11 @@ class Settings extends \WP_Piwik\Admin {
 			$GLOBALS ['wp-piwik_debug'] = true;
 			$id                         = \WP_Piwik\Request::register( 'SitesManager.getSitesWithAtLeastViewAccess', array() );
 			echo "\n\n";
-			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_dump
-			var_dump( self::$wp_piwik->request( $id ) );
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_export
+			echo esc_textarea( var_export( self::$wp_piwik->request( $id ), true ) );
 			echo "\n";
-			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_dump
-			var_dump( self::$wp_piwik->request( $id, true ) );
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_export
+			echo esc_textarea( var_export( self::$wp_piwik->request( $id, true ), true ) );
 			echo "\n";
 			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
 			$GLOBALS ['wp-piwik_debug'] = false;
@@ -1193,15 +1193,15 @@ class Settings extends \WP_Piwik\Admin {
 				)
 			);
 			echo "\n\n";
-			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_dump
-			var_dump( self::$wp_piwik->request( $id ) );
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_export
+			echo esc_textarea( var_export( self::$wp_piwik->request( $id ), true ) );
 			echo "\n";
-			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_dump
-			var_dump( self::$wp_piwik->request( $id, true ) );
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_export
+			echo esc_textarea( var_export( self::$wp_piwik->request( $id, true ), true ) );
 			echo "\n";
 			echo "\n\n";
-			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_dump
-			var_dump( self::$settings->get_debug_data() );
+			// phpcs:ignore WordPress.PHP.DevelopmentFunctions.error_log_var_export
+			echo esc_textarea( var_export( self::$settings->get_debug_data(), true ) );
 			echo '`';
 			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedVariableFound
 			$GLOBALS ['wp-piwik_debug'] = false;
