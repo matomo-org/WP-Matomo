@@ -11,7 +11,7 @@ use WP_Piwik\Widget\Post;
 class WP_Piwik {
 
 	private static $revision_id = 2023092201;
-	private static $version     = '1.1.7';
+	private static $version     = '1.1.8';
 	private static $blog_id;
 	private static $plugin_basename = null;
 	private static $logger;
