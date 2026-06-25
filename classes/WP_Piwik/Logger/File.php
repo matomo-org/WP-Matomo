@@ -13,7 +13,7 @@ class File extends \WP_Piwik\Logger {
 
 	private function encode_filename( $file_name ) {
 		$file_name = str_replace( ' ', '_', $file_name );
-		preg_replace( '/[^0-9^a-z^_^.]/', '', $file_name );
+		$file_name = preg_replace( '/[^0-9^a-z^_^.]/', '', $file_name );
 		return $file_name;
 	}
 

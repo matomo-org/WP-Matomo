@@ -86,11 +86,8 @@ function wp_matomo_uninstall() {
 	);
 
 	if ( function_exists( 'is_multisite' ) && is_multisite() ) {
-		if ( isset( $limit ) && isset( $page ) ) {
-			$query_limit = 'LIMIT ' . (int) ( ( $page - 1 ) * $limit ) . ',' . (int) $limit . ' ';
-		}
-		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
-		$ary_blogs = $wpdb->get_results( $wpdb->prepare( 'SELECT blog_id FROM %s ' . $query_limit . 'ORDER BY blog_id', $wpdb->blogs ), ARRAY_A );
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$ary_blogs = $wpdb->get_results( "SELECT blog_id FROM {$wpdb->blogs} ORDER BY blog_id", ARRAY_A );
 		if ( is_array( $ary_blogs ) ) {
 			foreach ( $ary_blogs as $ary_blog ) {
 				foreach ( $settings as $key ) {

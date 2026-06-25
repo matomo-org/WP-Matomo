@@ -55,7 +55,8 @@ class MetaBoxCustomVars extends \WP_Piwik\Template {
 				// Create key
 				$str_meta_key = 'wp-piwik_custom_' . $ary_names[ $j ] . $i;
 				// Get data
-				$str_meta_val = isset( $_POST[ $str_meta_key ] ) ? esc_html( $str_meta_key ) : '';
+				// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+				$str_meta_val = isset( $_POST[ $str_meta_key ] ) ? esc_html( wp_unslash( $_POST[ $str_meta_key ] ) ) : '';
 				// Get the meta value of the custom field key
 				$str_cur_val = get_post_meta( $int_id, $str_meta_key, true );
 				if ( $str_meta_val && '' === $str_cur_val ) {
