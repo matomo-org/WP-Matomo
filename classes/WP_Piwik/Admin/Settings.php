@@ -21,7 +21,7 @@ class Settings extends \WP_Piwik\Admin {
 			return;
 		}
 		if ( ! empty( $_GET['clear'] ) && check_admin_referer() ) {
-			$this->clear( 2 === $_GET['clear'] );
+			$this->clear( 2 === (int) $_GET['clear'] );
 			self::$wp_piwik->reset_request();
 			$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
 			echo '<form method="post" action="?page=' . esc_attr( $page ) . '"><input type="submit" value="' . esc_attr__( 'Reload', 'wp-piwik' ) . '" /></form>';
