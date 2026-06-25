@@ -300,8 +300,8 @@ class Settings {
 		}
 
 		$like = '%' . $wpdb->esc_like( $search ) . '%';
-		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared
-		return $wpdb->get_results( $wpdb->prepare( 'SELECT blog_id FROM %s WHERE CONCAT(domain, path) LIKE %s AND spam = 0 AND deleted = 0 ORDER BY blog_id' . $query_limit, $wpdb->blogs, $like ), ARRAY_A );
+		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		return $wpdb->get_results( $wpdb->prepare( "SELECT blog_id FROM {$wpdb->blogs} WHERE CONCAT(domain, path) LIKE %s AND spam = 0 AND deleted = 0 ORDER BY blog_id" . $query_limit, $like ), ARRAY_A );
 	}
 
 	/**

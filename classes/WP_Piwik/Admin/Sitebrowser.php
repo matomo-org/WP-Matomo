@@ -60,8 +60,9 @@ class Sitebrowser extends \WP_List_Table {
 		$per_page     = 10;
 
 		if ( is_plugin_active_for_network( 'wp-piwik/wp-piwik.php' ) ) {
-			$search      = '%' . $wpdb->esc_like( $search ) . '%';
-			$total_items = $wpdb->get_var( $wpdb->prepare( 'SELECT COUNT(*) FROM %s WHERE CONCAT(domain, path) LIKE %s AND spam = 0 AND deleted = 0', $wpdb->blogs, $search ) );
+			$search = '%' . $wpdb->esc_like( $search ) . '%';
+			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$total_items = $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$wpdb->blogs} WHERE CONCAT(domain, path) LIKE %s AND spam = 0 AND deleted = 0", $search ) );
 			$blogs       = \WP_Piwik\Settings::get_blog_list( $per_page, $current_page, $search );
 			foreach ( $blogs as $blog ) {
 				$blog_details  = get_blog_details( $blog['blog_id'], true );
