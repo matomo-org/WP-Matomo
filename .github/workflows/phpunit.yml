@@ -6,8 +6,21 @@ on:
   schedule:
     - cron: "0 0 * * 0"
 
+permissions:
+  actions: read
+  checks: none
+  contents: read
+  deployments: none
+  issues: read
+  packages: none
+  pull-requests: read
+  repository-projects: none
+  security-events: none
+  statuses: none
+  id-token: write # for docker gha cache
+
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: php-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -49,4 +62,4 @@ jobs:
 
       - name: Show wp-env logs on failure
         if: always()
-        run: npx wp-env logs tests || true
+        run: npx wp-env logs tests -- --no-watch || true
