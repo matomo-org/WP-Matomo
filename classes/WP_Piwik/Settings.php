@@ -161,7 +161,6 @@ class Settings {
 		global $wp_roles;
 
 		if ( ! $this->settings_changed ) {
-			print "settings not changed\n";@ob_flush();
 			self::$wp_piwik->log( 'No settings changed yet' );
 			return;
 		}
@@ -181,10 +180,12 @@ class Settings {
 			$obj_role = get_role( $str_key );
 			$caps     = array( 'stealth', 'read_stats' );
 			foreach ( $caps as $str_cap ) {
-				print "role: $str_key - $str_name - $str_cap \n";@ob_flush();
 				$ary_caps = $this->get_global_option( 'capability_' . $str_cap );
-				print_r($ary_caps);@ob_flush();
 				if ( isset( $ary_caps [ $str_key ] ) && $ary_caps [ $str_key ] ) {
+					if (@$GLOBALS['test']) {
+						print "adding cap: $str_key\n";
+						@ob_flush();
+					}
 					$wp_roles->add_cap( $str_key, 'wp-piwik_' . $str_cap );
 				} else {
 					$wp_roles->remove_cap( $str_key, 'wp-piwik_' . $str_cap );

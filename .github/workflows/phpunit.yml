@@ -62,4 +62,4 @@ jobs:
 
       - name: Show wp-env logs on failure
         if: always()
-        run: npx wp-env logs tests -- --no-watch || true
+        run: npx wp-env logs tests --no-watch || true

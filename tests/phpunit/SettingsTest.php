@@ -67,11 +67,14 @@ class SettingsTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_save_updates_role_capabilities() {
+		print "test_save_updates_role_capabilities start\n";@ob_flush();
+		$GLOBALS['test'] = 1;
 		$settings = $this->create_settings();
 		$settings->set_global_option( 'capability_read_stats', [ 'administrator' => true ] );
 		$settings->save();
 
 		$administrator = get_role( 'administrator' );
+		print_r($administrator);@ob_flush();
 		$this->assertTrue( $administrator->has_cap( 'wp-piwik_read_stats' ) );
 		$this->assertFalse( $administrator->has_cap( 'wp-piwik_stealth' ) );
 		$this->assertFalse( get_role( 'editor' )->has_cap( 'wp-piwik_read_stats' ) );
