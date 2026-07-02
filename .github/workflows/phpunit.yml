@@ -1,0 +1,52 @@
+name: PHPUnit Tests
+
+on:
+  workflow_dispatch:
+  push:
+  schedule:
+    - cron: "0 0 * * 0"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phpunit:
+    name: PHPUnit (wp-env)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.5'
+          coverage: none
+
+      - name: Install composer dependencies
+        uses: ramsey/composer-install@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Start the WordPress environment
+        run: npm run wp-env start
+
+      - name: Run PHPUnit
+        run: npm run test:php
+
+      - name: Run PHPUnit (multisite)
+        run: npm run test:php:multisite
+
+      - name: Show wp-env logs on failure
+        if: always()
+        run: npx wp-env logs tests || true

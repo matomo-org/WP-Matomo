@@ -13,6 +13,8 @@
 
 namespace WP_Piwik;
 
+use \Exception;
+
 /**
  * MatomoTracker implements the Matomo Tracking Web API.
  *
