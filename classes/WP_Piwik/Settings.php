@@ -186,9 +186,9 @@ class Settings {
 						print "adding cap: $str_key\n";
 						@ob_flush();
 					}
-					$wp_roles->add_cap( $str_key, 'wp-piwik_' . $str_cap );
+					$obj_role->add_cap( $str_key, 'wp-piwik_' . $str_cap );
 				} else {
-					$wp_roles->remove_cap( $str_key, 'wp-piwik_' . $str_cap );
+					$obj_role->remove_cap( $str_key, 'wp-piwik_' . $str_cap );
 				}
 			}
 		}
