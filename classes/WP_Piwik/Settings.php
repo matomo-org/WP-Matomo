@@ -177,19 +177,17 @@ class Settings {
 			update_option( 'wp-piwik-' . $key, $value );
 		}
 		foreach ( $wp_roles->role_names as $str_key => $str_name ) {
+			// note: using wp_roles()->add_cap/remove_cap does not affect capabilities cached
+			// in WP_Role objects, so the role object needs to be used directly.
 			$obj_role = get_role( $str_key );
 			if ( ! $obj_role ) { // sanity check
 				continue;
 			}
 
-			$caps     = array( 'stealth', 'read_stats' );
+			$caps = array( 'stealth', 'read_stats' );
 			foreach ( $caps as $str_cap ) {
 				$ary_caps = $this->get_global_option( 'capability_' . $str_cap );
 				if ( isset( $ary_caps [ $str_key ] ) && $ary_caps [ $str_key ] ) {
-					if (@$GLOBALS['test']) {
-						print "adding cap: $str_key\n";
-						@ob_flush();
-					}
 					$obj_role->add_cap( 'wp-piwik_' . $str_cap );
 				} else {
 					$obj_role->remove_cap( 'wp-piwik_' . $str_cap );
