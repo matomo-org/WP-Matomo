@@ -67,7 +67,11 @@ class SettingsTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_save_updates_role_capabilities() {
+		global $wp_user_roles;
+
 		print "test_save_updates_role_capabilities start\n";@ob_flush();
+		print "wp user roles empty: " . print_r($wp_user_roles, true)."\n";@ob_flush();
+
 		$GLOBALS['test'] = 1;
 		$settings = $this->create_settings();
 		$settings->set_global_option( 'capability_read_stats', [ 'administrator' => true ] );
