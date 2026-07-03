@@ -178,6 +178,10 @@ class Settings {
 		}
 		foreach ( $wp_roles->role_names as $str_key => $str_name ) {
 			$obj_role = get_role( $str_key );
+			if ( ! $obj_role ) { // sanity check
+				continue;
+			}
+
 			$caps     = array( 'stealth', 'read_stats' );
 			foreach ( $caps as $str_cap ) {
 				$ary_caps = $this->get_global_option( 'capability_' . $str_cap );
@@ -186,9 +190,9 @@ class Settings {
 						print "adding cap: $str_key\n";
 						@ob_flush();
 					}
-					$obj_role->add_cap( $str_key, 'wp-piwik_' . $str_cap );
+					$obj_role->add_cap( 'wp-piwik_' . $str_cap );
 				} else {
-					$obj_role->remove_cap( $str_key, 'wp-piwik_' . $str_cap );
+					$obj_role->remove_cap( 'wp-piwik_' . $str_cap );
 				}
 			}
 		}
