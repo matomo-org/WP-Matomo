@@ -12,9 +12,14 @@
             "phpstan/extension-installer": true
         }
     },
+    "scripts": {
+        "test": "phpunit"
+    },
     "require-dev": {
         "phpstan/phpstan": "^2.1",
         "szepeviktor/phpstan-wordpress": "^2.0",
-        "phpstan/extension-installer": "^1.4"
+        "phpstan/extension-installer": "^1.4",
+        "phpunit/phpunit": "^9.6",
+        "yoast/phpunit-polyfills": "^3.1"
     }
 }

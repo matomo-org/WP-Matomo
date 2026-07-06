@@ -1,10 +1,14 @@
 {
   "scripts": {
     "phpcs": "./vendor/bin/phpcs",
-    "phpcbf": "./vendor/bin/phpcbf"
+    "phpcbf": "./vendor/bin/phpcbf",
+    "wp-env": "wp-env",
+    "test:php": "wp-env run tests-cli --env-cwd=wp-content/plugins/$(basename \"$PWD\") vendor/bin/phpunit",
+    "test:php:multisite": "wp-env run tests-cli --env-cwd=wp-content/plugins/$(basename \"$PWD\") bash -c 'WP_MULTISITE=1 vendor/bin/phpunit'"
   },
   "devDependencies": {
-    "@fastify/pre-commit": "^2.2.1"
+    "@fastify/pre-commit": "^2.2.1",
+    "@wordpress/env": "^11.10.0"
   },
   "pre-commit": [
     "phpcs"

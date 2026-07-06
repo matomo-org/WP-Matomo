@@ -1,0 +1,69 @@
+name: PHPUnit Tests
+
+on:
+  workflow_dispatch:
+  push:
+  schedule:
+    - cron: "0 0 * * 0"
+
+permissions:
+  actions: read
+  checks: none
+  contents: read
+  deployments: none
+  issues: read
+  packages: none
+  pull-requests: read
+  repository-projects: none
+  security-events: none
+  statuses: none
+  id-token: write # for docker gha cache
+
+concurrency:
+  group: php-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  phpunit:
+    name: PHPUnit (wp-env)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240
+        with:
+          php-version: '8.5'
+          coverage: none
+          tools: composer:v2
+
+      - name: Install composer dependencies
+        shell: bash
+        run: composer install
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Start the WordPress environment
+        run: npm run wp-env start
+
+      - name: Run PHPUnit
+        run: npm run test:php
+
+      - name: Run PHPUnit (multisite)
+        run: npm run test:php:multisite
+
+      - name: Show wp-env logs on failure
+        if: always()
+        run: npx wp-env logs tests --no-watch || true

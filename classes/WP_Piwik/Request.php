@@ -120,8 +120,11 @@ abstract class Request {
 
 	protected function unserialize( $str ) {
 		self::$wp_piwik->log( 'Result string: ' . $str );
-		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-		return ( json_decode( '', true ) === $str || false !== @json_decode( $str, true ) ) ? json_decode( $str, true ) : array();
+		return (
+			json_decode( '', true ) === $str
+			// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
+			|| null !== @json_decode( $str, true )
+		) ? json_decode( $str, true ) : array();
 	}
 
 	public static function get_last_error() {
