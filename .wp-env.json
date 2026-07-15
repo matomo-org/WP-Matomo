@@ -1,5 +1,8 @@
 {
   "plugins": [
     "."
-  ]
+  ],
+  "config": {
+    "IN_WP_ENV": "1"
+  }
 }
