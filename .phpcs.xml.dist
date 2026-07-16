@@ -67,6 +67,7 @@
 		<exclude name="PHPCompatibility.FunctionDeclarations.NewReturnTypeDeclarations.stringFound"/>
 		<exclude name="PHPCompatibility.FunctionDeclarations.NewParamTypeDeclarations.boolFound"/>
 		<exclude name="PHPCompatibility.FunctionDeclarations.NewParamTypeDeclarations.stringFound"/>
+		<exclude name="PHPCompatibility.FunctionUse.NewFunctionParameters.dirname_levelsFound"/>
 	</rule>
 	<rule ref="WordPress.NamingConventions.PrefixAllGlobals">
 		<properties>
@@ -98,4 +99,14 @@
 	        </property>
 	    </properties>
 	</rule>
+
+    <rule ref="WordPress.WP.AlternativeFunctions">
+        <exclude-pattern>tests/phpunit/*</exclude-pattern>
+    </rule>
+    <rule ref="WordPress.PHP.DiscouragedPHPFunctions">
+        <exclude-pattern>tests/phpunit/*</exclude-pattern>
+    </rule>
+    <rule ref="WordPress.Security.EscapeOutput">
+        <exclude-pattern>tests/phpunit/*</exclude-pattern>
+    </rule>
 </ruleset>
