@@ -78,7 +78,7 @@ class ProxyIntegrationTest extends \WP_UnitTestCase {
 		$this->assertSame( 'Home', $request['get']['action_name'] );
 	}
 
-	public function test_proxy_strips_geolocation_override_params_when_no_token_is_supplied() {
+	public function test_proxy_does_not_authorize_geolocation_override_params_when_no_token_is_supplied() {
 		$harness = self::$harness;
 
 		$harness->get(
@@ -97,12 +97,13 @@ class ProxyIntegrationTest extends \WP_UnitTestCase {
 
 		$forwarded = $harness->get_single_captured_request()['get'];
 
-		foreach ( [ 'cdt', 'country', 'region', 'city', 'lat', 'long' ] as $stripped ) {
-			$this->assertArrayNotHasKey( $stripped, $forwarded, $stripped . ' should have been stripped' );
-		}
-		// non-override params are preserved
+		// the client sent override params but no token. The proxy must not lend
+		// its own token_auth, so Matomo will reject the unauthorized overrides.
+		$this->assertArrayNotHasKey( 'token_auth', $forwarded );
+		// check that the request is still forwarded, including the (now unauthorized) params.
 		$this->assertSame( 'https://example.org/page', $forwarded['url'] );
 		$this->assertSame( '1', $forwarded['idsite'] );
+		$this->assertSame( '2020-01-01 00:00:00', $forwarded['cdt'] );
 	}
 
 	public function test_proxy_keeps_override_params_when_the_client_supplies_a_token() {
@@ -125,6 +126,26 @@ class ProxyIntegrationTest extends \WP_UnitTestCase {
 		$this->assertSame( 'client-provided-token', $forwarded['token_auth'] );
 	}
 
+	public function test_proxy_forwards_custom_cdt_and_token_auth() {
+		$harness = self::$harness;
+
+		$harness->get(
+			'matomo.php',
+			[
+				'idsite'     => 1,
+				'cdt'        => '2021-06-15 12:34:56',
+				'token_auth' => 'client-provided-token',
+			]
+		);
+
+		$forwarded = $harness->get_single_captured_request()['get'];
+		// custom token + custom cdt should not result in a redaction. if the custom token
+		// is valid, it means we trust the sender is allowed to set a custom cdt.
+		$this->assertSame( '2021-06-15 12:34:56', $forwarded['cdt'] );
+		$this->assertSame( 'client-provided-token', $forwarded['token_auth'] );
+		$this->assertNotSame( $harness->token, $forwarded['token_auth'] );
+	}
+
 	public function test_proxy_uses_forwarded_ip_header_as_cip() {
 		$harness = self::$harness;
 
@@ -133,7 +154,21 @@ class ProxyIntegrationTest extends \WP_UnitTestCase {
 		$this->assertSame( '8.8.8.8', $harness->get_single_captured_request()['get']['cip'] );
 	}
 
-	public function test_proxy_forwards_post_body_as_post_and_strips_overrides() {
+	public function test_proxy_forwards_post_body_as_post_and_injects_token_and_ip() {
+		$harness = self::$harness;
+
+		$harness->post( 'matomo.php', 'e_c=category&e_a=action', [ 'idsite' => 1 ] );
+
+		$request = $harness->get_single_captured_request();
+		$this->assertSame( 'POST', $request['method'] );
+		$this->assertSame( 'category', $request['post']['e_c'] );
+		$this->assertSame( 'action', $request['post']['e_a'] );
+		// a clean request gets the proxy's token and the visitor IP injected via the query string
+		$this->assertSame( $harness->token, $request['get']['token_auth'] );
+		$this->assertNotFalse( filter_var( $request['get']['cip'], FILTER_VALIDATE_IP ) );
+	}
+
+	public function test_proxy_does_not_authorize_override_params_in_the_post_body() {
 		$harness = self::$harness;
 
 		$harness->post( 'matomo.php', 'foo=bar&cdt=2020-01-01+00%3A00%3A00', [ 'idsite' => 1 ] );
@@ -141,11 +176,10 @@ class ProxyIntegrationTest extends \WP_UnitTestCase {
 		$request = $harness->get_single_captured_request();
 		$this->assertSame( 'POST', $request['method'] );
 		$this->assertSame( 'bar', $request['post']['foo'] );
-		$this->assertArrayNotHasKey( 'cdt', $request['post'] );
-		$this->assertSame( 'foo=bar', $request['body'] );
-		// token and cip are still injected via the query string
-		$this->assertSame( $harness->token, $request['get']['token_auth'] );
-		$this->assertNotFalse( filter_var( $request['get']['cip'], FILTER_VALIDATE_IP ) );
+		// an override param (eg, cdt) in the body means the proxy should withhold its configured token,
+		// so matomo ignores the override param
+		$this->assertArrayNotHasKey( 'token_auth', $request['get'] );
+		$this->assertArrayNotHasKey( 'token_auth', $request['post'] );
 	}
 
 	public function test_proxy_sanitizes_token_and_matomo_url_out_of_the_response() {
