@@ -32,12 +32,12 @@ class Test_Request extends Request {
 class RequestTest extends WP_Piwik_TestCase {
 
 	/**
-	 * @var \WP_Piwik_Test_Fake_Plugin
+	 * @var \WP_Piwik_Test_Mock_Plugin
 	 */
 	private $plugin;
 
 	/**
-	 * @var \WP_Piwik_Test_Fake_Settings
+	 * @var \WP_Piwik_Test_Mock_Settings
 	 */
 	private $settings;
 
@@ -48,8 +48,8 @@ class RequestTest extends WP_Piwik_TestCase {
 
 	public function set_up() {
 		parent::set_up();
-		$this->plugin                            = new \WP_Piwik_Test_Fake_Plugin();
-		$this->settings                          = new \WP_Piwik_Test_Fake_Settings();
+		$this->plugin                            = new \WP_Piwik_Test_Mock_Plugin();
+		$this->settings                          = new \WP_Piwik_Test_Mock_Settings();
 		$this->settings->global_options['cache'] = false;
 		$this->settings->options['site_id']      = 7;
 		Test_Request::$responses                 = [];

@@ -39,6 +39,6 @@ tests_add_filter(
 // boot the WordPress test environment.
 require $_tests_dir . '/includes/bootstrap.php';
 
-require_once __DIR__ . '/fake/Plugin.php';
-require_once __DIR__ . '/fake/Settings.php';
+require_once __DIR__ . '/mock/Plugin.php';
+require_once __DIR__ . '/mock/Settings.php';
 require_once __DIR__ . '/WP_Piwik_TestCase.php';

@@ -605,7 +605,7 @@ class Settings extends \WP_Piwik\Admin {
 				'post' => __( 'POST', 'wp-piwik' ),
 				'get'  => __( 'GET', 'wp-piwik' ),
 			),
-			__( 'Choose whether WP-Matomo should use POST or GET in HTTP or Cloud mode.', 'wp-piwik' )
+			__( 'Choose whether WP-Matomo should use POST or GET in HTTP or Cloud mode. POST is recommended: it keeps the auth token out of server access logs and is not subject to URL length limits.', 'wp-piwik' )
 		);
 
 		$this->show_checkbox( 'disable_timelimit', __( 'Disable time limit', 'wp-piwik' ), __( 'Use set_time_limit(0) if stats page causes a time out.', 'wp-piwik' ) );
@@ -1037,7 +1037,7 @@ class Settings extends \WP_Piwik\Admin {
 				esc_html_e( 'enabled', 'wp-piwik' );
 			?>
 			</strong>.</li>
-			<li><strong><?php echo ( ( ( function_exists( 'curl_init' ) && ini_get( 'allow_url_fopen' ) && 'curl' === self::$settings->get_global_option( 'http_connection' ) ) || ( function_exists( 'curl_init' ) && ! ini_get( 'allow_url_fopen' ) ) ) ? esc_html__( 'cURL', 'wp-piwik' ) : esc_html__( 'fopen', 'wp-piwik' ) ) . ' (' . ( 'post' === self::$settings->get_global_option( 'http_method' ) ? esc_html__( 'POST', 'wp-piwik' ) : esc_html__( 'GET', 'wp-piwik' ) ) . ')</strong> ' . esc_html__( 'is used.', 'wp-piwik' ); ?></li>
+			<li><strong><?php echo ( ( ( function_exists( 'curl_init' ) && ini_get( 'allow_url_fopen' ) && 'curl' === self::$settings->get_global_option( 'http_connection' ) ) || ( function_exists( 'curl_init' ) && ! ini_get( 'allow_url_fopen' ) ) ) ? esc_html__( 'cURL', 'wp-piwik' ) : esc_html__( 'fopen', 'wp-piwik' ) ) . ' (' . ( 'get' === self::$settings->get_global_option( 'http_method' ) ? esc_html__( 'GET', 'wp-piwik' ) : esc_html__( 'POST', 'wp-piwik' ) ) . ')</strong> ' . esc_html__( 'is used.', 'wp-piwik' ); ?></li>
 			<?php
 			if ( 'php' === self::$settings->get_global_option( 'piwik_mode' ) ) {
 				?>

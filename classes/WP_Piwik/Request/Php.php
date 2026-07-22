@@ -74,9 +74,22 @@ class Php extends \WP_Piwik\Request {
 		}
 		$result = $this->unserialize( $result );
 		if ( $GLOBALS ['wp-piwik_debug'] ) {
-			self::$debug[ $id ] = array( $params . '&token_auth=...' );
+			self::$debug[ $id ] = [ $this->build_debug_params( $params ) ];
 		}
 		return $result;
+	}
+
+	/**
+	 * Render the parameters of a request for debug output, with the auth token masked.
+	 *
+	 * @param array $params request parameters, including the auth token.
+	 * @return string
+	 */
+	protected function build_debug_params( $params ) {
+		if ( isset( $params['token_auth'] ) ) {
+			$params['token_auth'] = '...';
+		}
+		return http_build_query( $params, '', '&' );
 	}
 
 	public function reset() {

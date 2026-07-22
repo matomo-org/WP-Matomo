@@ -96,6 +96,6 @@ abstract class WP_Piwik_TestCase extends \WP_UnitTestCase {
 		foreach ( $options as $key => $value ) {
 			update_option( 'wp-piwik-' . $key, $value );
 		}
-		return new \WP_Piwik\Settings( new \WP_Piwik_Test_Fake_Plugin() );
+		return new \WP_Piwik\Settings( new \WP_Piwik_Test_Mock_Plugin() );
 	}
 }

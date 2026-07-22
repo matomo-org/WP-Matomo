@@ -186,7 +186,7 @@ class SettingsTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_apply_changes_requests_site_id_when_auto_config_is_enabled() {
-		$plugin                = new \WP_Piwik_Test_Fake_Plugin();
+		$plugin                = new \WP_Piwik_Test_Mock_Plugin();
 		$plugin->piwik_site_id = 42;
 		$settings              = new Settings( $plugin );
 
@@ -216,7 +216,7 @@ class SettingsTest extends WP_Piwik_TestCase {
 		update_site_option( 'wp-piwik_global-piwik_url', 'https://network.example.org/' );
 		update_option( 'wp-piwik_global-piwik_url', 'https://single.example.org/' );
 
-		$settings = new Settings( new \WP_Piwik_Test_Fake_Plugin() );
+		$settings = new Settings( new \WP_Piwik_Test_Mock_Plugin() );
 
 		$this->assertSame( 'https://network.example.org/', $settings->get_global_option( 'piwik_url' ) );
 	}

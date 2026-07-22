@@ -132,7 +132,7 @@ class TrackingCodeTest extends WP_Piwik_TestCase {
 
 	private function create_tracking_code( $plugin = null ) {
 		if ( null === $plugin ) {
-			$plugin = new \WP_Piwik_Test_Fake_Plugin();
+			$plugin = new \WP_Piwik_Test_Mock_Plugin();
 		}
 		if ( ! isset( $plugin->options['tracking_code'] ) ) {
 			$plugin->options['tracking_code'] = $this->get_sample_code();
@@ -147,7 +147,7 @@ class TrackingCodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_constructor_refreshes_outdated_tracking_code() {
-		$plugin                        = new \WP_Piwik_Test_Fake_Plugin();
+		$plugin                        = new \WP_Piwik_Test_Mock_Plugin();
 		$plugin->current_tracking_code = false;
 
 		$this->create_tracking_code( $plugin );
@@ -156,7 +156,7 @@ class TrackingCodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_constructor_refreshes_tracking_code_containing_an_error() {
-		$plugin                           = new \WP_Piwik_Test_Fake_Plugin();
+		$plugin                           = new \WP_Piwik_Test_Mock_Plugin();
 		$plugin->options['tracking_code'] = '{"result":"error","message":"no access"}';
 
 		$this->create_tracking_code( $plugin );
@@ -165,7 +165,7 @@ class TrackingCodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_constructor_uses_site_option_in_network_mode_with_manual_tracking() {
-		$plugin                               = new \WP_Piwik_Test_Fake_Plugin();
+		$plugin                               = new \WP_Piwik_Test_Mock_Plugin();
 		$plugin->network_mode                 = true;
 		$plugin->global_options['track_mode'] = 'manually';
 		$plugin->options['tracking_code']     = 'blog level code';
@@ -209,7 +209,7 @@ class TrackingCodeTest extends WP_Piwik_TestCase {
 		$user_id = self::factory()->user->create( [ 'user_email' => 'user@example.org' ] );
 		wp_set_current_user( $user_id );
 
-		$plugin                                  = new \WP_Piwik_Test_Fake_Plugin();
+		$plugin                                  = new \WP_Piwik_Test_Mock_Plugin();
 		$plugin->global_options['track_user_id'] = 'email';
 
 		$tracking_code                  = $this->create_tracking_code( $plugin );
@@ -223,7 +223,7 @@ class TrackingCodeTest extends WP_Piwik_TestCase {
 	public function test_get_tracking_code_skips_user_id_tracking_for_anonymous_visitors() {
 		wp_set_current_user( 0 );
 
-		$plugin                                  = new \WP_Piwik_Test_Fake_Plugin();
+		$plugin                                  = new \WP_Piwik_Test_Mock_Plugin();
 		$plugin->global_options['track_user_id'] = 'email';
 
 		$tracking_code                  = $this->create_tracking_code( $plugin );
