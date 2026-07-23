@@ -1,7 +1,7 @@
 <?php
 // phpcs:ignoreFile -- mock types, not WordPress plugin code.
 
-class WP_Piwik_Test_Fake_Settings {
+class WP_Piwik_Test_Mock_Settings {
 
 	public $global_options = [];
 	public $options        = [];

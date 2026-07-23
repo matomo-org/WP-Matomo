@@ -170,13 +170,19 @@ class Proxy_Test_Harness {
 		$raw = curl_exec( $ch );
 		if ( false === $raw ) {
 			$error = curl_error( $ch );
-			curl_close( $ch );
+			if ( version_compare( PHP_VERSION, '8', '<' ) ) {
+				// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated
+				curl_close( $ch );
+			}
 			throw new \Exception( 'Request to the proxy failed: ' . $error );
 		}
 
 		$status      = (int) curl_getinfo( $ch, CURLINFO_HTTP_CODE );
 		$header_size = (int) curl_getinfo( $ch, CURLINFO_HEADER_SIZE );
-		curl_close( $ch );
+		if ( version_compare( PHP_VERSION, '8', '<' ) ) {
+			// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated
+			curl_close( $ch );
+		}
 
 		$raw_headers = substr( $raw, 0, $header_size );
 		$body_out    = substr( $raw, $header_size );

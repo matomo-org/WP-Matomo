@@ -7,3 +7,4 @@ vendor/
 .phpunit.result.cache
 
 tests/phpunit/proxy/mock/runtime/
+tests/phpunit/rest/mock/runtime/
