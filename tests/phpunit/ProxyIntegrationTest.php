@@ -256,4 +256,56 @@ class ProxyIntegrationTest extends \WP_UnitTestCase {
 		$this->assertSame( '1', $request['get']['idsite'] );
 		$this->assertSame( $harness->token, $request['get']['token_auth'] );
 	}
+
+	public function test_proxy_strips_wordpress_cookies_but_forwards_others_when_no_allowlist() {
+		$harness = self::$harness;
+
+		$harness->get(
+			'matomo.php',
+			[ 'idsite' => 1 ],
+			[ 'Cookie' => 'wordpress_logged_in_abc123=alice%7Csecret; wp-settings-1=editor; _pk_id.1.1fff=daslkfjs; PHPSESSID=sess123; my_pref=keep' ]
+		);
+
+		$forwarded = $this->get_forwarded_cookie_header( $harness->get_single_captured_request() );
+
+		// with no allow list configured, unrecognised cookies (incl. the Matomo cookie) still pass through
+		$this->assertStringContainsString( '_pk_id.1.1fff=daslkfjs', $forwarded );
+		$this->assertStringContainsString( 'my_pref=keep', $forwarded );
+		// known WordPress cookies are always removed, so the login/session value never reaches Matomo
+		$this->assertStringNotContainsString( 'wordpress_logged_in', $forwarded );
+		$this->assertStringNotContainsString( 'secret', $forwarded );
+		$this->assertStringNotContainsString( 'wp-settings-1', $forwarded );
+		// the PHP session cookie is removed by default too
+		$this->assertStringNotContainsString( 'PHPSESSID', $forwarded );
+	}
+
+	public function test_proxy_only_forwards_allowlisted_cookies_when_allowlist_is_set() {
+		$harness = self::$harness;
+		$harness->set_cookie_allowlist( '_pk_*, mtm_*' );
+
+		$harness->get(
+			'matomo.php',
+			[ 'idsite' => 1 ],
+			[ 'Cookie' => '_pk_id.1.1fff=daslkfjs; mtm_consent=1; PHPSESSID=sess123; foo=bar; wordpress_logged_in_abc123=alice%7Csecret' ]
+		);
+
+		$forwarded = $this->get_forwarded_cookie_header( $harness->get_single_captured_request() );
+
+		// only cookies matching the allow list are forwarded
+		$this->assertStringContainsString( '_pk_id.1.1fff=daslkfjs', $forwarded );
+		$this->assertStringContainsString( 'mtm_consent=1', $forwarded );
+		// everything else is dropped, including a non-WordPress cookie not on the list
+		$this->assertStringNotContainsString( 'PHPSESSID', $forwarded );
+		$this->assertStringNotContainsString( 'foo=bar', $forwarded );
+		$this->assertStringNotContainsString( 'wordpress_logged_in', $forwarded );
+	}
+
+	private function get_forwarded_cookie_header( $request ) {
+		foreach ( (array) $request['headers'] as $name => $value ) {
+			if ( 'cookie' === strtolower( $name ) ) {
+				return $value;
+			}
+		}
+		return '';
+	}
 }

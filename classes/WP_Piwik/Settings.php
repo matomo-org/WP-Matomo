@@ -88,6 +88,7 @@ class Settings {
 		'limit_cookies_visitor'       => 34186669, // Piwik default 13 months
 		'limit_cookies_session'       => 1800, // Piwik default 30 minutes
 		'limit_cookies_referral'      => 15778463, // Piwik default 6 months
+		'cookie_allowlist'            => '', // proxy cookie allow list; empty = off (proxy forwards all non-WP cookies)
 		'track_admin'                 => false,
 		'capability_stealth'          => array(),
 		'track_across'                => false,

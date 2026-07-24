@@ -91,6 +91,12 @@ class Proxy_Test_Harness {
 		file_put_contents( $requests_file, '' );
 		chmod( $requests_file, 0666 );
 		$this->set_matomo_tracker_response( 200, [ 'Content-Type' => 'image/gif' ], 'MOCKGIF' );
+
+		$this->set_cookie_allowlist( '' );
+	}
+
+	public function set_cookie_allowlist( $value ) {
+		$this->wp_cli( 'option update ' . escapeshellarg( 'wp-piwik_global-cookie_allowlist' ) . ' ' . escapeshellarg( $value ) );
 	}
 
 	public function set_matomo_tracker_response( $status, array $headers, $body, $body_is_base64 = false ) {
