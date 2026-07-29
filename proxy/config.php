@@ -79,8 +79,13 @@ function wp_matomo_is_blocked_cookie( $name ) {
 	// WordPress cookie names can be customized via constants, so we check for these as well.
 	$constants = [ 'AUTH_COOKIE', 'SECURE_AUTH_COOKIE', 'LOGGED_IN_COOKIE', 'USER_COOKIE', 'PASS_COOKIE', 'TEST_COOKIE', 'RECOVERY_MODE_COOKIE' ];
 	foreach ( $constants as $constant ) {
-		if ( defined( $constant ) && is_string( constant( $constant ) ) && constant( $constant ) !== '' ) {
-			$prefixes[] = constant( $constant );
+		if ( ! defined( $constant ) ) {
+			continue;
+		}
+
+		$constant_value = constant( $constant );
+		if ( ! is_string( $constant_value ) && '' !== $constant_value ) {
+			$prefixes[] = $constant_value;
 		}
 	}
 
@@ -93,7 +98,7 @@ function wp_matomo_is_blocked_cookie( $name ) {
 	// the PHP session cookie must never be forwarded either
 	$exact = [ 'PHPSESSID' ];
 	$session_cookie_name = (string) ini_get( 'session.name' );
-	if ( $session_cookie_name !== '' ) {
+	if ( '' !== $session_cookie_name ) {
 		$exact[] = $session_cookie_name;
 	}
 	return in_array( $name, $exact, true );
