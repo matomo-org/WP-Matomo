@@ -336,6 +336,147 @@ class ProxyIntegrationTest extends \WP_UnitTestCase {
 		$this->assertStringNotContainsString( 'foo=bar', $forwarded );
 	}
 
+	public function test_proxy_forwards_no_cookies_when_the_allowlist_setting_has_no_usable_entries() {
+		$harness = self::$harness;
+		// a value like this parses to nothing; it must not fall back to forwarding everything, or the
+		// settings screen would show a configured allow list while no filtering happens at all
+		$harness->set_cookie_allowlist( ' , , ' );
+
+		$harness->get(
+			'matomo.php',
+			[ 'idsite' => 1 ],
+			[ 'Cookie' => '_pk_id.1.1fff=daslkfjs; foo=bar' ]
+		);
+
+		$forwarded = $this->get_forwarded_cookie_header( $harness->get_single_captured_request() );
+
+		$this->assertSame( '', $forwarded );
+	}
+
+	public function test_proxy_forwards_no_cookies_when_the_allowlist_setting_is_only_a_wildcard() {
+		$harness = self::$harness;
+		$harness->set_cookie_allowlist( '*' );
+
+		$harness->get(
+			'matomo.php',
+			[ 'idsite' => 1 ],
+			[ 'Cookie' => '_pk_id.1.1fff=daslkfjs; foo=bar' ]
+		);
+
+		$forwarded = $this->get_forwarded_cookie_header( $harness->get_single_captured_request() );
+
+		// a bare '*' is not a way to allow everything, that is what an empty setting is for
+		$this->assertSame( '', $forwarded );
+	}
+
+	public function test_proxy_drops_malformed_allowlist_entries_but_keeps_the_valid_ones() {
+		$harness = self::$harness;
+		$harness->set_cookie_allowlist( '_pk_*, bad;entry, "quoted", *, mtm_consent' );
+
+		$harness->get(
+			'matomo.php',
+			[ 'idsite' => 1 ],
+			[ 'Cookie' => '_pk_id.1.1fff=daslkfjs; mtm_consent=1; bad;entry=x; "quoted"=x; foo=bar' ]
+		);
+
+		$forwarded = $this->get_forwarded_cookie_header( $harness->get_single_captured_request() );
+
+		$this->assertStringContainsString( '_pk_id.1.1fff=daslkfjs', $forwarded );
+		$this->assertStringContainsString( 'mtm_consent=1', $forwarded );
+		// a malformed entry is dropped from the list rather than kept as an exact match, so a cookie
+		// literally named "quoted" (quotes included) is not forwarded either
+		$this->assertStringNotContainsString( 'quoted', $forwarded );
+		$this->assertStringNotContainsString( 'entry=x', $forwarded );
+		$this->assertStringNotContainsString( 'foo=bar', $forwarded );
+	}
+
+	public function test_proxy_forwards_no_cookies_when_the_allowlist_setting_is_not_a_string() {
+		$harness = self::$harness;
+		$harness->set_cookie_allowlist_json( [ '_pk_*' ] );
+
+		$response = $harness->get(
+			'matomo.php',
+			[ 'idsite' => 1 ],
+			[ 'Cookie' => '_pk_id.1.1fff=daslkfjs; foo=bar' ]
+		);
+
+		$forwarded = $this->get_forwarded_cookie_header( $harness->get_single_captured_request() );
+
+		// an option that is not a string is unusable rather than "off", so the allow list fails closed
+		$this->assertSame( '', $forwarded );
+		// and reading it must not print a PHP warning into the tracker response
+		$this->assertSame( 200, $response->status );
+		$this->assertSame( 'MOCKGIF', $response->body );
+	}
+
+	public function test_proxy_always_forwards_the_matomo_optout_cookies() {
+		$harness = self::$harness;
+		// an allow list that does not mention the opt-out cookie would otherwise hide it from Matomo,
+		// which evaluates it server side, and opted-out visitors would be tracked again
+		$harness->set_cookie_allowlist( '_pk_*' );
+
+		$harness->get(
+			'matomo.php',
+			[ 'idsite' => 1 ],
+			[ 'Cookie' => '_pk_id.1.1fff=daslkfjs; matomo_ignore=1; piwik_ignore=1; foo=bar' ]
+		);
+
+		$forwarded = $this->get_forwarded_cookie_header( $harness->get_single_captured_request() );
+
+		$this->assertStringContainsString( 'matomo_ignore=1', $forwarded );
+		$this->assertStringContainsString( 'piwik_ignore=1', $forwarded );
+		$this->assertStringContainsString( '_pk_id.1.1fff=daslkfjs', $forwarded );
+		$this->assertStringNotContainsString( 'foo=bar', $forwarded );
+	}
+
+	public function test_proxy_always_forwards_the_matomo_optout_cookies_with_a_config_local_allowlist() {
+		$harness = self::$harness;
+		$harness->set_config_local( "<?php\n\$COOKIE_ALLOWLIST = [ 'custom_*' ];\n" );
+
+		$harness->get(
+			'matomo.php',
+			[ 'idsite' => 1 ],
+			[ 'Cookie' => 'custom_pref=keep; matomo_ignore=1; foo=bar' ]
+		);
+
+		$forwarded = $this->get_forwarded_cookie_header( $harness->get_single_captured_request() );
+
+		$this->assertStringContainsString( 'custom_pref=keep', $forwarded );
+		$this->assertStringContainsString( 'matomo_ignore=1', $forwarded );
+		$this->assertStringNotContainsString( 'foo=bar', $forwarded );
+	}
+
+	public function test_proxy_forwards_no_cookies_when_the_allowlist_setting_fails_closed_and_no_optout_is_set() {
+		$harness = self::$harness;
+		$harness->set_cookie_allowlist( ',' );
+
+		$harness->get( 'matomo.php', [ 'idsite' => 1 ], [ 'Cookie' => 'foo=bar' ] );
+
+		$request = $harness->get_single_captured_request();
+		$this->assertSame( '', $this->get_forwarded_cookie_header( $request ) );
+	}
+
+	public function test_proxy_strips_wordpress_auth_cookies_renamed_through_wp_config_constants() {
+		$harness = self::$harness;
+		// config.local.php is included before wp-load.php runs, so defining the constant there has the
+		// same effect as defining it in wp-config.php
+		$harness->set_config_local( "<?php\ndefine( 'LOGGED_IN_COOKIE', 'my_custom_login' );\n" );
+
+		$harness->get(
+			'matomo.php',
+			[ 'idsite' => 1 ],
+			[ 'Cookie' => 'my_custom_login=alice%7Csecret; my_pref=keep' ]
+		);
+
+		$forwarded = $this->get_forwarded_cookie_header( $harness->get_single_captured_request() );
+
+		// the renamed login cookie matches none of the default WordPress prefixes, the constant is
+		// what makes it blocked
+		$this->assertStringNotContainsString( 'my_custom_login', $forwarded );
+		$this->assertStringNotContainsString( 'secret', $forwarded );
+		$this->assertStringContainsString( 'my_pref=keep', $forwarded );
+	}
+
 	private function get_forwarded_cookie_header( $request ) {
 		foreach ( (array) $request['headers'] as $name => $value ) {
 			if ( 'cookie' === strtolower( $name ) ) {

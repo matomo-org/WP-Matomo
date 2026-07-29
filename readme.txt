@@ -149,7 +149,7 @@ Add WP-Matomo to your /wp-content/plugins folder and enable it as [Network Plugi
 = 1.1.10 =
 * Update tracker proxy to latest version.
 * New: added a "Cookie allow list" tracking option that restricts which cookies the tracking proxy forwards to Matomo (comma-separated list of cookie names, trailing * matches by prefix). Disabled by default.
-* Security: the tracking proxy now always removes known WordPress cookies (login/session, settings, comment author, etc.) and the PHP session cookie before forwarding a request to Matomo.
+* Security: the tracking proxy now always removes known WordPress cookies (login/session, settings, comment author, etc.) and the PHP session cookie before forwarding a request to Matomo. Authentication cookies renamed through the wp-config.php cookie constants are recognised as well. Matomo opt out cookies are always forwarded.
 
 = 1.1.9 =
 * Bug fix: correctly check clear parameter value.

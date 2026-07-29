@@ -201,6 +201,71 @@ class SettingsTest extends WP_Piwik_TestCase {
 		$this->assertSame( 42, $settings->get_option( 'site_id' ) );
 	}
 
+	public function test_apply_changes_normalizes_the_cookie_allowlist() {
+		$settings = $this->create_settings();
+
+		$settings->apply_changes( [ 'cookie_allowlist' => "  _pk_* ,mtm_*,\n_pk_*  " ] );
+
+		$this->assertSame( '_pk_*, mtm_*', $settings->get_global_option( 'cookie_allowlist' ) );
+	}
+
+	/**
+	 * @dataProvider get_unusable_cookie_allowlists
+	 *
+	 * @param mixed $value allow list to store
+	 */
+	public function test_apply_changes_turns_an_unusable_cookie_allowlist_off( $value ) {
+		$settings = $this->create_settings();
+
+		$settings->apply_changes( [ 'cookie_allowlist' => $value ] );
+
+		// storing it as an empty value keeps the settings screen honest: an allow list that matches
+		// nothing must not look like an active filter
+		$this->assertSame( '', $settings->get_global_option( 'cookie_allowlist' ) );
+	}
+
+	public function get_unusable_cookie_allowlists() {
+		return [
+			'only separators'   => [ ',,,' ],
+			'whitespace'        => [ " ,\t, " ],
+			'bare wildcard'     => [ '*' ],
+			'invalid names'     => [ 'bad;entry, "quoted", a=b, foo bar' ],
+			'array'             => [ [ '_pk_*' ] ],
+			'null'              => [ null ],
+			'too long an entry' => [ str_repeat( 'a', 129 ) ],
+		];
+	}
+
+	public function test_parse_cookie_allowlist_keeps_valid_entries_only() {
+		$this->assertSame(
+			[ '_pk_*', 'mtm_consent', '_pk_id.1.1fff' ],
+			Settings::parse_cookie_allowlist( '_pk_*, bad;entry, mtm_consent, *, , _pk_id.1.1fff' )
+		);
+	}
+
+	public function test_parse_cookie_allowlist_caps_the_number_of_entries() {
+		$value = implode( ',', array_map( fn ( $i ) => 'cookie_' . $i, range( 1, 200 ) ) );
+
+		$entries = Settings::parse_cookie_allowlist( $value );
+
+		$this->assertCount( Settings::COOKIE_ALLOWLIST_MAX_ENTRIES, $entries );
+		$this->assertSame( 'cookie_1', $entries[0] );
+	}
+
+	public function test_parse_cookie_allowlist_caps_the_overall_length_without_truncating_an_entry() {
+		// stay under the entry count limit so that the length limit is what cuts the list short
+		$names   = array_map( fn ( $i ) => str_pad( 'cookie_' . $i . '_', 120, 'x' ), range( 1, 40 ) );
+		$entries = Settings::parse_cookie_allowlist( implode( ',', $names ) . ',never_read' );
+
+		$this->assertGreaterThan( 0, count( $entries ) );
+		$this->assertLessThan( count( $names ), count( $entries ) );
+		$this->assertNotContains( 'never_read', $entries );
+		foreach ( $entries as $entry ) {
+			// a cut off entry would be a different, shorter cookie name, so it is dropped entirely
+			$this->assertContains( $entry, $names );
+		}
+	}
+
 	public function test_check_network_activation_is_false_when_not_network_activated() {
 		$settings = $this->create_settings();
 

@@ -104,6 +104,16 @@ class Proxy_Test_Harness {
 		$this->wp_cli( 'option update ' . escapeshellarg( 'wp-piwik_global-cookie_allowlist' ) . ' ' . escapeshellarg( $value ) );
 	}
 
+	/**
+	 * stores a non-comma separated allow list. used to simulate someone or some tool
+	 * manually setting it to a something that can't be parsed by the plugin.
+	 *
+	 * @param mixed $value value to store as JSON
+	 */
+	public function set_cookie_allowlist_json( $value ) {
+		$this->wp_cli( 'option update ' . escapeshellarg( 'wp-piwik_global-cookie_allowlist' ) . ' ' . escapeshellarg( json_encode( $value ) ) . ' --format=json' );
+	}
+
 	public function set_config_local( $php_code ) {
 		file_put_contents( $this->config_local_path, $php_code );
 		chmod( $this->config_local_path, 0666 );
