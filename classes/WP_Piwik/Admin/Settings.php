@@ -881,7 +881,7 @@ class Settings extends \WP_Piwik\Admin {
 	 * @param boolean $hide_description $hideDescription set to false to show description initially (default: true)
 	 * @param boolean $is_global set to false if the textarea shows a site-specific option (default: true)
 	 */
-	private function show_select( $id, $name, $options = array(), $description = '', $on_change = '', $is_hidden = false, $group_name = '', $hide_description = true, $is_global = true ) {
+	public function show_select( $id, $name, $options = array(), $description = '', $on_change = '', $is_hidden = false, $group_name = '', $hide_description = true, $is_global = true ) {
 		$default = $is_global ? self::$settings->get_global_option( $id ) : self::$settings->get_option( $id );
 
 		$this->show_input_wrapper(
@@ -895,7 +895,7 @@ class Settings extends \WP_Piwik\Admin {
 				?>
 			<select name="wp-piwik[<?php echo esc_attr( $id ); ?>]" id="<?php echo esc_attr( $id ); ?>" onchange="<?php echo esc_attr( $on_change ); ?>">
 				<?php foreach ( $options as $key => $value ) : ?>
-					<option value="<?php echo esc_attr( $key ); ?>" <?php echo ( $key === $default ? ' selected="selected"' : '' ); ?> ><?php echo esc_html( $value ); ?></option>
+					<option value="<?php echo esc_attr( $key ); ?>" <?php echo ( (string) $key === (string) $default ? ' selected="selected"' : '' ); ?> ><?php echo esc_html( $value ); ?></option>
 				<?php endforeach; ?>
 			</select>
 				<?php
