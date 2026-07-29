@@ -84,7 +84,7 @@ function wp_matomo_is_blocked_cookie( $name ) {
 		}
 
 		$constant_value = constant( $constant );
-		if ( ! is_string( $constant_value ) && '' !== $constant_value ) {
+		if ( is_string( $constant_value ) && '' !== $constant_value ) {
 			$prefixes[] = $constant_value;
 		}
 	}
