@@ -116,7 +116,7 @@ class Proxy_Test_Harness {
 
 	public function set_config_local( $php_code ) {
 		file_put_contents( $this->config_local_path, $php_code );
-		chmod( $this->config_local_path, 0666 );
+		chmod( $this->config_local_path, 0644 );
 	}
 
 	public function remove_config_local() {

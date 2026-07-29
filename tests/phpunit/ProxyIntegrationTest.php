@@ -456,6 +456,26 @@ class ProxyIntegrationTest extends \WP_UnitTestCase {
 		$this->assertSame( '', $this->get_forwarded_cookie_header( $request ) );
 	}
 
+	public function test_proxy_still_forwards_the_optout_cookies_when_config_local_sets_a_malformed_allowlist() {
+		$harness = self::$harness;
+		// not an array, so the allow list cannot be applied as written
+		$harness->set_config_local( "<?php\n\$COOKIE_ALLOWLIST = '_pk_*';\n" );
+
+		$harness->get(
+			'matomo.php',
+			[ 'idsite' => 1 ],
+			[ 'Cookie' => '_pk_id.1.1fff=daslkfjs; matomo_ignore=1; foo=bar' ]
+		);
+
+		$forwarded = $this->get_forwarded_cookie_header( $harness->get_single_captured_request() );
+
+		// blocking the opt-out cookie would make Matomo track a visitor who opted out, so that
+		// one still has to get through
+		$this->assertStringContainsString( 'matomo_ignore=1', $forwarded );
+		$this->assertStringNotContainsString( '_pk_id', $forwarded );
+		$this->assertStringNotContainsString( 'foo=bar', $forwarded );
+	}
+
 	public function test_proxy_strips_wordpress_auth_cookies_renamed_through_wp_config_constants() {
 		$harness = self::$harness;
 		// config.local.php is included before wp-load.php runs, so defining the constant there has the

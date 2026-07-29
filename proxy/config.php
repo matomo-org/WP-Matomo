@@ -59,6 +59,9 @@ if ( ! isset( $COOKIE_ALLOWLIST ) ) {
 	if ( ! $cookie_allowlist_is_off ) {
 		$COOKIE_ALLOWLIST = WP_Piwik\Settings::parse_cookie_allowlist( $cookie_allowlist_setting );
 	}
+} elseif ( ! is_array( $COOKIE_ALLOWLIST ) ) {
+	error_log('$COOKIE_ALLOWLIST must be an array; treating it as empty (no cookies forwarded, except opt out cookies) until fixed.');
+	$COOKIE_ALLOWLIST = []; // handle malformed value in config.local.php
 }
 
 // make sure opt out cookies are never blocked, or visitors who opted out would silently be tracked.
