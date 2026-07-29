@@ -300,6 +300,42 @@ class ProxyIntegrationTest extends \WP_UnitTestCase {
 		$this->assertStringNotContainsString( 'wordpress_logged_in', $forwarded );
 	}
 
+	public function test_proxy_lets_config_local_override_the_cookie_allowlist_setting() {
+		$harness = self::$harness;
+		$harness->set_cookie_allowlist( '_pk_*' );
+		$harness->set_config_local( "<?php\n\$COOKIE_ALLOWLIST = [ 'custom_*' ];\n" );
+
+		$harness->get(
+			'matomo.php',
+			[ 'idsite' => 1 ],
+			[ 'Cookie' => 'custom_pref=keep; _pk_id.1.1fff=daslkfjs; foo=bar' ]
+		);
+
+		$forwarded = $this->get_forwarded_cookie_header( $harness->get_single_captured_request() );
+
+		// config.local.php runs before config.php, so the allow list it defines wins and the setting is ignored
+		$this->assertStringContainsString( 'custom_pref=keep', $forwarded );
+		$this->assertStringNotContainsString( '_pk_id', $forwarded );
+		$this->assertStringNotContainsString( 'foo=bar', $forwarded );
+	}
+
+	public function test_proxy_falls_back_to_the_cookie_allowlist_setting_when_config_local_does_not_set_one() {
+		$harness = self::$harness;
+		$harness->set_cookie_allowlist( '_pk_*' );
+		$harness->set_config_local( "<?php\n// no \$COOKIE_ALLOWLIST here\n" );
+
+		$harness->get(
+			'matomo.php',
+			[ 'idsite' => 1 ],
+			[ 'Cookie' => '_pk_id.1.1fff=daslkfjs; foo=bar' ]
+		);
+
+		$forwarded = $this->get_forwarded_cookie_header( $harness->get_single_captured_request() );
+
+		$this->assertStringContainsString( '_pk_id.1.1fff=daslkfjs', $forwarded );
+		$this->assertStringNotContainsString( 'foo=bar', $forwarded );
+	}
+
 	private function get_forwarded_cookie_header( $request ) {
 		foreach ( (array) $request['headers'] as $name => $value ) {
 			if ( 'cookie' === strtolower( $name ) ) {

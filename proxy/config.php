@@ -38,11 +38,13 @@ $timeout = $settings->get_global_option ( 'connection_timeout' );
 
 // set the cookie allow list: only forward the listed cookie names to Matomo. proxy.php reads the global
 // $COOKIE_ALLOWLIST array.
-$cookie_allowlist_setting = trim( (string) $settings->get_global_option( 'cookie_allowlist' ) );
-if ( $cookie_allowlist_setting !== '' ) { // setting is off, forward all cookies
-	$cookie_allowlist_entries = array_values( array_filter( array_map( 'trim', explode( ',', $cookie_allowlist_setting ) ), 'strlen' ) );
-	if ( ! empty( $cookie_allowlist_entries ) ) {
-		$COOKIE_ALLOWLIST = $cookie_allowlist_entries;
+if ( ! isset( $COOKIE_ALLOWLIST ) ) {
+	$cookie_allowlist_setting = trim( (string) $settings->get_global_option( 'cookie_allowlist' ) );
+	if ( $cookie_allowlist_setting !== '' ) { // setting is off, forward all cookies
+		$cookie_allowlist_entries = array_values( array_filter( array_map( 'trim', explode( ',', $cookie_allowlist_setting ) ), 'strlen' ) );
+		if ( ! empty( $cookie_allowlist_entries ) ) {
+			$COOKIE_ALLOWLIST = $cookie_allowlist_entries;
+		}
 	}
 }
 

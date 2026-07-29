@@ -24,13 +24,16 @@ class Proxy_Test_Harness {
 
 	private $mock_matomo_dir;
 
+	private $config_local_path;
+
 	public function start() {
 		$this->proxy_host = getenv( 'WP_MATOMO_TEST_HTTP_HOST' ) ? getenv( 'WP_MATOMO_TEST_HTTP_HOST' ) : 'tests-wordpress';
 
-		$plugins_path           = wp_parse_url( plugins_url(), PHP_URL_PATH );
-		$plugin_dir             = basename( dirname( __DIR__, 3 ) );
-		$this->plugin_http_path = rtrim( $plugins_path, '/' ) . '/' . $plugin_dir . '/';
-		$this->mock_matomo_dir  = __DIR__ . '/mock/runtime';
+		$plugins_path            = wp_parse_url( plugins_url(), PHP_URL_PATH );
+		$plugin_dir              = basename( dirname( __DIR__, 3 ) );
+		$this->plugin_http_path  = rtrim( $plugins_path, '/' ) . '/' . $plugin_dir . '/';
+		$this->mock_matomo_dir   = __DIR__ . '/mock/runtime';
+		$this->config_local_path = dirname( __DIR__, 3 ) . '/proxy/config.local.php';
 
 		if ( ! is_dir( $this->mock_matomo_dir ) && ! mkdir( $this->mock_matomo_dir, 0777, true ) && ! is_dir( $this->mock_matomo_dir ) ) {
 			throw new \Exception( 'Could not create the mock matomo directory' );
@@ -76,6 +79,7 @@ class Proxy_Test_Harness {
 			unlink( $this->mock_matomo_dir . '/requests.jsonl' );
 			unlink( $this->mock_matomo_dir . '/response.json' );
 		}
+		$this->remove_config_local();
 	}
 
 	public function matomo_base_url() {
@@ -93,10 +97,22 @@ class Proxy_Test_Harness {
 		$this->set_matomo_tracker_response( 200, [ 'Content-Type' => 'image/gif' ], 'MOCKGIF' );
 
 		$this->set_cookie_allowlist( '' );
+		$this->remove_config_local();
 	}
 
 	public function set_cookie_allowlist( $value ) {
 		$this->wp_cli( 'option update ' . escapeshellarg( 'wp-piwik_global-cookie_allowlist' ) . ' ' . escapeshellarg( $value ) );
+	}
+
+	public function set_config_local( $php_code ) {
+		file_put_contents( $this->config_local_path, $php_code );
+		chmod( $this->config_local_path, 0666 );
+	}
+
+	public function remove_config_local() {
+		if ( $this->config_local_path && file_exists( $this->config_local_path ) ) {
+			unlink( $this->config_local_path );
+		}
 	}
 
 	public function set_matomo_tracker_response( $status, array $headers, $body, $body_is_base64 = false ) {
