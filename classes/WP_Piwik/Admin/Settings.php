@@ -420,6 +420,24 @@ class Settings extends \WP_Piwik\Admin {
 
 			$this->show_input( 'limit_cookies_referral', __( 'Referral timeout (seconds)', 'wp-piwik' ), false, $is_not_generated_tracking || ! self::$settings->get_global_option( 'limit_cookies' ), $full_generated_tracking_group . ' wp-piwik-cookielifetime-option' . ( self::$settings->get_global_option( 'limit_cookies' ) ? '' : ' wp-piwik-hidden' ) );
 
+			$this->show_input(
+				'cookie_allowlist',
+				__( 'Cookie allow list (tracker proxy)', 'wp-piwik' ),
+				sprintf(
+					esc_html__(
+						'When using the tracker proxy, only forward cookies matching the given patterns to Matomo. Enter a comma-separated list of cookie names; a trailing %1$s*%2$s matches by prefix. Leave empty to disable the allow list (known WordPress cookies such as the login/session cookies, and the PHP session cookie, are always removed regardless, and the %1$smatomo_ignore%2$s / %1$spiwik_ignore%2$s opt-out cookies are always forwarded so that opted-out visitors stay untracked). If you haven\'t configured custom cookie names or prefixes in Matomo, a value that only allows the default Matomo tracker cookies would be %1$s_pk_*, mtm_*%2$s. If you are using custom cookie names, you will need to make sure what you enter here reflects those customizations.',
+						'wp-piwik'
+					),
+					'<code>',
+					'</code>'
+				),
+				false,
+				$full_generated_tracking_group,
+				false,
+				true,
+				true
+			);
+
 			$this->show_checkbox( 'track_admin', __( 'Track admin pages', 'wp-piwik' ), __( 'Enable to track users on admin pages (remember to configure the tracking filter appropriately).', 'wp-piwik' ), $is_not_tracking, $full_generated_tracking_group . ' wp-piwik-track-option-manually' );
 
 			echo '<tr class="' . esc_attr( $full_generated_tracking_group ) . ' wp-piwik-track-option-manually' . ( $is_not_tracking ? ' hidden' : '' ) . '">';

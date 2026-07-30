@@ -6,5 +6,7 @@ vendor/
 .phpunit.cache/
 .phpunit.result.cache
 
+proxy/config.local.php
+
 tests/phpunit/proxy/mock/runtime/
 tests/phpunit/rest/mock/runtime/

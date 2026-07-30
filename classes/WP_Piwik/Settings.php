@@ -18,6 +18,24 @@ class Settings {
 	const TRACK_AI_BOTS_USING_ESI = 'track_ai_bots_using_esi';
 
 	/**
+	 * The cookie allowlist is allowed to contain valid cookie characters (see
+	 * https://www.ietf.org/archive/id/draft-ietf-httpbis-rfc6265bis-10.html) and
+	 * an optional trailing '*' wildcard.
+	 *
+	 * Note: a single '*' is not allowed, as it would allow everything. The setting
+	 * should simply be unset if this is desired.
+	 */
+	const COOKIE_ALLOWLIST_ENTRY_PATTERN = '/^[A-Za-z0-9!#$%&\'+\-.^_`|~]+\*?$/';
+
+	/**
+	 * Bounds on the cookie allow list meant to make sure the value length stays
+	 * sane.
+	 */
+	const COOKIE_ALLOWLIST_MAX_ENTRIES      = 50;
+	const COOKIE_ALLOWLIST_MAX_ENTRY_LENGTH = 128;
+	const COOKIE_ALLOWLIST_MAX_LENGTH       = 4096;
+
+	/**
 	 * @var \WP_Piwik variables and default settings container
 	 */
 	private static $wp_piwik;
@@ -29,11 +47,12 @@ class Settings {
 	 * @var array Define callback functions for changed settings
 	 */
 	private $check_settings = array(
-		'piwik_url'     => 'check_piwik_url',
-		'piwik_token'   => 'check_piwik_token',
-		'site_id'       => 'request_piwik_site_id',
-		'tracking_code' => 'prepare_tracking_code',
-		'noscript_code' => 'prepare_nocscript_code',
+		'piwik_url'        => 'check_piwik_url',
+		'piwik_token'      => 'check_piwik_token',
+		'site_id'          => 'request_piwik_site_id',
+		'tracking_code'    => 'prepare_tracking_code',
+		'noscript_code'    => 'prepare_nocscript_code',
+		'cookie_allowlist' => 'check_cookie_allowlist',
 	);
 
 	/**
@@ -88,6 +107,7 @@ class Settings {
 		'limit_cookies_visitor'       => 34186669, // Piwik default 13 months
 		'limit_cookies_session'       => 1800, // Piwik default 30 minutes
 		'limit_cookies_referral'      => 15778463, // Piwik default 6 months
+		'cookie_allowlist'            => '', // proxy cookie allow list; empty = off (proxy forwards all non-WP cookies)
 		'track_admin'                 => false,
 		'capability_stealth'          => array(),
 		'track_across'                => false,
@@ -390,6 +410,53 @@ class Settings {
 	 */
 	private function check_piwik_token( $value ) {
 		return str_replace( '&token_auth=', '', $value );
+	}
+
+	/**
+	 * Normalize the tracker proxy cookie allow list
+	 *
+	 * @param mixed $value new allow list
+	 * @return string normalized comma separated allow list
+	 * @phpstan-ignore method.unused
+	 */
+	private function check_cookie_allowlist( $value ) {
+		return implode( ', ', self::parse_cookie_allowlist( $value ) );
+	}
+
+	/**
+	 * @param mixed $value stored allow list
+	 * @return array<int, string> non empty and sanitized allow list entries. empty
+	 *                            when the value contains nothing usable
+	 */
+	public static function parse_cookie_allowlist( $value ) {
+		if ( ! is_string( $value ) ) {
+			return array();
+		}
+
+		if ( strlen( $value ) > self::COOKIE_ALLOWLIST_MAX_LENGTH ) {
+			$value          = substr( $value, 0, self::COOKIE_ALLOWLIST_MAX_LENGTH );
+			$last_separator = strrpos( $value, ',' );
+
+			// drop the cut off entry, so a truncated name cannot turn into a different one
+			$value = false === $last_separator ? '' : substr( $value, 0, $last_separator );
+		}
+
+		$entries = array();
+		foreach ( explode( ',', $value ) as $entry ) {
+			$entry = trim( $entry );
+			if ( '' === $entry
+				|| strlen( $entry ) > self::COOKIE_ALLOWLIST_MAX_ENTRY_LENGTH
+				|| ! preg_match( self::COOKIE_ALLOWLIST_ENTRY_PATTERN, $entry ) ) {
+				continue; // invalid cookie entries are discarded
+			}
+
+			$entries[] = $entry;
+			if ( count( $entries ) >= self::COOKIE_ALLOWLIST_MAX_ENTRIES ) {
+				break; // max cookie entry values found, discard the rest
+			}
+		}
+
+		return array_values( array_unique( $entries ) );
 	}
 
 	/**
