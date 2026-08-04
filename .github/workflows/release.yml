@@ -66,6 +66,7 @@ jobs:
           fetch-depth: '0'
           token: ${{ secrets.GITHUB_TOKEN }} # for pushing to protected branch
           submodules: true
+          persist-credentials: false
       - name: "Check tag"
         run: |
           existing_version=$(grep -oP " * Version: \K(.+)" wp-piwik.php)
