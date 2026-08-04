@@ -1,0 +1,151 @@
+# Connect Matomo Release Action
+#
+# Builds the release archives, publishes a GitHub release and deploys the
+# plugin to the wordpress.org SVN repository (slug: wp-piwik).
+#
+# Required GitHub secrets:
+#
+# RELEASE_PASSWORD  |  password that needs to be provided to start the action
+# GITHUB_TOKEN  |  github release token to publish (provided automatically)
+# SVN_USERNAME  | the svn username to publish a new plugin release
+# SVN_PASSWORD  | the svn password to publish a new plugin release
+
+name: Build release
+
+permissions:
+  actions: none
+  checks: none
+  contents: write  # required to create tag and release
+  deployments: none
+  issues: none
+  packages: none
+  pull-requests: none
+  repository-projects: none
+  security-events: none
+  statuses: none
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version'
+        required: false
+        default: ''
+      password:
+        description: 'Release password'
+        required: true
+      force:
+        description: 'Force (0 or 1)'
+        required: false
+        default: 0
+
+env:
+  RELEASE_PASSWORD: ${{ secrets.RELEASE_PASSWORD }}
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: "Check release password"
+        if: ${{ github.event.inputs.password != env.RELEASE_PASSWORD }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+              core.setFailed('Release password didn\'t match.')
+      - name: "Check if user is allowed"
+        if: ${{ github.actor != 'mattab' && github.actor != 'tsteur' && github.actor != 'diosmosis' }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.setFailed('User is not allowed to release.')
+      - run: |
+          sudo apt-get install -y subversion
+          svn --version
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: '0'
+          token: ${{ secrets.GITHUB_TOKEN }} # for pushing to protected branch
+          submodules: true
+          persist-credentials: false
+      - name: "Check tag"
+        run: |
+          existing_version=$(grep -oP " * Version: \K(.+)" wp-piwik.php)
+
+          if [[ -n "$VERSION_TO_RELEASE" ]]
+          then
+            version="$VERSION_TO_RELEASE"
+
+            if [[ "$existing_version" != "$version" ]]; then
+              echo "Version in wp-piwik.php not set correctly, aborting."
+              exit 1
+            fi
+          else
+            version=$existing_version
+          fi
+          echo "Version to build: '$version'"
+
+          # the same invariant tests/phpunit/ReleaseTest.php asserts
+          class_version=$(grep -oP "\\\$version\s*=\s*'\K([^']+)" classes/WP_Piwik.php)
+          if [[ "$class_version" != "$version" ]]; then
+            echo "Version in classes/WP_Piwik.php is '$class_version', expected '$version'. Aborting."
+            exit 1
+          fi
+
+          stable_tag=$(grep -oP "^Stable tag: \K(.+)" readme.txt)
+          if [[ "$stable_tag" != "$version" ]]; then
+            echo "Stable tag in readme.txt is '$stable_tag', expected '$version'. Aborting."
+            exit 1
+          fi
+
+          echo "Check tag does not exist"
+          git fetch --all -q 2>/dev/null
+          tag_exists=$( git tag --list "$version" )
+          if [[ -n "$tag_exists" ]]
+          then
+            echo "A tag for $tag_exists already exists."
+            exit 1
+          fi
+
+          echo "version=$version" >> $GITHUB_ENV
+        env:
+          VERSION_TO_RELEASE: ${{ github.event.inputs.version }}
+      - name: "Extract changelog"
+        id: changelog
+        run: |
+          # the section between "= <version> =" and the next version heading
+          notes=$(awk -v ver="$version" '
+            $0 == "= " ver " =" { capture = 1; next }
+            capture && /^= [0-9]+\.[0-9]+/ { exit }
+            capture { print }
+          ' readme.txt | awk 'NF { seen = 1 } seen' | tac | awk 'NF { seen = 1 } seen' | tac)
+
+          if [[ -z "$notes" ]]; then
+            echo "::warning::No changelog section found for $version in readme.txt"
+            notes="[View changes](https://github.com/matomo-org/wp-matomo/blob/main/readme.txt)"
+          fi
+
+          {
+            echo "notes<<CHANGELOG_EOF"
+            echo "$notes"
+            echo "CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+      - name: "Build releases"
+        run: |
+          git archive --format=zip --prefix=wp-piwik/ -o "wp-piwik-$version.zip" HEAD
+          git archive --format=tar.gz --prefix=wp-piwik/ -o "wp-piwik-$version.tgz" HEAD
+      - name: "Create release"
+        uses: ncipollo/release-action@c4bf6c1ab090090498fb7f3ddc9f99ba5ab619b9
+        with:
+            artifacts: "wp-piwik-${{ env.version }}.*"
+            allowUpdates: false
+            tag: ${{ env.version }}
+            body: ${{ steps.changelog.outputs.notes }}
+            prerelease: false
+            token: ${{ secrets.GITHUB_TOKEN }}
+      - name: "Deploy on wordpress"
+        run: |
+          chmod +x ./scripts/*.sh
+          ./scripts/deploy.sh "$version" "${{ secrets.SVN_USERNAME }}" "${{ secrets.SVN_PASSWORD }}" "$PWD/wp-piwik-$version.tgz"
+        shell: bash
+        env:
+          FORCE_DEPLOY: ${{ github.event.inputs.force }}
