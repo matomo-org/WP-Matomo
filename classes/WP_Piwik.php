@@ -1447,6 +1447,7 @@ class WP_Piwik {
 			self::$settings->set_option( 'tracking_code', $result ['script'], $blog_id );
 			self::$settings->set_option( 'noscript_code', $result ['noscript'], $blog_id );
 			self::$settings->set_global_option( 'proxy_url', $result ['proxy'] );
+			self::$settings->save();
 			return $result['script'];
 		}
 		return false;

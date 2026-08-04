@@ -41,4 +41,5 @@ require $_tests_dir . '/includes/bootstrap.php';
 
 require_once __DIR__ . '/mock/Plugin.php';
 require_once __DIR__ . '/mock/Settings.php';
+require_once __DIR__ . '/rest/Mock_Matomo_Endpoint.php';
 require_once __DIR__ . '/WP_Piwik_TestCase.php';
