@@ -1,7 +1,10 @@
 .gitattributes   export-ignore
-/.github          export-ignore
-/tests            export-ignore
+/.github         export-ignore
+/tests           export-ignore
 .phpcs.xml.dist  export-ignore
 .wp-env.json     export-ignore
 phpstan.neon     export-ignore
 phpunit.xml.dist export-ignore
+.editorconfig    export-ignore
+/scripts         export-ignore
+
