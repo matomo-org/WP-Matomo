@@ -10,3 +10,6 @@ proxy/config.local.php
 
 tests/phpunit/proxy/mock/runtime/
 tests/phpunit/rest/mock/runtime/
+
+/wp-piwik*.zip
+/wp-piwik*.tgz

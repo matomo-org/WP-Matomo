@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # source: https://github.com/10up/action-wordpress-plugin-asset-update/blob/develop/entrypoint.sh
 # https://github.com/10up/action-wordpress-plugin-asset-update/
@@ -7,9 +7,7 @@
 # Modifications from the Matomo team for our use case
 
 VERSION=$1
-SVN_USERNAME=$2
-SVN_PASSWORD=$3
-ARCHIVE=$4
+ARCHIVE=$2
 
 # Note that this does not use pipefail because if the grep later
 # doesn't match I want to be able to show an error first
