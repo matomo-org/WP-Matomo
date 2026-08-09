@@ -11,7 +11,7 @@ use WP_Piwik\Widget\Post;
 class WP_Piwik {
 
 	private static $revision_id = 2023092201;
-	private static $version     = '1.1.10';
+	private static $version     = '1.1.11';
 	private static $blog_id;
 	private static $plugin_basename = null;
 	private static $logger;
@@ -1262,19 +1262,25 @@ class WP_Piwik {
 	 *          attribute list
 	 */
 	public function shortcode( $attributes ) {
-		shortcode_atts(
+		// only the attributes listed below reach the widgets. anything else an author
+		// writes is dropped here, so a shortcode cannot smuggle its own parameters.
+		// the defaults are null on purpose: the widgets test their parameters with
+		// isset(), which is false for null, so each widget applies its own
+		// fallback.
+		$attributes       = shortcode_atts(
 			array(
-				'title'    => '',
 				'module'   => 'overview',
-				'period'   => 'day',
-				'date'     => 'yesterday',
-				'limit'    => 10,
-				'width'    => '100%',
-				'height'   => '200px',
-				'idsite'   => '',
-				'language' => 'en',
-				'range'    => false,
-				'key'      => 'sum_daily_nb_uniq_visitors',
+				'title'    => null,
+				'period'   => null,
+				'date'     => null,
+				'limit'    => null,
+				'width'    => null,
+				'height'   => null,
+				'idsite'   => null,
+				'language' => null,
+				'range'    => null,
+				'key'      => null,
+				'url'      => null,
 			),
 			$attributes
 		);

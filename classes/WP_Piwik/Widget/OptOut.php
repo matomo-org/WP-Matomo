@@ -7,7 +7,12 @@ class OptOut extends \WP_Piwik\Widget {
 	public $class_name = __CLASS__;
 
 	protected function configure( $prefix = '', $params = array() ) {
-		$this->parameter = $params;
+		$this->parameter = array(
+			'width'    => isset( $params['width'] ) ? $params['width'] : '100%',
+			'height'   => isset( $params['height'] ) ? $params['height'] : '200px',
+			'idsite'   => isset( $params['idsite'] ) ? $params['idsite'] : '',
+			'language' => isset( $params['language'] ) ? $params['language'] : 'en',
+		);
 	}
 
 	public function show() {
@@ -26,10 +31,12 @@ class OptOut extends \WP_Piwik\Widget {
 				$piwik_url = self::$settings->get_global_option( 'piwik_url' );
 				break;
 		}
-		$width    = ( isset( $this->parameter['width'] ) ? rawurlencode( $this->parameter['width'] ) : '' );
-		$height   = ( isset( $this->parameter['height'] ) ? rawurlencode( $this->parameter['height'] ) : '' );
-		$idsite   = ( isset( $this->parameter['idsite'] ) ? 'idsite=' . (int) $this->parameter['idsite'] . '&' : '' );
-		$language = ( isset( $this->parameter['language'] ) ? rawurlencode( $this->parameter['language'] ) : 'en' );
+		// width and height end up in HTML attributes, where esc_attr() is the
+		// right encoding; idsite and language end up in the iframe URL
+		$width    = $this->parameter['width'];
+		$height   = $this->parameter['height'];
+		$idsite   = ( '' !== $this->parameter['idsite'] ? 'idsite=' . (int) $this->parameter['idsite'] . '&' : '' );
+		$language = rawurlencode( $this->parameter['language'] );
 		$this->out( '<iframe frameborder="no" width="' . esc_attr( $width ) . '" height="' . esc_attr( $height ) . '" src="' . esc_attr( $piwik_url . 'index.php?module=CoreAdminHome&action=optOut&' . $idsite . 'language=' . $language ) . '"></iframe>' );
 	}
 }

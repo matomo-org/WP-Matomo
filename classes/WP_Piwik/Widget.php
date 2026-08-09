@@ -75,7 +75,9 @@ abstract class Widget {
 				$this->api_id [ $method ] = Request::register( $method, $this->parameter );
 				self::$wp_piwik->log( 'Register request: ' . $this->api_id [ $method ] );
 			}
-		} else {
+		} elseif ( '' !== $this->method ) {
+			// a widget without a method performs no API request, so it must not
+			// queue one, or it will affect the next bulk api request call.
 			$this->api_id [ $this->method ] = Request::register( $this->method, $this->parameter );
 			self::$wp_piwik->log( 'Register request: ' . $this->api_id [ $this->method ] );
 		}

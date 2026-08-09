@@ -4,6 +4,7 @@ namespace WP_Piwik\Tests;
 
 use WP_Piwik\Request;
 use WP_Piwik\Request\Rest;
+use WP_Piwik\Widget\OptOut;
 
 class RestIntegrationTest extends WP_Piwik_TestCase {
 
@@ -73,7 +74,7 @@ class RestIntegrationTest extends WP_Piwik_TestCase {
 		$this->assertSame( 'API.getBulkRequest', $sent['method'] );
 		$this->assertSame( 'secret-token', $sent['token_auth'] );
 		$this->assertSame(
-			[ 'method=VisitsSummary.get&idSite=1&period=day&date=2015-01-01' ],
+			[ 'idSite=1&period=day&date=2015-01-01&method=VisitsSummary.get' ],
 			$sent['urls']
 		);
 	}
@@ -93,6 +94,57 @@ class RestIntegrationTest extends WP_Piwik_TestCase {
 		} else {
 			$this->assertStringContainsString( 'token_auth=secret-token', urldecode( $requests[0]['query'] ) );
 		}
+	}
+
+	public function test_bulk_request_should_not_carry_a_method_injected_through_a_widget() {
+		$settings = $this->create_settings(
+			[
+				'piwik_mode'         => 'http',
+				'piwik_url'          => $this->mock_url(),
+				'piwik_token'        => 'secret-token',
+				'http_connection'    => 'curl',
+				'http_method'        => 'post',
+				'cache'              => false,
+				'connection_timeout' => 15,
+			],
+			[ 'site_id' => 1 ]
+		);
+
+		$request = new Rest( new \WP_Piwik_Test_Mock_Plugin(), $settings );
+		$request->reset();
+
+		// the opt-out widget used to adopt the shortcode attributes verbatim
+		new OptOut(
+			new \WP_Piwik_Test_Mock_Plugin(),
+			$settings,
+			null,
+			null,
+			null,
+			[
+				'module' => 'opt-out',
+				'method' => 'SitesManager.deleteSite',
+			],
+			true
+		);
+
+		// the opt-out widget never calls the API itself, so a second widget is
+		// what flushes the queue
+		$id = Request::register(
+			'VisitsSummary.get',
+			[
+				'period' => 'day',
+				'date'   => '2015-01-01',
+			]
+		);
+		$request->perform( $id );
+
+		$requests = $this->get_captured_requests();
+		$this->assertCount( 1, $requests );
+		$this->assertSame(
+			[ 'idSite=1&period=day&date=2015-01-01&method=VisitsSummary.get' ],
+			$requests[0]['post']['urls'],
+			'the opt-out widget must contribute no sub request, and none may carry the injected method'
+		);
 	}
 
 	/**

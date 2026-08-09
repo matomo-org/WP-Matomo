@@ -111,10 +111,15 @@ abstract class Request {
 
 	protected function get_url_params( $config ) {
 		$params = [
-			'method' => $config['method'],
 			'idSite' => self::$settings->get_option( 'site_id' ),
 		];
-		$params = array_merge( $params, $config['parameter'] );
+		// method is merged last, so a parameter can never redefine which API
+		// method runs
+		$params = array_merge(
+			$params,
+			$config['parameter'],
+			[ 'method' => $config['method'] ]
+		);
 		return $params;
 	}
 

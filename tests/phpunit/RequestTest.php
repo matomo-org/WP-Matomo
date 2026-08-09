@@ -263,7 +263,33 @@ class RequestTest extends WP_Piwik_TestCase {
 			]
 		);
 
-		$this->assertSame( 'method=VisitsSummary.get&idSite=7&period=day&date=today', $url );
+		$this->assertSame( 'idSite=7&period=day&date=today&method=VisitsSummary.get', $url );
+	}
+
+	public function test_build_url_should_ignore_a_method_supplied_as_a_parameter() {
+		$url = $this->request->build_url_public(
+			[
+				'method'    => 'VisitsSummary.get',
+				'parameter' => [
+					'method' => 'SitesManager.deleteSite',
+					'period' => 'day',
+					'date'   => 'today',
+				],
+			]
+		);
+
+		$this->assertSame( 'idSite=7&method=VisitsSummary.get&period=day&date=today', $url );
+	}
+
+	public function test_build_url_should_let_a_parameter_override_the_site_id() {
+		$url = $this->request->build_url_public(
+			[
+				'method'    => 'VisitsSummary.get',
+				'parameter' => [ 'idSite' => 12 ],
+			]
+		);
+
+		$this->assertSame( 'idSite=12&method=VisitsSummary.get', $url );
 	}
 
 	public function test_get_debug_returns_false_when_no_debug_data_collected() {

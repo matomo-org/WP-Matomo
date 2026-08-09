@@ -82,8 +82,8 @@ class RestTest extends WP_Piwik_TestCase {
 
 		$this->assertSame(
 			[
-				'method=VisitsSummary.get&idSite=7&period=day&date=2015-01-01',
-				'method=VisitsSummary.get&idSite=7&period=day&date=2015-01-02',
+				'idSite=7&period=day&date=2015-01-01&method=VisitsSummary.get',
+				'idSite=7&period=day&date=2015-01-02&method=VisitsSummary.get',
 			],
 			$params['urls']
 		);
@@ -126,7 +126,7 @@ class RestTest extends WP_Piwik_TestCase {
 				'module'     => 'API',
 				'method'     => 'API.getBulkRequest',
 				'format'     => 'json',
-				'urls'       => [ 'method=VisitsSummary.get&idSite=7&period=day&date=2015-01-01' ],
+				'urls'       => [ 'idSite=7&period=day&date=2015-01-01&method=VisitsSummary.get' ],
 				'token_auth' => 'secret-token',
 			],
 			$decoded
@@ -148,10 +148,10 @@ class RestTest extends WP_Piwik_TestCase {
 
 		$this->assertSame(
 			[
-				'method' => 'VisitsSummary.get',
 				'idSite' => '7',
 				'period' => 'day',
 				'date'   => '2015-01-01',
+				'method' => 'VisitsSummary.get',
 			],
 			$sub_request
 		);
@@ -163,7 +163,7 @@ class RestTest extends WP_Piwik_TestCase {
 		list( $params ) = $this->request->build_bulk_params_public();
 		$body           = $this->request->build_param_string_public( $params );
 
-		$this->assertSame( 'module=API&method=API.getBulkRequest&format=json&urls%5B0%5D=method%3DVisitsSummary.get%26idSite%3D7%26period%3Dday%26date%3D2015-01-01&token_auth=secret-token', $body );
+		$this->assertSame( 'module=API&method=API.getBulkRequest&format=json&urls%5B0%5D=idSite%3D7%26period%3Dday%26date%3D2015-01-01%26method%3DVisitsSummary.get&token_auth=secret-token', $body );
 	}
 
 	public function test_request_body_can_mask_the_auth_token_for_debug_output() {
@@ -266,7 +266,7 @@ class RestTest extends WP_Piwik_TestCase {
 		list( $params, $map ) = $this->request->build_bulk_params_public();
 
 		$this->assertSame(
-			[ 'method=VisitsSummary.get&idSite=7&period=day&date=2015-01-02' ],
+			[ 'idSite=7&period=day&date=2015-01-02&method=VisitsSummary.get' ],
 			$params['urls']
 		);
 		$this->assertSame( [ 'method=VisitsSummary.get&period=day&date=2015-01-02' ], array_values( $map ) );
