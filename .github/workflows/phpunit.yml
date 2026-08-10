@@ -36,7 +36,7 @@ jobs:
           persist-credentials: false
 
       - name: Set up DDEV
-        uses: ddev/github-action-setup-ddev@v1
+        uses: ddev/github-action-setup-ddev@fdf2f5c97943bae638f31df6df86f1defa6210c0
         with:
           autostart: false
 

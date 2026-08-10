@@ -1,7 +1,7 @@
 # Lets the web container resolve another DDEV project's hostname, so the plugin
 # can talk to a Matomo that runs in its own DDEV project -- by default the one
 # in the sibling matomo repository at https://matomo.ddev.site.
-ervices:
+services:
   web:
     extra_hosts:
       - "matomo.ddev.site:host-gateway"
