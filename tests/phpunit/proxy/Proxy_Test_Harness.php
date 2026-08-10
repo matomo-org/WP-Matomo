@@ -3,7 +3,7 @@
 namespace WP_Piwik\Tests;
 
 /**
- * Manages the bundled tracker proxy within a running wp-env environment.
+ * Manages the bundled tracker proxy within a running WordPress environment.
  * - configures the proxy to use a mock Matomo endpoint at tests/phpunit/proxy/mock/
  * - captures requests sent to it for later inspection
  */
@@ -27,7 +27,7 @@ class Proxy_Test_Harness {
 	private $config_local_path;
 
 	public function start() {
-		$this->proxy_host = getenv( 'WP_MATOMO_TEST_HTTP_HOST' ) ? getenv( 'WP_MATOMO_TEST_HTTP_HOST' ) : 'tests-wordpress';
+		$this->proxy_host = getenv( 'WP_MATOMO_TEST_HTTP_HOST' ) ? getenv( 'WP_MATOMO_TEST_HTTP_HOST' ) : 'localhost';
 
 		$plugins_path            = wp_parse_url( plugins_url(), PHP_URL_PATH );
 		$plugin_dir              = basename( dirname( __DIR__, 3 ) );

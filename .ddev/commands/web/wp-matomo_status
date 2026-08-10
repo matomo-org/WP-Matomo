@@ -1,0 +1,37 @@
+#!/bin/bash
+
+## Description: Show the plugin's current Matomo connection and check whether it connects
+## Usage: wp-matomo:status [--site=single|multisite|both]
+## Example: "ddev wp-matomo:status"
+## ExecRaw: true
+
+set -eu -o pipefail
+
+DOCROOT="/var/www/html/${DDEV_DOCROOT:-wp}"
+SITE="both"
+
+for arg in "$@"; do
+	case "$arg" in
+		--site=*)  SITE="${arg#*=}" ;;
+		-h|--help) sed -n '3,5p' "$0"; exit 0 ;;
+		*) echo "Unknown option: $arg" >&2; exit 1 ;;
+	esac
+done
+
+status_site() {
+	local name="$1" path="${DOCROOT}/$1"
+
+	if [ ! -f "${path}/wp-config.php" ]; then
+		echo "==> ${name}: not installed"
+		return
+	fi
+	echo "==> ${name}"
+	wp eval-file --path="$path" /mnt/ddev_config/scripts/wp-matomo-status.php
+}
+
+if [ "$SITE" = "single" ] || [ "$SITE" = "both" ]; then
+	status_site single
+fi
+if [ "$SITE" = "multisite" ] || [ "$SITE" = "both" ]; then
+	status_site multisite
+fi

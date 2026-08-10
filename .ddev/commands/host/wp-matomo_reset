@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+
+## Description: Delete the WordPress installs and the database, then reinstall
+## Usage: wp-matomo:reset [--yes] [wp-matomo:install flags...]
+## Example: "ddev wp-matomo:reset --yes" or "ddev wp-matomo:reset --only=tests"
+
+set -eu -o pipefail
+
+cd "${DDEV_APPROOT}"
+
+ASSUME_YES=0
+ARGS=()
+for arg in "$@"; do
+	case "$arg" in
+		--yes|-y) ASSUME_YES=1 ;;
+		*) ARGS+=("$arg") ;;
+	esac
+done
+
+if [ "$ASSUME_YES" != "1" ]; then
+	echo "This deletes ${DDEV_APPROOT}/wp and the 'db' database, then reinstalls."
+	read -r -p "Continue? [y/N] " reply
+	case "$reply" in
+		y|Y) ;;
+		*) echo "Aborted."; exit 1 ;;
+	esac
+fi
+
+echo "==> Stopping the project to detach the plugin bind mounts"
+ddev stop
+
+echo "==> Removing ${DDEV_APPROOT}/wp"
+rm -rf "${DDEV_APPROOT}/wp"
+
+echo "==> Starting the project"
+ddev start
+
+echo "==> Recreating the database"
+ddev mysql -uroot -proot -e "DROP DATABASE IF EXISTS db; CREATE DATABASE db; GRANT ALL ON db.* TO 'db'@'%';"
+
+if [ ${#ARGS[@]} -eq 0 ]; then
+	ddev wp-matomo:install
+else
+	ddev wp-matomo:install "${ARGS[@]}"
+fi

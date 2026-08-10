@@ -3,6 +3,9 @@
 node_modules/
 vendor/
 
+# DDEV downloads WordPress into this docroot; it is not part of the plugin.
+/wp/
+
 .phpunit.cache/
 .phpunit.result.cache
 

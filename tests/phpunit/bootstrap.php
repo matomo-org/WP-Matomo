@@ -7,15 +7,18 @@
 $_tests_dir = getenv( 'WP_TESTS_DIR' );
 
 if ( ! $_tests_dir ) {
-	// default location of the WordPress PHPUnit test library inside the wp-env tests container
-	$_tests_dir = '/wordpress-phpunit';
+	// the WordPress PHPUnit test library, installed by composer as a dev dependency.
+	$_tests_dir = dirname( __DIR__, 2 ) . '/vendor/wp-phpunit/wp-phpunit';
 }
 
 if ( ! file_exists( $_tests_dir . '/includes/functions.php' ) ) {
 	echo 'Could not find the WordPress test library in ' . $_tests_dir . '.' . PHP_EOL;
-	echo 'The test suite must run inside the wp-env tests container:' . PHP_EOL;
-	echo '  npm run wp-env start' . PHP_EOL;
-	echo '  npm run test:php' . PHP_EOL;
+	echo 'The test suite needs a WordPress environment. With DDEV:' . PHP_EOL;
+	echo '  ddev start' . PHP_EOL;
+	echo '  ddev composer install' . PHP_EOL;
+	echo '  ddev wp-matomo:install' . PHP_EOL;
+	echo '  ddev wp-matomo:test' . PHP_EOL;
+	echo 'See .ddev/README.md.' . PHP_EOL;
 	exit( 1 );
 }
 

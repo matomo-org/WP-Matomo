@@ -6,7 +6,8 @@ require_once __DIR__ . '/proxy/Proxy_Test_Harness.php';
 
 /**
  * End-to-end integration tests for the bundled tracker proxy in ./proxy.
- * The tests skip automatically when not run inside the wp-env container.
+ * The tests skip automatically unless WP_MATOMO_INTEGRATION_TESTS is set, since
+ * they need a web server that serves this plugin over HTTP.
  */
 class ProxyIntegrationTest extends \WP_UnitTestCase {
 
@@ -18,8 +19,8 @@ class ProxyIntegrationTest extends \WP_UnitTestCase {
 	public static function set_up_before_class() {
 		parent::set_up_before_class();
 
-		if ( ! self::is_in_wp_env_environment() ) {
-			self::markTestSkipped( 'Not in wp-env environment, cannot run this test' );
+		if ( ! self::is_integration_environment() ) {
+			self::markTestSkipped( 'WP_MATOMO_INTEGRATION_TESTS is not set, cannot run this test' );
 		}
 
 		$harness = new Proxy_Test_Harness();
@@ -35,8 +36,8 @@ class ProxyIntegrationTest extends \WP_UnitTestCase {
 		parent::tear_down_after_class();
 	}
 
-	private static function is_in_wp_env_environment() {
-		return defined( 'IN_WP_ENV' ) && IN_WP_ENV;
+	private static function is_integration_environment() {
+		return (bool) getenv( 'WP_MATOMO_INTEGRATION_TESTS' );
 	}
 
 	public function set_up() {

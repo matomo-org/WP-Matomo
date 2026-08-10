@@ -1,0 +1,42 @@
+#!/bin/bash
+
+## Description: Run the plugin's PHPUnit suite
+## Usage: wp-matomo:test [--multisite] [phpunit args...]
+## Example: "ddev wp-matomo:test" or "ddev wp-matomo:test --multisite" or "ddev wp-matomo:test --filter RestIntegrationTest"
+## ExecRaw: true
+
+set -eu -o pipefail
+
+DOCROOT="/var/www/html/${DDEV_DOCROOT:-wp}"
+PLUGIN_PATH="${DOCROOT}/tests/wp-content/plugins/wp-piwik"
+
+ARGS=()
+for arg in "$@"; do
+	case "$arg" in
+		--multisite) export WP_MULTISITE=1 ;;
+		*) ARGS+=("$arg") ;;
+	esac
+done
+
+if [ ! -f "${DOCROOT}/tests/wp-load.php" ]; then
+	echo "The test WordPress is missing. Run: ddev wp-matomo:install --only=tests" >&2
+	exit 1
+fi
+
+if [ ! -f "/var/www/html/vendor/bin/phpunit" ]; then
+	echo "PHPUnit is missing. Run: ddev composer install" >&2
+	exit 1
+fi
+
+mkdir -p "${PLUGIN_PATH}/tests/phpunit/proxy/mock/runtime" \
+         "${PLUGIN_PATH}/tests/phpunit/rest/mock/runtime"
+
+# must run from the mounted plugin path, not /var/www/html: the integration tests
+# build their HTTP URLs from basename( dirname( __DIR__, 2|3 ) ), which has to
+# resolve to "wp-piwik".
+cd "$PLUGIN_PATH"
+
+if [ ${#ARGS[@]} -eq 0 ]; then
+	exec vendor/bin/phpunit
+fi
+exec vendor/bin/phpunit "${ARGS[@]}"

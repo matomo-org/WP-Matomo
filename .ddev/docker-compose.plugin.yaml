@@ -1,0 +1,7 @@
+# mounts this repository into each WordPress install as "wp-piwik".
+services:
+  web:
+    volumes:
+      - "../:/var/www/html/wp/single/wp-content/plugins/wp-piwik"
+      - "../:/var/www/html/wp/multisite/wp-content/plugins/wp-piwik"
+      - "../:/var/www/html/wp/tests/wp-content/plugins/wp-piwik"
