@@ -74,7 +74,7 @@ class RestIntegrationTest extends WP_Piwik_TestCase {
 		$this->assertSame( 'API.getBulkRequest', $sent['method'] );
 		$this->assertSame( 'secret-token', $sent['token_auth'] );
 		$this->assertSame(
-			[ 'idSite=1&period=day&date=2015-01-01&method=VisitsSummary.get' ],
+			[ 'period=day&date=2015-01-01&idSite=1&method=VisitsSummary.get' ],
 			$sent['urls']
 		);
 	}
@@ -141,7 +141,7 @@ class RestIntegrationTest extends WP_Piwik_TestCase {
 		$requests = $this->get_captured_requests();
 		$this->assertCount( 1, $requests );
 		$this->assertSame(
-			[ 'idSite=1&period=day&date=2015-01-01&method=VisitsSummary.get' ],
+			[ 'period=day&date=2015-01-01&idSite=1&method=VisitsSummary.get' ],
 			$requests[0]['post']['urls'],
 			'the opt-out widget must contribute no sub request, and none may carry the injected method'
 		);

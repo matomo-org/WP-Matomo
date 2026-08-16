@@ -433,6 +433,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_reject_a_url_on_another_port() {
+		$this->set_home_url_without_a_port();
 		$this->create_post_and_set_as_current( $this->create_author( true ) );
 		$other_id              = self::factory()->post->create( [ 'post_status' => 'publish' ] );
 		$other_on_another_port = str_replace(
@@ -448,6 +449,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_accept_a_url_stating_the_default_port_of_a_scheme() {
+		$this->set_home_url_without_a_port();
 		$this->create_post_and_set_as_current( $this->create_author( true ) );
 		$other_id  = self::factory()->post->create( [ 'post_status' => 'publish' ] );
 		$other_url = str_replace(
@@ -780,5 +782,17 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 			}
 		}
 		$this->fail( 'No request was registered for ' . $method );
+	}
+
+	private function set_home_url_without_a_port() {
+		$home_url = 'http://example.org';
+		foreach ( [ 'option_name', 'option_siteurl' ] as $option ) {
+			add_filter(
+				$option,
+				function () use ( $home_url ) {
+					return $home_url;
+				}
+			);
+		}
 	}
 }
