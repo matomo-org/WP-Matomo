@@ -42,7 +42,7 @@ Shows overview table like WP-Matomo's overview dashboard. See Matomo API documen
 Shows the Matomo opt-out Iframe. You can change the Iframe's language by the language attribute (e.g. de for German language) and its width and height using the corresponding attributes.
 
     [wp-piwik module="post" period="range" date="last30" key="sum_daily_nb_uniq_visitors"]
-Shows the chosen keys value related to the current post. You can define a date (format: lastN, previousN, today, yesterday, YYYY-MM-DD or YYYY-MM-DD,YYYY-MM-DD) and the desired value's key (e.g., sum_daily_nb_uniq_visitors, nb_visits or nb_hits - for details see Matomo's API method Actions.getPageUrl using a range). The optional url attribute reports on another post of this site instead of the current one; it is only accepted if it resolves to a posts author of the containing post is allowed to read.
+Shows the chosen keys value related to the current post. You can define a date (format: lastN, previousN, today, yesterday, YYYY-MM-DD or YYYY-MM-DD,YYYY-MM-DD) and the desired value's key (e.g., sum_daily_nb_uniq_visitors, nb_visits or nb_hits - for details see Matomo's API method Actions.getPageUrl using a range). The optional url attribute reports on another post of this site instead of the current one; it is only accepted if it resolves to a post the author of the containing post is allowed to read.
 
     [wp-piwik]
 is equal to *[wp-piwik module="overview" title="" period="day" date="yesterday"]*.
@@ -148,7 +148,7 @@ Add WP-Matomo to your /wp-content/plugins folder and enable it as [Network Plugi
 
 = 1.1.11 =
 * Security: the overview and post shortcodes are no longer rendered if the author of the post containing them is not allowed to see the statistics.
-* Security: the url attribute of the post shortcode is now restricted to posts of the author is allowed to read.
+* Security: the url attribute of the post shortcode is now restricted to posts the author is allowed to read.
 * Security: shortcodes ignore period, date and language attributes Matomo would not accept, and fall back to their default instead.
 * Bug fix: the post shortcode no longer triggers a request when there is no post to report on.
 * Security: shortcodes no longer pass unknown attributes on to Matomo.

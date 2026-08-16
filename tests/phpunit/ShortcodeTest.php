@@ -46,6 +46,9 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		$request = new Shortcode_Test_Request( new \WP_Piwik_Test_Mock_Plugin(), $settings );
 		$request->reset();
 
+		add_shortcode( Shortcode::TAG, array( $GLOBALS['wp-piwik'], 'shortcode' ) );
+		add_filter( 'render_block', array( $GLOBALS['wp-piwik'], 'render_shortcodes_in_reusable_block' ), 10, 2 );
+
 		wp_set_current_user( 0 );
 		$this->set_current_post( null );
 	}
@@ -66,6 +69,9 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 			}
 		}
 		$this->role_caps_to_revoke = [];
+
+		remove_shortcode( Shortcode::TAG );
+		remove_shortcode( 'wp_piwik_test_other' );
 
 		$this->set_current_post( null );
 
@@ -387,6 +393,121 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
 	}
 
+	public function test_render_should_reject_a_url_on_another_port() {
+		$this->given_a_post_authored_by( $this->create_author( true ) );
+		$other_id              = self::factory()->post->create( [ 'post_status' => 'publish' ] );
+		$other_on_another_port = str_replace(
+			wp_parse_url( home_url(), PHP_URL_HOST ),
+			wp_parse_url( home_url(), PHP_URL_HOST ) . ':8080',
+			get_permalink( $other_id )
+		);
+
+		$output = $this->render( 'module=post url=' . $other_on_another_port );
+
+		$this->assertSame( '', $output );
+		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
+	}
+
+	public function test_render_should_accept_a_url_stating_the_default_port_of_a_scheme() {
+		$this->given_a_post_authored_by( $this->create_author( true ) );
+		$other_id  = self::factory()->post->create( [ 'post_status' => 'publish' ] );
+		$other_url = str_replace(
+			wp_parse_url( home_url(), PHP_URL_HOST ),
+			wp_parse_url( home_url(), PHP_URL_HOST ) . ':80',
+			get_permalink( $other_id )
+		);
+
+		$this->render( 'module=post url=' . $other_url );
+
+		$parameters = $this->get_registered_parameters( 'Actions.getPageUrl' );
+		$this->assertSame( $other_url, $parameters['pageUrl'] );
+	}
+
+	public function test_render_should_authorize_a_reusable_block_against_its_own_author() {
+		$block_id = self::factory()->post->create(
+			[
+				'post_type'    => 'wp_block',
+				'post_status'  => 'publish',
+				'post_author'  => $this->create_author( false ),
+				'post_content' => '[wp-piwik module="overview"]',
+			]
+		);
+		// the embedding post belongs to somebody who may see the statistics
+		$this->given_a_post_authored_by( $this->create_author( true ) );
+
+		$output = $this->render_reusable_block( $block_id );
+
+		$this->assertSame( '', $output, 'the block author may not see the statistics, so the block borrowing the embedding author is a bypass' );
+		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
+	}
+
+	public function test_render_should_render_a_reusable_block_whose_author_may_read_stats() {
+		$block_id = self::factory()->post->create(
+			[
+				'post_type'    => 'wp_block',
+				'post_status'  => 'publish',
+				'post_author'  => $this->create_author( true ),
+				'post_content' => '[wp-piwik module="overview"]',
+			]
+		);
+		$this->given_a_post_authored_by( $this->create_author( false ) );
+
+		$this->render_reusable_block( $block_id );
+
+		$this->assertSame( [ 'VisitsSummary.get' ], $this->get_registered_methods() );
+	}
+
+	public function test_render_should_leave_the_global_post_alone_after_rendering_a_reusable_block() {
+		$block_id = self::factory()->post->create(
+			[
+				'post_type'    => 'wp_block',
+				'post_status'  => 'publish',
+				'post_author'  => $this->create_author( true ),
+				'post_content' => '[wp-piwik module="overview"]',
+			]
+		);
+		$post_id  = $this->given_a_post_authored_by( $this->create_author( true ) );
+
+		$this->render_reusable_block( $block_id );
+
+		$this->assertSame( $post_id, $GLOBALS['post']->ID );
+		$this->assertArrayHasKey( 'wp-piwik', $GLOBALS['shortcode_tags'], 'the narrowed tag list has to be restored' );
+	}
+
+	public function test_render_should_leave_other_shortcodes_in_a_reusable_block_to_the_usual_pass() {
+		$block_id = self::factory()->post->create(
+			[
+				'post_type'    => 'wp_block',
+				'post_status'  => 'publish',
+				'post_author'  => $this->create_author( true ),
+				'post_content' => '[wp-piwik module="opt-out"][wp_piwik_test_other]',
+			]
+		);
+		add_shortcode( 'wp_piwik_test_other', '__return_empty_string' );
+		$this->given_a_post_authored_by( $this->create_author( true ) );
+
+		$output = $this->render_reusable_block( $block_id );
+
+		$this->assertStringContainsString( '<iframe', $output );
+		$this->assertStringContainsString( '[wp_piwik_test_other]', $output, 'only this plugin\'s tag is expanded early' );
+	}
+
+	public function test_render_should_ignore_blocks_that_are_not_reusable() {
+		$this->given_a_post_authored_by( $this->create_author( false ) );
+		$shortcode = new Shortcode( $GLOBALS['wp-piwik'], \WP_Piwik::get_settings() );
+
+		$output = $shortcode->render_reusable_block(
+			'[wp-piwik module="overview"]',
+			[
+				'blockName' => 'core/paragraph',
+				'attrs'     => [],
+			]
+		);
+
+		$this->assertSame( '[wp-piwik module="overview"]', $output );
+		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
+	}
+
 	public function test_render_should_let_the_authorized_filter_block_an_allowed_shortcode() {
 		$this->given_a_post_authored_by( $this->create_author( true ) );
 		add_filter( 'wp-piwik_shortcode_authorized', '__return_false' );
@@ -493,6 +614,19 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	private function render( $attributes ) {
 		$shortcode = new Shortcode( $GLOBALS['wp-piwik'], \WP_Piwik::get_settings() );
 		return $shortcode->render( shortcode_parse_atts( $attributes ) );
+	}
+
+	private function render_reusable_block( $block_id ) {
+		$block = get_post( $block_id );
+		return apply_filters(
+			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
+			'render_block',
+			$block->post_content,
+			[
+				'blockName' => 'core/block',
+				'attrs'     => [ 'ref' => $block_id ],
+			]
+		);
 	}
 
 	/**

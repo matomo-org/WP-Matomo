@@ -263,7 +263,7 @@ class RequestTest extends WP_Piwik_TestCase {
 			]
 		);
 
-		$this->assertSame( 'idSite=7&period=day&date=today&method=VisitsSummary.get', $url );
+		$this->assertSame( 'period=day&date=today&idSite=7&method=VisitsSummary.get', $url );
 	}
 
 	public function test_build_url_should_ignore_a_method_supplied_as_a_parameter() {
@@ -278,10 +278,12 @@ class RequestTest extends WP_Piwik_TestCase {
 			]
 		);
 
-		$this->assertSame( 'idSite=7&method=VisitsSummary.get&period=day&date=today', $url );
+		// array_merge keeps the position a string key already had, so the injected
+		// method keeps its slot but never its value
+		$this->assertSame( 'method=VisitsSummary.get&period=day&date=today&idSite=7', $url );
 	}
 
-	public function test_build_url_should_let_a_parameter_override_the_site_id() {
+	public function test_build_url_should_ignore_a_site_id_supplied_as_a_parameter() {
 		$url = $this->request->build_url_public(
 			[
 				'method'    => 'VisitsSummary.get',
@@ -289,7 +291,26 @@ class RequestTest extends WP_Piwik_TestCase {
 			]
 		);
 
-		$this->assertSame( 'idSite=12&method=VisitsSummary.get', $url );
+		$this->assertSame( 'idSite=7&method=VisitsSummary.get', $url );
+	}
+
+	public function test_build_url_should_use_the_site_id_the_request_was_registered_with() {
+		$url = $this->request->build_url_public(
+			[
+				'method'    => 'SitesManager.getJavascriptTag',
+				'parameter' => [],
+				'id_site'   => 12,
+			]
+		);
+
+		$this->assertSame( 'idSite=12&method=SitesManager.getJavascriptTag', $url );
+	}
+
+	public function test_register_should_keep_requests_for_different_sites_apart() {
+		$first  = Test_Request::register( 'VisitsSummary.get', [ 'period' => 'day' ], 7 );
+		$second = Test_Request::register( 'VisitsSummary.get', [ 'period' => 'day' ], 12 );
+
+		$this->assertNotSame( $first, $second, 'the site is part of the request identity, not an interchangeable parameter' );
 	}
 
 	public function test_get_debug_returns_false_when_no_debug_data_collected() {

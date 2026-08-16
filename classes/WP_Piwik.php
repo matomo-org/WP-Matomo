@@ -290,11 +290,22 @@ class WP_Piwik {
 	private function add_shortcodes() {
 		if ( $this->is_add_shortcode() ) {
 			add_shortcode(
-				'wp-piwik',
+				\WP_Piwik\Shortcode::TAG,
 				array(
 					$this,
 					'shortcode',
 				)
+			);
+			// a reusable block carries its own author, so its shortcodes are resolved
+			// while the block renders rather than with the embedding post's content
+			add_filter(
+				'render_block',
+				array(
+					$this,
+					'render_shortcodes_in_reusable_block',
+				),
+				10,
+				2
 			);
 		}
 	}
@@ -1149,10 +1160,10 @@ class WP_Piwik {
 			$id     = WP_Piwik\Request::register(
 				'Annotations.add',
 				array(
-					'idSite' => $this->get_piwik_site_id(),
-					'date'   => gmdate( 'Y-m-d' ),
-					'note'   => $note,
-				)
+					'date' => gmdate( 'Y-m-d' ),
+					'note' => $note,
+				),
+				$this->get_piwik_site_id()
 			);
 			$result = $this->request( $id );
 			self::$logger->log( 'Add post annotation. ' . $note . ' - ' . wp_json_encode( $result ) );
@@ -1265,6 +1276,11 @@ class WP_Piwik {
 	public function shortcode( $attributes ) {
 		$shortcode = new \WP_Piwik\Shortcode( $this, self::$settings );
 		return $shortcode->render( $attributes );
+	}
+
+	public function render_shortcodes_in_reusable_block( $block_content, $block ) {
+		$shortcode = new \WP_Piwik\Shortcode( $this, self::$settings );
+		return $shortcode->render_reusable_block( $block_content, $block );
 	}
 
 	/**
@@ -1385,10 +1401,10 @@ class WP_Piwik {
 		$id         = WP_Piwik\Request::register(
 			'SitesManager.updateSite',
 			array(
-				'idSite'   => $site_id,
 				'urls'     => $is_current ? get_bloginfo( 'url' ) : get_blog_details( $blog_id )->siteurl,
 				'siteName' => $is_current ? get_bloginfo( 'name' ) : get_blog_details( $blog_id )->blogname,
-			)
+			),
+			$site_id
 		);
 		$this->request( $id );
 		self::$logger->log( 'Update Matomo site: WordPress site ' . ( $is_current ? get_bloginfo( 'url' ) : get_blog_details( $blog_id )->siteurl ) );
@@ -1413,13 +1429,13 @@ class WP_Piwik {
 		$id   = WP_Piwik\Request::register(
 			'SitesManager.getJavascriptTag',
 			array(
-				'idSite'          => $site_id,
 				'mergeSubdomains' => self::$settings->get_global_option( 'track_across' ) ? 1 : 0,
 				'mergeAliasUrls'  => self::$settings->get_global_option( 'track_across_alias' ) ? 1 : 0,
 				'disableCookies'  => self::$settings->get_global_option( 'disable_cookies' ) ? 1 : 0,
 				'crossDomain'     => self::$settings->get_global_option( 'track_crossdomain_linking' ) ? 1 : 0,
 				'trackNoScript'   => 1,
-			)
+			),
+			$site_id
 		);
 		$code = $this->request( $id );
 		if ( is_array( $code ) && isset( $code['value'] ) ) {

@@ -7,6 +7,8 @@ namespace WP_Piwik;
  */
 class Shortcode {
 
+	const TAG = 'wp-piwik';
+
 	private $available = array(
 		'opt-out'  => 'OptOut',
 		'post'     => 'Post',
@@ -80,6 +82,49 @@ class Shortcode {
 		}
 
 		return $this->render_widget( $attributes );
+	}
+
+	/**
+	 * Resolve the shortcodes of a reusable block against the block's own author
+	 * instead of the embedding post's author. Must be done before the content-wide
+	 * do_shortcode pass expands it in order to get the author of the block (this
+	 * information is lost afterward).
+	 *
+	 * @param string $block_content rendered block markup
+	 * @param array  $block         parsed block
+	 * @return string block markup with this plugin's shortcodes resolved
+	 */
+	public function render_reusable_block( $block_content, $block ) {
+		global $shortcode_tags, $post;
+
+		// only run the gate if we need to (ie, the block has the shortcode in it)
+		if ( empty( $block['blockName'] ) || 'core/block' !== $block['blockName'] || empty( $block['attrs']['ref'] ) ) {
+			return $block_content;
+		}
+		if ( ! isset( $shortcode_tags[ self::TAG ] ) || false === strpos( $block_content, '[' . self::TAG ) ) {
+			return $block_content;
+		}
+		$reusable_block = get_post( (int) $block['attrs']['ref'] );
+		if ( ! $reusable_block instanceof \WP_Post ) {
+			return $block_content;
+		}
+
+		$all_tags   = $shortcode_tags;
+		$saved_post = $post;
+		// the post is swapped because that is where the gate reads its subject from.
+		// phpcs:disable WordPress.WP.GlobalVariablesOverride.Prohibited
+		try {
+			$shortcode_tags = array( self::TAG => $all_tags[ self::TAG ] );
+			$post           = $reusable_block;
+
+			$block_content = do_shortcode( $block_content );
+		} finally {
+			$shortcode_tags = $all_tags;
+			$post           = $saved_post;
+		}
+		// phpcs:enable WordPress.WP.GlobalVariablesOverride.Prohibited
+
+		return $block_content;
 	}
 
 	/**
@@ -181,9 +226,9 @@ class Shortcode {
 		 * Filter whether a shortcode may request data from Matomo. The hook can return
 		 * a WP_Error to deny with a reason.
 		 *
-		 * @param bool          $authorized whether the shortcode may run
-		 * @param array         $attributes shortcode attributes
-		 * @param \WP_Post|null $post       post the shortcode is rendered in, if any
+		 * @param bool|\WP_Error $authorized whether the shortcode may run
+		 * @param array          $attributes shortcode attributes
+		 * @param \WP_Post|null  $post       post the shortcode is rendered in, if any
 		 */
 		// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound, WordPress.NamingConventions.ValidHookName.UseUnderscores
 		$authorized = apply_filters( 'wp-piwik_shortcode_authorized', $authorized, $attributes, $post );
@@ -233,9 +278,24 @@ class Shortcode {
 		if ( ! empty( $target['host'] ) && strtolower( $target['host'] ) !== strtolower( $home['host'] ) ) {
 			return false;
 		}
+		if ( ! $this->is_same_port( $target, $home ) ) {
+			return false;
+		}
 		$home_path   = isset( $home['path'] ) ? $home['path'] : '/';
 		$target_path = isset( $target['path'] ) ? $target['path'] : '/';
 		return 0 === strpos( $target_path, $home_path );
+	}
+
+	private function is_same_port( $target, $home ) {
+		$target_port = isset( $target['port'] ) ? (int) $target['port'] : null;
+		$home_port   = isset( $home['port'] ) ? (int) $home['port'] : null;
+		if ( $target_port === $home_port ) {
+			return true;
+		}
+		$stated_port = null === $home_port ? $target_port : $home_port;
+		return null === $target_port || null === $home_port
+			? in_array( $stated_port, array( 80, 443 ), true )
+			: false;
 	}
 
 	/**
