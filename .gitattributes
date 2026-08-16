@@ -7,4 +7,4 @@ phpstan.neon     export-ignore
 phpunit.xml.dist export-ignore
 .editorconfig    export-ignore
 /scripts         export-ignore
-
+.ddev/           export-ignore
