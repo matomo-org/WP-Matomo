@@ -185,6 +185,37 @@ class SettingsTest extends WP_Piwik_TestCase {
 		$this->assertNotEmpty( $settings->get_global_option( 'last_settings_update' ) );
 	}
 
+	public function test_get_global_option_defaults_the_shortcode_author_check_to_enabled() {
+		$settings = $this->create_settings();
+
+		$this->assertTrue( $settings->get_global_option( 'shortcode_author_check' ) );
+	}
+
+	public function test_apply_changes_persists_a_disabled_shortcode_author_check() {
+		$settings = $this->create_settings();
+
+		$settings->apply_changes(
+			[
+				'shortcodes'             => 1,
+				'shortcode_author_check' => 0,
+			]
+		);
+
+		$this->assertFalse( (bool) $settings->get_global_option( 'shortcode_author_check' ) );
+		$this->assertSame( '0', (string) get_option( 'wp-piwik_global-shortcode_author_check' ) );
+	}
+
+	public function test_apply_changes_re_enables_a_shortcode_author_check_the_form_did_not_submit() {
+		$settings = $this->create_settings( [ 'shortcode_author_check' => 0 ] );
+
+		// apply_changes() writes the default for every setting missing from the
+		// submitted configuration, so a settings form that stops rendering this row
+		// silently turns the check back on
+		$settings->apply_changes( [ 'shortcodes' => 1 ] );
+
+		$this->assertTrue( (bool) $settings->get_global_option( 'shortcode_author_check' ) );
+	}
+
 	public function test_apply_changes_requests_site_id_when_auto_config_is_enabled() {
 		$plugin                = new \WP_Piwik_Test_Mock_Plugin();
 		$plugin->piwik_site_id = 42;

@@ -1260,32 +1260,11 @@ class WP_Piwik {
 	 *
 	 * @param array $attributes
 	 *          attribute list
+	 * @return string|null
 	 */
 	public function shortcode( $attributes ) {
-		// only the attributes listed below reach the widgets. anything else an author
-		// writes is dropped here, so a shortcode cannot smuggle its own parameters.
-		// the defaults are null on purpose: the widgets test their parameters with
-		// isset(), which is false for null, so each widget applies its own
-		// fallback.
-		$attributes       = shortcode_atts(
-			array(
-				'module'   => 'overview',
-				'title'    => null,
-				'period'   => null,
-				'date'     => null,
-				'limit'    => null,
-				'width'    => null,
-				'height'   => null,
-				'idsite'   => null,
-				'language' => null,
-				'range'    => null,
-				'key'      => null,
-				'url'      => null,
-			),
-			$attributes
-		);
-		$shortcode_object = new \WP_Piwik\Shortcode( $attributes, $this, self::$settings );
-		return $shortcode_object->get();
+		$shortcode = new \WP_Piwik\Shortcode( $this, self::$settings );
+		return $shortcode->render( $attributes );
 	}
 
 	/**

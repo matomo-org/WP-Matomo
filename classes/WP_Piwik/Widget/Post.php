@@ -8,13 +8,21 @@ class Post extends \WP_Piwik\Widget {
 
 	protected function configure( $prefix = '', $params = array() ) {
 		global $post;
+		$page_url = isset( $params['url'] ) ? $params['url'] : null;
+		if ( null === $page_url && $post instanceof \WP_Post ) {
+			$page_url = get_permalink( $post->ID );
+		}
+		if ( empty( $page_url ) ) {
+			// no page means nothing to report on
+			return;
+		}
 		$time_settings   = $this->get_time_settings();
 		$this->parameter = array(
 			'idSite'      => self::$wp_piwik->get_piwik_site_id( $this->blog_id ),
 			'period'      => isset( $params['period'] ) ? $params['period'] : $time_settings['period'],
 			'date'        => isset( $params['date'] ) ? $params['date'] : $time_settings['date'],
 			'key'         => isset( $params['key'] ) ? $params['key'] : null,
-			'pageUrl'     => isset( $params['url'] ) ? $params['url'] : get_permalink( $post->ID ),
+			'pageUrl'     => $page_url,
 			'description' => $time_settings['description'],
 		);
 		$this->title     = $prefix . esc_html__( 'Overview', 'wp-piwik' ) . ' (' . $this->parameter['date'] . ')';
@@ -22,6 +30,10 @@ class Post extends \WP_Piwik\Widget {
 	}
 
 	public function show() {
+		if ( ! isset( $this->api_id[ $this->method ] ) ) {
+			// configure() found no page to report on
+			return;
+		}
 		$response = self::$wp_piwik->request( $this->api_id[ $this->method ] );
 		if ( ! empty( $response['result'] ) && 'error' === $response['result'] ) {
 			echo '<strong>' . esc_html__( 'Piwik error', 'wp-piwik' ) . ':</strong> ' . esc_html( $response['message'] );
