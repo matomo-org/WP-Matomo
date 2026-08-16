@@ -433,15 +433,17 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_reject_a_url_on_another_port() {
+		$this->set_permalink_structure( '' );
 		$this->set_home_url_without_a_port();
+
 		$this->create_post_and_set_as_current( $this->create_author( true ) );
 		$other_id              = self::factory()->post->create( [ 'post_status' => 'publish' ] );
+
 		$other_on_another_port = str_replace(
 			wp_parse_url( home_url(), PHP_URL_HOST ),
 			wp_parse_url( home_url(), PHP_URL_HOST ) . ':8080',
 			get_permalink( $other_id )
 		);
-
 		$output = $this->render( 'module=post url=' . $other_on_another_port );
 
 		$this->assertSame( '', $output );
@@ -449,6 +451,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_accept_a_url_stating_the_default_port_of_a_scheme() {
+		$this->set_permalink_structure( '' );
 		$this->set_home_url_without_a_port();
 		$this->create_post_and_set_as_current( $this->create_author( true ) );
 		$other_id  = self::factory()->post->create( [ 'post_status' => 'publish' ] );
@@ -457,6 +460,15 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 			wp_parse_url( home_url(), PHP_URL_HOST ) . ':80',
 			get_permalink( $other_id )
 		);
+
+		print "$other_id\n";
+		print get_permalink($other_id)."\n";
+		print $other_url."\n";
+		print home_url()."\n";
+		print home_url('/')."\n";
+		print wp_parse_url($other_url, PHP_URL_HOST)."\n";
+		print wp_parse_url(home_url(), PHP_URL_HOST)."\n";
+		@ob_flush();
 
 		$this->render( 'module=post url=' . $other_url );
 
@@ -759,6 +771,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 				'post_status' => 'publish',
 			]
 		);
+		print "permalink: ". get_permalink($post_id)."\n";@ob_flush();
 		$this->set_current_post( get_post( $post_id ) );
 		return $post_id;
 	}
@@ -786,13 +799,11 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 
 	private function set_home_url_without_a_port() {
 		$home_url = 'http://example.org';
-		foreach ( [ 'option_name', 'option_siteurl' ] as $option ) {
-			add_filter(
-				$option,
-				function () use ( $home_url ) {
-					return $home_url;
-				}
-			);
-		}
+		add_filter(
+			'home_url',
+			function () use ( $home_url ) {
+				return $home_url;
+			}
+		);
 	}
 }
