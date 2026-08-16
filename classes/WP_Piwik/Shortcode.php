@@ -9,6 +9,8 @@ class Shortcode {
 
 	const TAG = 'wp-piwik';
 
+	const MAX_BLOCK_PASSES = 10;
+
 	private $available = array(
 		'opt-out'  => 'OptOut',
 		'post'     => 'Post',
@@ -117,14 +119,35 @@ class Shortcode {
 			$shortcode_tags = array( self::TAG => $all_tags[ self::TAG ] );
 			$post           = $reusable_block;
 
-			$block_content = do_shortcode( $block_content );
+			// do_shortcode() peels one bracket level off [[wp-piwik]] rather than
+			// expanding it, so a single pass would hand the tag on to the content wide
+			// pass, which authorizes against the embedding post instead. keep expanding
+			// while there is something here of ours left to expand.
+			$passes = 0;
+			do {
+				$before        = $block_content;
+				$block_content = do_shortcode( $block_content );
+			} while (
+				$before !== $block_content
+				&& false !== strpos( $block_content, '[' . self::TAG )
+				&& ++$passes < self::MAX_BLOCK_PASSES
+			);
 		} finally {
 			$shortcode_tags = $all_tags;
 			$post           = $saved_post;
 		}
 		// phpcs:enable WordPress.WP.GlobalVariablesOverride.Prohibited
 
-		return $block_content;
+		return $this->disarm_leftover_tags( $block_content );
+	}
+
+	private function disarm_leftover_tags( $block_content ) {
+		// &#091; and not &#91;, which do_shortcode() turns back into a bracket
+		return preg_replace(
+			'/\[(?=\[*' . preg_quote( self::TAG, '/' ) . '(?![\w-]))/',
+			'&#091;',
+			$block_content
+		);
 	}
 
 	/**
@@ -250,6 +273,14 @@ class Shortcode {
 	 * @return bool true if the URL is a post on this site the author may read
 	 */
 	private function is_url_allowed( $url, $author_id ) {
+		// url_to_postid() below looks for ?p= anywhere in the string it is given, ahead
+		// of stripping the fragment itself, so a fragment left on here could name a
+		// post other than the one the path names and authorize against that instead.
+		$fragment_at = strpos( $url, '#' );
+		if ( false !== $fragment_at ) {
+			$url = substr( $url, 0, $fragment_at );
+		}
+
 		if ( ! $this->is_url_on_this_site( $url ) ) {
 			return false;
 		}

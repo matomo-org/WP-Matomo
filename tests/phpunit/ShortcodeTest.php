@@ -24,6 +24,8 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 
 	private $role_caps_to_revoke = [];
 
+	private $permalink_structure_changed = false;
+
 	public function set_up() {
 		parent::set_up();
 
@@ -69,6 +71,13 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 			}
 		}
 		$this->role_caps_to_revoke = [];
+
+		// the permalink structure lives in an option the test transaction rolls back,
+		// but also in the wp_rewrite global, which survives the rollback.
+		if ( $this->permalink_structure_changed ) {
+			$this->set_permalink_structure();
+			$this->permalink_structure_changed = false;
+		}
 
 		remove_shortcode( Shortcode::TAG );
 		remove_shortcode( 'wp_piwik_test_other' );
@@ -217,7 +226,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_render_the_overview_when_the_post_author_can_read_stats() {
-		$this->given_a_post_authored_by( $this->create_author( true ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ) );
 
 		$output = $this->render( 'module=overview' );
 
@@ -226,7 +235,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_not_render_the_overview_when_the_post_author_cannot_read_stats() {
-		$this->given_a_post_authored_by( $this->create_author( false ) );
+		$this->create_post_and_set_as_current( $this->create_author( false ) );
 
 		$output = $this->render( 'module=overview' );
 
@@ -235,7 +244,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_render_the_post_module_when_the_post_author_can_read_stats() {
-		$this->given_a_post_authored_by( $this->create_author( true ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ) );
 
 		$this->render( 'module=post key=nb_visits' );
 
@@ -243,7 +252,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_not_render_the_post_module_when_the_post_author_cannot_read_stats() {
-		$this->given_a_post_authored_by( $this->create_author( false ) );
+		$this->create_post_and_set_as_current( $this->create_author( false ) );
 
 		$output = $this->render( 'module=post key=nb_visits' );
 
@@ -252,7 +261,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_render_the_opt_out_module_when_the_post_author_cannot_read_stats() {
-		$this->given_a_post_authored_by( $this->create_author( false ) );
+		$this->create_post_and_set_as_current( $this->create_author( false ) );
 
 		$output = $this->render( 'module=opt-out' );
 
@@ -261,7 +270,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 
 	public function test_render_should_render_the_overview_when_the_author_check_is_disabled() {
 		\WP_Piwik::get_settings()->set_global_option( 'shortcode_author_check', false );
-		$this->given_a_post_authored_by( $this->create_author( false ) );
+		$this->create_post_and_set_as_current( $this->create_author( false ) );
 
 		$this->render( 'module=overview' );
 
@@ -286,7 +295,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_render_the_overview_in_the_main_loop_when_the_post_author_can_read_stats() {
-		$post_id = $this->given_a_post_authored_by( $this->create_author( true ) );
+		$post_id = $this->create_post_and_set_as_current( $this->create_author( true ) );
 		$this->set_current_post( null );
 
 		$this->go_to( get_permalink( $post_id ) );
@@ -298,7 +307,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_not_render_the_overview_in_the_main_loop_when_the_post_author_cannot_read_stats() {
-		$post_id = $this->given_a_post_authored_by( $this->create_author( false ) );
+		$post_id = $this->create_post_and_set_as_current( $this->create_author( false ) );
 		$this->set_current_post( null );
 
 		$this->go_to( get_permalink( $post_id ) );
@@ -310,7 +319,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 
 	public function test_render_should_follow_the_read_stats_capability_of_the_author_role() {
 		$author_id = self::factory()->user->create( [ 'role' => 'author' ] );
-		$this->given_a_post_authored_by( $author_id );
+		$this->create_post_and_set_as_current( $author_id );
 
 		$this->assertSame( '', $this->render( 'module=overview' ), 'precondition: the author role may not read stats' );
 
@@ -321,7 +330,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_use_the_current_post_url_when_no_url_is_given() {
-		$post_id = $this->given_a_post_authored_by( $this->create_author( true ) );
+		$post_id = $this->create_post_and_set_as_current( $this->create_author( true ) );
 
 		$this->render( 'module=post' );
 
@@ -330,7 +339,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_accept_a_url_the_author_may_read() {
-		$this->given_a_post_authored_by( $this->create_author( true ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ) );
 		$other_id  = self::factory()->post->create( [ 'post_status' => 'publish' ] );
 		$other_url = get_permalink( $other_id );
 
@@ -341,7 +350,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_accept_a_url_of_this_site_written_with_the_other_scheme() {
-		$this->given_a_post_authored_by( $this->create_author( true ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ) );
 		$other_id  = self::factory()->post->create( [ 'post_status' => 'publish' ] );
 		$other_url = set_url_scheme( get_permalink( $other_id ), 'https' === wp_parse_url( home_url(), PHP_URL_SCHEME ) ? 'http' : 'https' );
 
@@ -352,7 +361,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_reject_an_off_site_url() {
-		$this->given_a_post_authored_by( $this->create_author( true ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ) );
 
 		$output = $this->render( 'module=post url=https://attacker.example/some-page/' );
 
@@ -361,7 +370,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_reject_an_admin_url() {
-		$this->given_a_post_authored_by( $this->create_author( true ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ) );
 
 		$output = $this->render( 'module=post url=' . admin_url( 'index.php' ) );
 
@@ -370,7 +379,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_reject_a_url_the_author_may_not_read() {
-		$this->given_a_post_authored_by( $this->create_author( true ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ) );
 		$private_id = self::factory()->post->create(
 			[
 				'post_status' => 'private',
@@ -384,8 +393,38 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
 	}
 
+	public function test_render_should_reject_an_admin_url_naming_a_readable_post_in_its_fragment() {
+		$this->create_post_and_set_as_current( $this->create_author( true ) );
+		$readable_id = self::factory()->post->create( [ 'post_status' => 'publish' ] );
+
+		$output = $this->render( 'module=post url=' . admin_url( 'index.php' ) . '#?p=' . $readable_id );
+
+		$this->assertSame( '', $output );
+		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
+	}
+
+	public function test_render_should_reject_a_url_the_author_may_not_read_naming_a_readable_post_in_its_fragment() {
+		$this->set_pretty_permalink_structure();
+		$this->create_post_and_set_as_current( $this->create_author( true ) );
+		$readable_id = self::factory()->post->create( [ 'post_status' => 'publish' ] );
+		self::factory()->post->create(
+			[
+				'post_status' => 'private',
+				'post_name'   => 'embargoed-story',
+				'post_author' => self::factory()->user->create( [ 'role' => 'administrator' ] ),
+			]
+		);
+
+		$private_url = home_url( '/embargoed-story/' );
+
+		$output = $this->render( 'module=post url=' . $private_url . '#?p=' . $readable_id );
+
+		$this->assertSame( '', $output );
+		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
+	}
+
 	public function test_render_should_reject_a_url_of_a_host_that_only_looks_like_this_site() {
-		$this->given_a_post_authored_by( $this->create_author( true ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ) );
 
 		$output = $this->render( 'module=post url=' . home_url() . '.attacker.example/?p=1' );
 
@@ -394,7 +433,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_reject_a_url_on_another_port() {
-		$this->given_a_post_authored_by( $this->create_author( true ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ) );
 		$other_id              = self::factory()->post->create( [ 'post_status' => 'publish' ] );
 		$other_on_another_port = str_replace(
 			wp_parse_url( home_url(), PHP_URL_HOST ),
@@ -409,7 +448,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_accept_a_url_stating_the_default_port_of_a_scheme() {
-		$this->given_a_post_authored_by( $this->create_author( true ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ) );
 		$other_id  = self::factory()->post->create( [ 'post_status' => 'publish' ] );
 		$other_url = str_replace(
 			wp_parse_url( home_url(), PHP_URL_HOST ),
@@ -433,7 +472,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 			]
 		);
 		// the embedding post belongs to somebody who may see the statistics
-		$this->given_a_post_authored_by( $this->create_author( true ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ) );
 
 		$output = $this->render_reusable_block( $block_id );
 
@@ -450,7 +489,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 				'post_content' => '[wp-piwik module="overview"]',
 			]
 		);
-		$this->given_a_post_authored_by( $this->create_author( false ) );
+		$this->create_post_and_set_as_current( $this->create_author( false ) );
 
 		$this->render_reusable_block( $block_id );
 
@@ -466,7 +505,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 				'post_content' => '[wp-piwik module="overview"]',
 			]
 		);
-		$post_id  = $this->given_a_post_authored_by( $this->create_author( true ) );
+		$post_id  = $this->create_post_and_set_as_current( $this->create_author( true ) );
 
 		$this->render_reusable_block( $block_id );
 
@@ -484,7 +523,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 			]
 		);
 		add_shortcode( 'wp_piwik_test_other', '__return_empty_string' );
-		$this->given_a_post_authored_by( $this->create_author( true ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ) );
 
 		$output = $this->render_reusable_block( $block_id );
 
@@ -492,8 +531,44 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		$this->assertStringContainsString( '[wp_piwik_test_other]', $output, 'only this plugin\'s tag is expanded early' );
 	}
 
+	/**
+	 * @dataProvider get_block_pass_counts
+	 */
+	public function test_render_should_not_leave_an_escaped_shortcode_in_a_reusable_block_to_the_usual_pass( $block_passes ) {
+		$escaped  = str_repeat( '[', $block_passes + 1 ) . 'wp-piwik module="overview"' . str_repeat( ']', $block_passes + 1 );
+		$block_id = self::factory()->post->create(
+			[
+				'post_type'    => 'wp_block',
+				'post_status'  => 'publish',
+				'post_author'  => $this->create_author( false ),
+				'post_content' => $escaped,
+			]
+		);
+		$this->create_post_and_set_as_current( $this->create_author( true ) );
+
+		$block_content = $escaped;
+		for ( $pass = 0; $pass < $block_passes; $pass++ ) {
+			$block_content = $this->render_reusable_block( $block_id, $block_content );
+		}
+		$output = do_shortcode( $block_content );
+
+		$this->assertSame(
+			[],
+			Shortcode_Test_Request::get_registered(),
+			'the block author may not see the statistics, so no pass may expand the shortcode'
+		);
+		$this->assertStringNotContainsString( '<table', $output );
+	}
+
+	public function get_block_pass_counts() {
+		return [
+			'one render_block pass'   => [ 1 ],
+			'two render_block passes' => [ 2 ],
+		];
+	}
+
 	public function test_render_should_ignore_blocks_that_are_not_reusable() {
-		$this->given_a_post_authored_by( $this->create_author( false ) );
+		$this->create_post_and_set_as_current( $this->create_author( false ) );
 		$shortcode = new Shortcode( $GLOBALS['wp-piwik'], \WP_Piwik::get_settings() );
 
 		$output = $shortcode->render_reusable_block(
@@ -509,7 +584,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_let_the_authorized_filter_block_an_allowed_shortcode() {
-		$this->given_a_post_authored_by( $this->create_author( true ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ) );
 		add_filter( 'wp-piwik_shortcode_authorized', '__return_false' );
 
 		$output = $this->render( 'module=overview' );
@@ -519,7 +594,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_let_the_authorized_filter_allow_a_blocked_shortcode() {
-		$this->given_a_post_authored_by( $this->create_author( false ) );
+		$this->create_post_and_set_as_current( $this->create_author( false ) );
 		add_filter( 'wp-piwik_shortcode_authorized', '__return_true' );
 
 		$this->render( 'module=overview' );
@@ -528,7 +603,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_let_the_authorized_filter_block_with_a_wp_error() {
-		$this->given_a_post_authored_by( $this->create_author( true ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ) );
 		$this->deny_through_the_authorized_filter( 'the editorial policy forbids stats here' );
 
 		$output = $this->render( 'module=overview' );
@@ -538,7 +613,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_show_an_administrator_the_message_of_a_wp_error_from_the_authorized_filter() {
-		$this->given_a_post_authored_by( $this->create_author( true ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ) );
 		$this->deny_through_the_authorized_filter( 'the editorial policy forbids stats here' );
 		wp_set_current_user( self::factory()->user->create( [ 'role' => 'administrator' ] ) );
 
@@ -549,7 +624,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_report_only_the_first_message_of_a_multi_message_wp_error() {
-		$this->given_a_post_authored_by( $this->create_author( true ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ) );
 		add_filter(
 			'wp-piwik_shortcode_authorized',
 			function () {
@@ -567,7 +642,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_pass_the_attributes_and_the_post_to_the_authorized_filter() {
-		$post_id = $this->given_a_post_authored_by( $this->create_author( true ) );
+		$post_id = $this->create_post_and_set_as_current( $this->create_author( true ) );
 		$seen    = [];
 		add_filter(
 			'wp-piwik_shortcode_authorized',
@@ -594,7 +669,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_return_nothing_to_a_visitor_when_it_blocks_a_shortcode() {
-		$this->given_a_post_authored_by( $this->create_author( false ) );
+		$this->create_post_and_set_as_current( $this->create_author( false ) );
 
 		$output = $this->render( 'module=overview' );
 
@@ -602,7 +677,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_render_should_explain_to_an_administrator_why_it_blocked_a_shortcode() {
-		$this->given_a_post_authored_by( $this->create_author( false ) );
+		$this->create_post_and_set_as_current( $this->create_author( false ) );
 		wp_set_current_user( self::factory()->user->create( [ 'role' => 'administrator' ] ) );
 
 		$output = $this->render( 'module=overview' );
@@ -616,16 +691,25 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		return $shortcode->render( shortcode_parse_atts( $attributes ) );
 	}
 
-	private function render_reusable_block( $block_id ) {
-		$block = get_post( $block_id );
+	private function render_reusable_block( $block_id, $block_content = null ) {
+		if ( null === $block_content ) {
+			$block_content = get_post( $block_id )->post_content;
+		}
+		// core hooks callbacks that take the block instance too, so the filter has to be
+		// called with all three arguments the block renderer passes
+		$parsed_block = [
+			'blockName'    => 'core/block',
+			'attrs'        => [ 'ref' => $block_id ],
+			'innerBlocks'  => [],
+			'innerHTML'    => '',
+			'innerContent' => [],
+		];
 		return apply_filters(
 			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 			'render_block',
-			$block->post_content,
-			[
-				'blockName' => 'core/block',
-				'attrs'     => [ 'ref' => $block_id ],
-			]
+			$block_content,
+			$parsed_block,
+			new \WP_Block( $parsed_block )
 		);
 	}
 
@@ -656,12 +740,17 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		);
 	}
 
+	private function set_pretty_permalink_structure() {
+		$this->set_permalink_structure( '/%postname%/' );
+		$this->permalink_structure_changed = true;
+	}
+
 	private function grant_read_stats_to_role( $role_name ) {
 		get_role( $role_name )->add_cap( 'wp-piwik_read_stats' );
 		$this->role_caps_to_revoke[] = $role_name;
 	}
 
-	private function given_a_post_authored_by( $author_id ) {
+	private function create_post_and_set_as_current( $author_id ) {
 		$post_id = self::factory()->post->create(
 			[
 				'post_author' => $author_id,
