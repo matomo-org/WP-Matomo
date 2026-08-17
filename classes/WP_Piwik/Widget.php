@@ -70,13 +70,22 @@ abstract class Widget {
 		$this->is_shortcode = $is_shortcode;
 		$prefix             = ( 'dashboard' === $this->page_id ? self::$settings->get_global_option( 'plugin_display_name' ) . ' - ' : '' );
 		$this->configure( $prefix, $params );
+		// the site a widget reports on is not a request parameter, so hand it to
+		// register() separately
+		$id_site = null;
+		if ( isset( $this->parameter['idSite'] ) ) {
+			$id_site = $this->parameter['idSite'];
+			unset( $this->parameter['idSite'] );
+		}
 		if ( is_array( $this->method ) ) {
 			foreach ( $this->method as $method ) {
-				$this->api_id [ $method ] = Request::register( $method, $this->parameter );
+				$this->api_id [ $method ] = Request::register( $method, $this->parameter, $id_site );
 				self::$wp_piwik->log( 'Register request: ' . $this->api_id [ $method ] );
 			}
-		} else {
-			$this->api_id [ $this->method ] = Request::register( $this->method, $this->parameter );
+		} elseif ( '' !== $this->method ) {
+			// a widget without a method performs no API request, so it must not
+			// queue one, or it will affect the next bulk api request call.
+			$this->api_id [ $this->method ] = Request::register( $this->method, $this->parameter, $id_site );
 			self::$wp_piwik->log( 'Register request: ' . $this->api_id [ $this->method ] );
 		}
 		if ( $this->is_shortcode ) {

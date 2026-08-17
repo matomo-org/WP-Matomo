@@ -86,6 +86,7 @@ class Settings {
 		'plugin_display_name'         => 'Connect Matomo',
 		'piwik_shortcut'              => false,
 		'shortcodes'                  => false,
+		'shortcode_author_check'      => true,
 		// User settings: Tracking configuration
 		'track_mode'                  => 'disabled',
 		'track_codeposition'          => 'footer',

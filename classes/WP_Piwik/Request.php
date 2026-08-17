@@ -34,11 +34,24 @@ abstract class Request {
 		self::$piwik_version = null;
 	}
 
-	public static function register( $method, $parameter ) {
+	/**
+	 * Queue a Matomo API request
+	 *
+	 * @param string   $method
+	 *          Matomo API method to call
+	 * @param array    $parameter
+	 *          request parameters. an idSite entry is ignored: the site is not
+	 *          selectable through a parameter, pass $id_site instead
+	 * @param int|null $id_site
+	 *          Matomo site to query, null to use the one this blog is configured with
+	 * @return string request id to hand to perform()
+	 */
+	public static function register( $method, $parameter, $id_site = null ) {
 		if ( 'API.getPiwikVersion' === $method ) {
 			$id = 'global.getPiwikVersion';
 		} else {
-			$id = 'method=' . $method . self::parameter_to_string( $parameter );
+			$id = 'method=' . $method . self::parameter_to_string( $parameter )
+				. ( null !== $id_site ? '&idSite=' . $id_site : '' );
 		}
 		if (
 			in_array( $method, array( 'API.getPiwikVersion', 'SitesManager.getJavascriptTag', 'SitesManager.getSitesWithAtLeastViewAccess', 'SitesManager.getSitesIdFromSiteUrl', 'SitesManager.addSite', 'SitesManager.updateSite', 'SitesManager.getSitesWithAtLeastViewAccess' ), true ) ||
@@ -53,12 +66,13 @@ abstract class Request {
 			self::$is_cacheable[ $id ] = false;
 		} else {
 			// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.serialize_serialize
-			self::$is_cacheable[ $id ] = $method . '-' . serialize( $parameter );
+			self::$is_cacheable[ $id ] = $method . ( null !== $id_site ? '-' . $id_site : '' ) . '-' . serialize( $parameter );
 		}
 		if ( ! isset( self::$requests[ $id ] ) ) {
 			self::$requests[ $id ] = array(
 				'method'    => $method,
 				'parameter' => $parameter,
+				'id_site'   => $id_site,
 			);
 		}
 		return $id;
@@ -110,12 +124,17 @@ abstract class Request {
 	}
 
 	protected function get_url_params( $config ) {
-		$params = [
-			'method' => $config['method'],
-			'idSite' => self::$settings->get_option( 'site_id' ),
-		];
-		$params = array_merge( $params, $config['parameter'] );
-		return $params;
+		$id_site = isset( $config['id_site'] )
+			? $config['id_site']
+			: self::$settings->get_option( 'site_id' );
+
+		return array_merge(
+			$config['parameter'],
+			[
+				'idSite' => $id_site,
+				'method' => $config['method'],
+			]
+		);
 	}
 
 	protected function unserialize( $str ) {

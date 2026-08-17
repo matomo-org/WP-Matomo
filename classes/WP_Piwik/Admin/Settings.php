@@ -278,7 +278,23 @@ class Settings extends \WP_Piwik\Admin {
 
 			$this->show_input( 'plugin_display_name', __( 'WP-Matomo display name', 'wp-piwik' ), __( 'Plugin name shown in WordPress.', 'wp-piwik' ) );
 
-			$this->show_checkbox( 'shortcodes', __( 'Enable shortcodes', 'wp-piwik' ), __( 'Enable shortcodes in post or page content.', 'wp-piwik' ) );
+			$this->show_checkbox(
+				'shortcodes',
+				__( 'Enable shortcodes', 'wp-piwik' ),
+				__( 'Enable shortcodes in post or page content.', 'wp-piwik' ),
+				false,
+				'',
+				true,
+				'jQuery(\'tr.wp-piwik-shortcode-option\').toggleClass(\'hidden\', !this.checked);'
+			);
+
+			$this->show_checkbox(
+				'shortcode_author_check',
+				__( 'Restrict shortcodes to authorized authors', 'wp-piwik' ),
+				__( 'Only show the statistics of a shortcode if the author of the post containing it is allowed to see the statistics (see &raquo;Display stats to&laquo; above). Note: the opt-out shortcode is always displayed.', 'wp-piwik' ),
+				! self::$settings->get_global_option( 'shortcodes' ),
+				'wp-piwik-shortcode-option'
+			);
 
 			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 			echo $submit_button;
