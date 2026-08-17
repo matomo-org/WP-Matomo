@@ -1,0 +1,181 @@
+#!/bin/bash
+
+## Description: Download and install the WordPress sites this plugin is developed against
+## Usage: wp-matomo:install [--only=single|multisite|tests] [--wp-version=<version>] [--force]
+## Example: "ddev wp-matomo:install" or "ddev wp-matomo:install --only=tests" or "ddev wp-matomo:install --wp-version=6.8.2"
+## ExecRaw: true
+
+set -eu -o pipefail
+
+DOCROOT="/var/www/html/${DDEV_DOCROOT:-wp}"
+PLUGIN_SLUG="wp-piwik"
+WP_VERSION="latest"
+ONLY=""
+FORCE=0
+
+for arg in "$@"; do
+	case "$arg" in
+		--only=*)       ONLY="${arg#*=}" ;;
+		--wp-version=*) WP_VERSION="${arg#*=}" ;;
+		--force)        FORCE=1 ;;
+		-h|--help)      sed -n '3,6p' "$0"; exit 0 ;;
+		*) echo "Unknown option: $arg" >&2; exit 1 ;;
+	esac
+done
+
+case "$ONLY" in
+	""|single|multisite|tests) ;;
+	*) echo "--only must be one of: single, multisite, tests" >&2; exit 1 ;;
+esac
+
+command -v wp >/dev/null || { echo "wp-cli is not available in the web container." >&2; exit 1; }
+
+wants() {
+	[ -z "$ONLY" ] || [ "$ONLY" = "$1" ]
+}
+
+# the plugin is bind-mounted by .ddev/docker-compose.plugin.yaml. if that did not
+# happen, everything below still "succeeds" while producing a site without the
+# plugin, so say something here instead.
+for site in single multisite tests; do
+	wants "$site" || continue
+	if [ ! -f "${DOCROOT}/${site}/wp-content/plugins/${PLUGIN_SLUG}/wp-piwik.php" ]; then
+		echo "The plugin is not mounted at ${DOCROOT}/${site}/wp-content/plugins/${PLUGIN_SLUG}." >&2
+		echo "Check .ddev/docker-compose.plugin.yaml and run 'ddev restart' on the host." >&2
+		exit 1
+	fi
+done
+
+# common wp-config.php additions. Without the X-Forwarded-Proto shim WordPress
+# only ever sees plain HTTP (ddev-router terminates TLS), builds http:// URLs and
+# sends /wp-admin/ into a redirect loop.
+extra_php() {
+	cat <<'PHP'
+// ddev-router terminates TLS, so PHP only ever sees a plain HTTP request.
+if ( isset( $_SERVER['HTTP_X_FORWARDED_PROTO'] ) && 'https' === $_SERVER['HTTP_X_FORWARDED_PROTO'] ) {
+	$_SERVER['HTTPS'] = 'on';
+}
+
+define( 'WP_DEBUG', true );
+define( 'WP_DEBUG_LOG', true );
+define( 'WP_DEBUG_DISPLAY', false );
+define( 'WP_ENVIRONMENT_TYPE', 'local' );
+define( 'AUTOMATIC_UPDATER_DISABLED', true );
+define( 'DISALLOW_FILE_MODS', true );
+PHP
+}
+
+download_core() {
+	local path="$1" version="$2"
+
+	mkdir -p "$path"
+	if [ -f "${path}/wp-load.php" ] && [ "$FORCE" != "1" ]; then
+		echo "    core already present, skipping download"
+		return
+	fi
+	wp core download --path="$path" --version="$version" --locale=en_US --force
+}
+
+write_config() {
+	local path="$1" prefix="$2"
+
+	if [ -f "${path}/wp-config.php" ] && [ "$FORCE" != "1" ]; then
+		echo "    wp-config.php already present, leaving it alone"
+		return
+	fi
+	extra_php | wp config create --path="$path" \
+		--dbname=db --dbuser=db --dbpass=db --dbhost=db \
+		--dbprefix="$prefix" --locale=en_US --skip-check --force --extra-php
+}
+
+install_site() {
+	local path="$1" url="$2" title="$3"
+
+	if wp core is-installed --path="$path" 2>/dev/null; then
+		echo "    already installed, skipping"
+		return
+	fi
+	wp core install --path="$path" \
+		--url="$url" \
+		--title="$title" \
+		--admin_user=admin \
+		--admin_password=admin \
+		--admin_email=admin@example.com \
+		--skip-email
+	wp rewrite structure '/%postname%/' --path="$path" --hard
+}
+
+activate_plugin() {
+	local path="$1" network="$2"
+
+	if [ "$network" = "1" ]; then
+		wp plugin activate "$PLUGIN_SLUG" --network --path="$path"
+	else
+		wp plugin activate "$PLUGIN_SLUG" --path="$path"
+	fi
+}
+
+# ---------------------------------------------------------------------------
+
+if wants single; then
+	echo "==> wp/single  (${DDEV_PRIMARY_URL})"
+	download_core "${DOCROOT}/single" "$WP_VERSION"
+	write_config "${DOCROOT}/single" "wp_"
+	install_site "${DOCROOT}/single" "${DDEV_PRIMARY_URL}" "Connect Matomo (single site)"
+	activate_plugin "${DOCROOT}/single" 0
+fi
+
+if wants multisite; then
+	# derived from the primary URL rather than assembled from scratch, so a
+	# non-default router port or TLD carries over.
+	MS_URL="${DDEV_PRIMARY_URL/\/\/${DDEV_SITENAME}.///${DDEV_SITENAME}-ms.}"
+	echo "==> wp/multisite  (${MS_URL})"
+	download_core "${DOCROOT}/multisite" "$WP_VERSION"
+	write_config "${DOCROOT}/multisite" "wpms_"
+	install_site "${DOCROOT}/multisite" "$MS_URL" "Connect Matomo (network)"
+	if ! wp core is-installed --network --path="${DOCROOT}/multisite" 2>/dev/null; then
+		echo "    converting to a subdirectory network"
+		wp core multisite-convert --path="${DOCROOT}/multisite" --title="Connect Matomo network"
+	fi
+	activate_plugin "${DOCROOT}/multisite" 1
+fi
+
+if wants tests; then
+	# The test library and the core it runs against have to be the same release.
+	TESTS_WP_VERSION=$(php -r '
+		$file = "/var/www/html/vendor/composer/installed.json";
+		if ( ! is_readable( $file ) ) { echo "latest"; exit; }
+		$data = json_decode( file_get_contents( $file ), true );
+		foreach ( ( $data["packages"] ?? $data ) as $package ) {
+			if ( "wp-phpunit/wp-phpunit" === ( $package["name"] ?? "" ) ) {
+				echo ltrim( $package["version"], "v" );
+				exit;
+			}
+		}
+		echo "latest";
+	')
+	echo "==> wp/tests  (http://localhost, WordPress ${TESTS_WP_VERSION})"
+	if [ "$TESTS_WP_VERSION" = "latest" ]; then
+		echo "    NOTE: wp-phpunit/wp-phpunit is not installed -- run 'ddev composer install' first"
+	fi
+	download_core "${DOCROOT}/tests" "$TESTS_WP_VERSION"
+	write_config "${DOCROOT}/tests" "wptests_"
+	# no "wp core install" here on purpose -- the PHPUnit bootstrap installs into
+	# the wptests_ tables on every run.
+	mkdir -p "${DOCROOT}/tests/wp-content/plugins/${PLUGIN_SLUG}/tests/phpunit/proxy/mock/runtime" \
+	         "${DOCROOT}/tests/wp-content/plugins/${PLUGIN_SLUG}/tests/phpunit/rest/mock/runtime"
+fi
+
+echo
+if wants single; then
+	wp plugin list --path="${DOCROOT}/single" --name="$PLUGIN_SLUG" --fields=name,status,version
+fi
+
+cat <<EOF
+
+  single site : ${DDEV_PRIMARY_URL}/wp-admin/  (admin / admin)
+  multisite   : ${DDEV_PRIMARY_URL/\/\/${DDEV_SITENAME}.///${DDEV_SITENAME}-ms.}/wp-admin/network/
+
+  next        : ddev wp-matomo:connect --token=<matomo auth token>
+  tests       : ddev wp-matomo:test [--multisite]
+EOF

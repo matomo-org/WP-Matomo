@@ -12,12 +12,58 @@ class RestIntegrationTest extends WP_Piwik_TestCase {
 	public function set_up() {
 		parent::set_up();
 
-		if ( ! self::is_in_wp_env_environment() ) {
-			self::markTestSkipped( 'Not in wp-env environment, cannot run this test' );
+		if ( ! self::is_integration_environment() ) {
+			self::markTestSkipped( 'WP_MATOMO_INTEGRATION_TESTS is not set, cannot run this test' );
 		}
 
 		$this->set_up_mock_endpoint();
 		$this->set_mock_response( [ 'echo_bulk' => true ] );
+	}
+
+	/**
+	 * The test needs a web server that serves this plugin over HTTP, so it only
+	 * runs when the environment opts in. DDEV sets this in .ddev/config.yaml.
+	 */
+	private static function is_integration_environment() {
+		return (bool) getenv( 'WP_MATOMO_INTEGRATION_TESTS' );
+	}
+
+	private function write_runtime_file( $name, $contents ) {
+		file_put_contents( $this->runtime . '/' . $name, $contents );
+		chmod( $this->runtime . '/' . $name, 0666 );
+	}
+
+	private function set_mock_response( array $response ) {
+		$this->write_runtime_file( 'response.json', wp_json_encode( $response ) );
+	}
+
+	private function get_captured_requests() {
+		$raw = file_get_contents( $this->runtime . '/requests.jsonl' );
+		if ( '' === trim( (string) $raw ) ) {
+			return [];
+		}
+		$requests = [];
+		foreach ( explode( "\n", trim( $raw ) ) as $line ) {
+			if ( '' !== $line ) {
+				$requests[] = json_decode( $line, true );
+			}
+		}
+		return $requests;
+	}
+
+	/**
+	 * @param bool $trailing_slash true to add a trailing slash, false if otherwise.
+	 *
+	 *                             A URL without the trailing slash makes the web
+	 *                             server answer with a 301 to URL with a slash.
+	 */
+	private function mock_url( $trailing_slash = true ) {
+		$host         = getenv( 'WP_MATOMO_TEST_HTTP_HOST' ) ? getenv( 'WP_MATOMO_TEST_HTTP_HOST' ) : 'localhost';
+		$plugins_path = wp_parse_url( plugins_url(), PHP_URL_PATH );
+		$plugin_dir   = basename( dirname( __DIR__, 2 ) );
+
+		return 'http://' . $host . rtrim( $plugins_path, '/' ) . '/' . $plugin_dir
+			. '/tests/phpunit/rest/mock' . ( $trailing_slash ? '/' : '' );
 	}
 
 	private function perform_bulk_request( $url, $connection, $method ) {

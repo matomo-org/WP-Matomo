@@ -1,0 +1,44 @@
+name: wp-matomo
+type: wordpress
+docroot: wp
+php_version: "8.3"
+webserver_type: apache-fpm
+xdebug_enabled: false
+
+# DDEV's settings management assumes a single WordPress at the docroot, but this
+# env provides multiple, so it is turned off and we own wp-config.php instead.
+disable_settings_management: true
+disable_upload_dirs_warning: true
+
+additional_hostnames:
+  - wp-matomo-ms
+
+database:
+  type: mariadb
+  version: "10.11"
+
+composer_version: "2"
+
+web_environment:
+  # Base URL of the external Matomo. Matomo is deliberately not part of this
+  # environment. Override persistently in .ddev/config.local.yaml (gitignored)
+  # or per invocation with "ddev wp-matomo:connect --url=...".
+  - WP_MATOMO_MATOMO_URL=https://matomo.ddev.site/
+
+  # PHPUnit vars, consumed by tests/phpunit/bootstrap.php and friends
+  - WP_TESTS_DIR=/var/www/html/vendor/wp-phpunit/wp-phpunit
+  - WP_PHPUNIT__TESTS_CONFIG=/mnt/ddev_config/wp-tests-config.php
+  - WP_MATOMO_TEST_HTTP_HOST=localhost
+  # opts the two integration test classes in; they skip themselves without it.
+  - WP_MATOMO_INTEGRATION_TESTS=1
+
+hooks:
+  pre-start:
+    # Create the bind-mount targets on the HOST, as the host user. Docker
+    # creates a missing mountpoint itself, but as root -- and because
+    # /var/www/html is itself a bind mount of this directory, those root-owned
+    # directories land in the working tree and "wp core download" then cannot
+    # write into wp-content/plugins.
+    - exec-host: mkdir -p wp/single/wp-content/plugins/wp-piwik wp/multisite/wp-content/plugins/wp-piwik wp/tests/wp-content/plugins/wp-piwik
+  post-start:
+    - exec: 'test -f /var/www/html/wp/single/wp-load.php || echo "WordPress is not installed yet -> run: ddev wp-matomo:install"'

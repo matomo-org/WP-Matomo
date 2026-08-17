@@ -1,0 +1,77 @@
+#!/bin/bash
+
+## Description: Point the plugin at the external Matomo and verify the connection
+## Usage: wp-matomo:connect --token=<auth-token> [--url=<matomo-url>] [--site=single|multisite|both] [--track-mode=<js|proxy|default|manually|disabled>] [--insecure]
+## Example: "ddev wp-matomo:connect --token=abc123"
+## Example: "ddev wp-matomo:connect --url=https://demo.matomo.cloud/ --token=abc123 --site=single"
+## ExecRaw: true
+
+set -eu -o pipefail
+
+DOCROOT="/var/www/html/${DDEV_DOCROOT:-wp}"
+URL="${WP_MATOMO_MATOMO_URL:-https://matomo.ddev.site/}"
+TOKEN=""
+SITE="both"
+TRACK_MODE="js"
+INSECURE=0
+
+for arg in "$@"; do
+	case "$arg" in
+		--url=*)        URL="${arg#*=}" ;;
+		--token=*)      TOKEN="${arg#*=}" ;;
+		--site=*)       SITE="${arg#*=}" ;;
+		--track-mode=*) TRACK_MODE="${arg#*=}" ;;
+		--insecure)     INSECURE=1 ;;
+		-h|--help)      sed -n '3,7p' "$0"; exit 0 ;;
+		*) echo "Unknown option: $arg" >&2; exit 1 ;;
+	esac
+done
+
+case "$SITE" in
+	single|multisite|both) ;;
+	*) echo "--site must be one of: single, multisite, both" >&2; exit 1 ;;
+esac
+
+if [ -z "$TOKEN" ]; then
+	cat >&2 <<'EOF'
+--token is required.
+EOF
+	exit 1
+fi
+
+# Request\Rest does not follow redirects, so a URL without the trailing slash
+# comes back as "not valid JSON ... 301" rather than anything useful.
+case "$URL" in */) ;; *) URL="${URL}/" ;; esac
+
+CURL=(curl --silent --show-error --location --max-time 20)
+if [ "$INSECURE" = "1" ]; then
+	CURL+=(--insecure)
+fi
+
+echo "==> Checking that ${URL} is reachable from the web container"
+if ! code=$("${CURL[@]}" -o /dev/null -w '%{http_code}' "$URL"); then
+	cat >&2 <<EOF
+Could not reach ${URL} from inside the web container.
+EOF
+	exit 1
+fi
+echo "    HTTP ${code}"
+
+connect_site() {
+	local name="$1" path="${DOCROOT}/$1"
+
+	if [ ! -f "${path}/wp-config.php" ]; then
+		echo "    ${name}: not installed, skipping (run 'ddev wp-matomo:install')"
+		return
+	fi
+	echo "==> ${name}"
+	wp eval-file --path="$path" /mnt/ddev_config/scripts/wp-matomo-connect.php \
+		"$URL" "$TOKEN" "$TRACK_MODE" "$INSECURE"
+}
+
+if [ "$SITE" = "single" ] || [ "$SITE" = "both" ]; then
+	connect_site single
+fi
+if [ "$SITE" = "multisite" ] || [ "$SITE" = "both" ]; then
+	connect_site multisite
+fi
