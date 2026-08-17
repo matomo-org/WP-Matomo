@@ -438,13 +438,12 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 
 		$this->create_post_and_set_as_current( $this->create_author( true ) );
 		$other_id              = self::factory()->post->create( [ 'post_status' => 'publish' ] );
-
 		$other_on_another_port = str_replace(
 			wp_parse_url( home_url(), PHP_URL_HOST ),
 			wp_parse_url( home_url(), PHP_URL_HOST ) . ':8080',
 			get_permalink( $other_id )
 		);
-		$output = $this->render( 'module=post url=' . $other_on_another_port );
+		$output                = $this->render( 'module=post url=' . $other_on_another_port );
 
 		$this->assertSame( '', $output );
 		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
@@ -460,15 +459,6 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 			wp_parse_url( home_url(), PHP_URL_HOST ) . ':80',
 			get_permalink( $other_id )
 		);
-
-		print "$other_id\n";
-		print get_permalink($other_id)."\n";
-		print $other_url."\n";
-		print home_url()."\n";
-		print home_url('/')."\n";
-		print wp_parse_url($other_url, PHP_URL_HOST)."\n";
-		print wp_parse_url(home_url(), PHP_URL_HOST)."\n";
-		@ob_flush();
 
 		$this->render( 'module=post url=' . $other_url );
 
@@ -771,7 +761,6 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 				'post_status' => 'publish',
 			]
 		);
-		print "permalink: ". get_permalink($post_id)."\n";@ob_flush();
 		$this->set_current_post( get_post( $post_id ) );
 		return $post_id;
 	}
@@ -801,9 +790,11 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		$home_url = 'http://example.org';
 		add_filter(
 			'home_url',
-			function () use ( $home_url ) {
-				return $home_url;
-			}
+			function ( $url, $path ) use ( $home_url ) {
+				return $home_url . ( $path ? '/' . ltrim( $path, '/' ) : '' );
+			},
+			10,
+			2
 		);
 	}
 }
