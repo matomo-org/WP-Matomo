@@ -20,6 +20,11 @@ class Shortcode_Test_Request extends Request {
 
 class ShortcodeTest extends WP_Piwik_TestCase {
 
+	/**
+	 * the name that the bound paragraph of the test synced pattern is addressed by
+	 */
+	const OVERRIDABLE_NAME = 'stats';
+
 	private $settings_backup = [];
 
 	private $role_caps_to_revoke = [];
@@ -50,6 +55,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 
 		add_shortcode( Shortcode::TAG, array( $GLOBALS['wp-piwik'], 'shortcode' ) );
 		add_filter( 'render_block', array( $GLOBALS['wp-piwik'], 'render_shortcodes_in_reusable_block' ), 10, 2 );
+		add_filter( 'render_block_data', array( '\WP_Piwik\Shortcode', 'note_open_reusable_block' ), 10, 1 );
 
 		wp_set_current_user( 0 );
 		$this->set_current_post( null );
@@ -484,7 +490,23 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
 	}
 
-	public function test_render_should_render_a_reusable_block_whose_author_may_read_stats() {
+	public function test_render_should_render_a_reusable_block_when_both_authors_may_read_stats() {
+		$block_id = self::factory()->post->create(
+			[
+				'post_type'    => 'wp_block',
+				'post_status'  => 'publish',
+				'post_author'  => $this->create_author( true ),
+				'post_content' => '[wp-piwik module="overview"]',
+			]
+		);
+		$this->create_post_and_set_as_current( $this->create_author( true ) );
+
+		$this->render_reusable_block( $block_id );
+
+		$this->assertSame( [ 'VisitsSummary.get' ], $this->get_registered_methods() );
+	}
+
+	public function test_render_should_authorize_a_reusable_block_against_the_embedding_post_author_too() {
 		$block_id = self::factory()->post->create(
 			[
 				'post_type'    => 'wp_block',
@@ -495,9 +517,14 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		);
 		$this->create_post_and_set_as_current( $this->create_author( false ) );
 
-		$this->render_reusable_block( $block_id );
+		$output = $this->render_reusable_block( $block_id );
 
-		$this->assertSame( [ 'VisitsSummary.get' ], $this->get_registered_methods() );
+		$this->assertSame(
+			'',
+			$output,
+			'the block can render text the embedding post supplies, so its author has to pass the gate as well'
+		);
+		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
 	}
 
 	public function test_render_should_leave_the_global_post_alone_after_rendering_a_reusable_block() {
@@ -569,6 +596,176 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 			'one render_block pass'   => [ 1 ],
 			'two render_block passes' => [ 2 ],
 		];
+	}
+
+	public function test_render_should_authorize_a_pattern_override_against_the_embedding_post_author() {
+		$pattern_id = $this->create_synced_pattern(
+			$this->create_author( true ),
+			[ $this->make_paragraph_block( 'no statistics here', true ) ]
+		);
+		$this->require_working_pattern_overrides( $pattern_id );
+
+		// the shortcode text lives in the embedding post, not in the pattern
+		$content = serialize_block( $this->make_synced_pattern_block( $pattern_id, '[wp-piwik module=overview]' ) );
+		$this->create_post_and_set_as_current( $this->create_author( false ), $content );
+
+		$output = $this->render_post_content( $content );
+
+		$this->assertStringNotContainsString(
+			'<table',
+			$output,
+			'the overridden text comes from the embedding post, so the pattern author may not authorize it'
+		);
+		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
+	}
+
+	public function test_render_should_authorize_a_pattern_override_url_against_the_embedding_post_author() {
+		$administrator_id = self::factory()->user->create( [ 'role' => 'administrator' ] );
+		( new \WP_User( $administrator_id ) )->add_cap( 'wp-piwik_read_stats' );
+		$private_id = self::factory()->post->create(
+			[
+				'post_status' => 'private',
+				'post_author' => $administrator_id,
+			]
+		);
+		$pattern_id = $this->create_synced_pattern(
+			$administrator_id,
+			[ $this->make_paragraph_block( 'no statistics here', true ) ]
+		);
+		$this->require_working_pattern_overrides( $pattern_id );
+
+		// the embedding author may see the statistics, but not the private post
+		$content = serialize_block(
+			$this->make_synced_pattern_block(
+				$pattern_id,
+				'[wp-piwik module=post url=' . get_permalink( $private_id ) . ' period=day date=today key=nb_visits]'
+			)
+		);
+		$this->create_post_and_set_as_current( $this->create_author( true ), $content );
+
+		$this->render_post_content( $content );
+
+		$this->assertSame(
+			[],
+			Shortcode_Test_Request::get_registered(),
+			'the url attribute comes from the embedding post, so it has to be read against its author'
+		);
+	}
+
+	public function test_render_should_render_the_own_content_of_a_pattern_when_both_authors_may_read_stats() {
+		$pattern_id = $this->create_synced_pattern(
+			$this->create_author( true ),
+			[ $this->make_paragraph_block( '[wp-piwik module=overview]' ) ]
+		);
+		$content    = serialize_block( $this->make_synced_pattern_block( $pattern_id ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ), $content );
+
+		$this->render_post_content( $content );
+
+		$this->assertSame(
+			[ 'VisitsSummary.get' ],
+			$this->get_registered_methods(),
+			'closing the override bypass may not stop an ordinary pattern from rendering'
+		);
+	}
+
+	public function test_render_should_authorize_the_own_content_of_an_overridden_pattern_against_the_pattern_author() {
+		// the pattern author cannot see the statistics; the author embedding it can.
+		// this is the pattern author writing a shortcode into a block somebody else
+		// already uses, so it has to stay authorized against the pattern author even
+		// though the embedding post now overrides a different block of the pattern.
+		$pattern_id = $this->create_synced_pattern(
+			$this->create_author( false ),
+			[
+				$this->make_paragraph_block( 'an editable note', true ),
+				$this->make_paragraph_block( '[wp-piwik module=overview]' ),
+			]
+		);
+		$this->require_working_pattern_overrides( $pattern_id );
+
+		$content = serialize_block( $this->make_synced_pattern_block( $pattern_id, 'a note from the embedding post' ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ), $content );
+
+		$output = $this->render_post_content( $content );
+
+		$this->assertStringNotContainsString(
+			'<table',
+			$output,
+			'an override elsewhere in the pattern may not hand the pattern its embedding author'
+		);
+		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
+	}
+
+	/**
+	 * @dataProvider get_permissions_for_nested_pattern_tests
+	 */
+	public function test_render_should_authorize_a_pattern_nested_in_another_pattern_against_every_author_on_the_way_down(
+		$inner_author_can_read,
+		$outer_author_can_read
+	) {
+		// all but one author in the chain can read the stats
+
+		$inner_id = $this->create_synced_pattern(
+			$this->create_author( $inner_author_can_read ),
+			[ $this->make_paragraph_block( 'no statistics here', true ) ]
+		);
+		$this->require_working_pattern_overrides( $inner_id );
+
+		$outer_id = $this->create_synced_pattern(
+			$this->create_author( $outer_author_can_read ),
+			[ $this->make_synced_pattern_block( $inner_id, 'injected shortcode: [wp-piwik module=overview]' ) ]
+		);
+		$content  = serialize_block( $this->make_synced_pattern_block( $outer_id ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ), $content );
+
+		$output = $this->render_post_content( $content );
+
+		$this->assertStringContainsString(
+			'injected shortcode',
+			$output,
+			'the shortcode override was not processed'
+		);
+		$this->assertStringNotContainsString(
+			'<table',
+			$output,
+			'the pattern in between supplied the text, so it has to pass the gate as well'
+		);
+		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
+	}
+
+	public function get_permissions_for_nested_pattern_tests() {
+		return [
+			'inner can read, outer cannot' => [ true, false ],
+			'inner cannot read, outer can' => [ false, true ],
+		];
+	}
+
+	public function test_render_should_render_a_pattern_nested_in_another_pattern_when_every_author_may_read_stats() {
+		$inner_id = $this->create_synced_pattern(
+			$this->create_author( true ),
+			[ $this->make_paragraph_block( 'no statistics here', true ) ]
+		);
+		$this->require_working_pattern_overrides( $inner_id );
+
+		$outer_id = $this->create_synced_pattern(
+			$this->create_author( true ),
+			[ $this->make_synced_pattern_block( $inner_id, 'injected shortcode: [wp-piwik module=overview]' ) ]
+		);
+		$content  = serialize_block( $this->make_synced_pattern_block( $outer_id ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ), $content );
+
+		$output = $this->render_post_content( $content );
+
+		$this->assertStringContainsString(
+			'injected shortcode',
+			$output,
+			'the shortcode override was not processed'
+		);
+		$this->assertSame(
+			[ 'VisitsSummary.get' ],
+			$this->get_registered_methods(),
+			'walking the whole chain may not stop a nested pattern from rendering'
+		);
 	}
 
 	public function test_render_should_ignore_blocks_that_are_not_reusable() {
@@ -718,6 +915,103 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	/**
+	 * @param string $text        text of the paragraph
+	 * @param bool   $overridable whether an embedding post may replace that text
+	 * @return array parsed block, as serialize_block expects it
+	 */
+	private function make_paragraph_block( $text, $overridable = false ) {
+		$attributes = [];
+		if ( $overridable ) {
+			$attributes['metadata'] = [
+				'name'     => self::OVERRIDABLE_NAME,
+				'bindings' => [ 'content' => [ 'source' => 'core/pattern-overrides' ] ],
+			];
+		}
+		return [
+			'blockName'    => 'core/paragraph',
+			'attrs'        => $attributes,
+			'innerBlocks'  => [],
+			'innerHTML'    => '<p>' . $text . '</p>',
+			'innerContent' => [ '<p>' . $text . '</p>' ],
+		];
+	}
+
+	/**
+	 * @param int         $pattern_id wp_block post ID
+	 * @param string|null $text
+	 *          text the embedding post puts into the overridable paragraph, null to
+	 *          leave the pattern to its own text
+	 * @return array parsed block, as serialize_block expects it
+	 */
+	private function make_synced_pattern_block( $pattern_id, $text = null ) {
+		$attributes = [ 'ref' => $pattern_id ];
+		if ( null !== $text ) {
+			$attributes['content'] = [ self::OVERRIDABLE_NAME => [ 'content' => $text ] ];
+		}
+		return [
+			'blockName'    => 'core/block',
+			'attrs'        => $attributes,
+			'innerBlocks'  => [],
+			'innerHTML'    => '',
+			'innerContent' => [],
+		];
+	}
+
+	/**
+	 * @param int     $author_id author of the pattern
+	 * @param array[] $blocks    parsed blocks the pattern consists of
+	 * @return int wp_block post ID
+	 */
+	private function create_synced_pattern( $author_id, $blocks ) {
+		return self::factory()->post->create(
+			[
+				'post_type'    => 'wp_block',
+				'post_status'  => 'publish',
+				'post_author'  => $author_id,
+				'post_content' => serialize_blocks( $blocks ),
+			]
+		);
+	}
+
+	/**
+	 * @param int $pattern_id wp_block post ID of a pattern with an overridable paragraph
+	 */
+	private function require_working_pattern_overrides( $pattern_id ) {
+		if (
+			! function_exists( 'get_block_bindings_source' )
+			|| null === get_block_bindings_source( 'core/pattern-overrides' )
+		) {
+			$this->markTestSkipped( 'this WordPress does not support pattern overrides' );
+		}
+
+		$probe = 'wp-piwik-override-probe';
+
+		$this->assertStringContainsString(
+			$probe,
+			$this->render_post_content( serialize_block( $this->make_synced_pattern_block( $pattern_id, $probe ) ) ),
+			'precondition: the embedding post can put its own text into the pattern'
+		);
+
+		// the probe rendered the whole pattern, shortcodes included
+		$this->forget_registered_requests();
+	}
+
+	private function forget_registered_requests() {
+		$request = new Shortcode_Test_Request( new \WP_Piwik_Test_Mock_Plugin(), \WP_Piwik::get_settings() );
+		$request->reset();
+	}
+
+	/**
+	 * Render post content the way the_content does: blocks first, shortcodes after
+	 *
+	 * @param string $content post content
+	 * @return string rendered content
+	 */
+	private function render_post_content( $content ) {
+		return do_shortcode( do_blocks( $content ) );
+	}
+
+	/**
 	 * Create a user who may or may not see the statistics
 	 *
 	 * @param bool $can_read_stats whether the user may see the statistics
@@ -754,11 +1048,12 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		$this->role_caps_to_revoke[] = $role_name;
 	}
 
-	private function create_post_and_set_as_current( $author_id ) {
+	private function create_post_and_set_as_current( $author_id, $content = '' ) {
 		$post_id = self::factory()->post->create(
 			[
-				'post_author' => $author_id,
-				'post_status' => 'publish',
+				'post_author'  => $author_id,
+				'post_status'  => 'publish',
+				'post_content' => $content,
 			]
 		);
 		$this->set_current_post( get_post( $post_id ) );
