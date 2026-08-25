@@ -148,6 +148,7 @@ Add WP-Matomo to your /wp-content/plugins folder and enable it as [Network Plugi
 
 = 1.1.11 =
 * Security: the overview and post shortcodes are no longer rendered if the author of the post containing them is not allowed to see the statistics.
+* Security: a shortcode inside a reusable block is now authorized against the block's author and the author of the post embedding it.
 * Security: the url attribute of the post shortcode is now restricted to posts the author is allowed to read.
 * Security: shortcodes ignore period, date and language attributes Matomo would not accept, and fall back to their default instead.
 * Bug fix: the post shortcode no longer triggers a request when there is no post to report on.

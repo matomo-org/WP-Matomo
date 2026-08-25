@@ -307,6 +307,18 @@ class WP_Piwik {
 				10,
 				2
 			);
+			// render_block only fires once the inner blocks have rendered, which is too
+			// late to see what pattern that contains a nested pattern. this one fires on the
+			// way down, so we can record each block as we see it.
+			add_filter(
+				'render_block_data',
+				array(
+					'\WP_Piwik\Shortcode',
+					'note_open_reusable_block',
+				),
+				10,
+				1
+			);
 		}
 	}
 

@@ -54,6 +54,30 @@ class Shortcode {
 	private $settings;
 
 	/**
+	 * The chain of posts a reusable block is currently being rendered in.
+	 *
+	 * Used to get the authors to authorize against should the [wp-piwik] shortcode
+	 * be used in a re-usable block.
+	 *
+	 * Must be static because WP_Piwik::shortcode() builds a fresh instance for every
+	 * shortcode it expands.
+	 *
+	 * @var \WP_Post[]
+	 */
+	private static $embedding_posts = array();
+
+	/**
+	 * The reusable blocks currently being rendered, outermost first.
+	 *
+	 * A pattern can embed another pattern and hand it text through pattern
+	 * overrides, so every pattern on the way down could have written a shortcode the
+	 * innermost one renders. Entries are null where the ref named no post.
+	 *
+	 * @var array<\WP_Post|null>
+	 */
+	private static $open_reusable_blocks = array();
+
+	/**
 	 * @param \WP_Piwik $wp_piwik
 	 * @param Settings  $settings
 	 */
@@ -87,8 +111,8 @@ class Shortcode {
 	}
 
 	/**
-	 * Resolve the shortcodes of a reusable block against the block's own author
-	 * instead of the embedding post's author. Must be done before the content-wide
+	 * Resolve the shortcodes of a reusable block against the block's own author as
+	 * well as the embedding post's author. Must be done before the content-wide
 	 * do_shortcode pass expands it in order to get the author of the block (this
 	 * information is lost afterward).
 	 *
@@ -97,12 +121,55 @@ class Shortcode {
 	 * @return string block markup with this plugin's shortcodes resolved
 	 */
 	public function render_reusable_block( $block_content, $block ) {
+		if ( ! self::is_reusable_block( $block ) ) {
+			return $block_content;
+		}
+
+		try {
+			return $this->resolve_shortcodes_of_reusable_block( $block_content, $block );
+		} finally {
+			// pop the entry note_open_reusable_block() added
+			array_pop( self::$open_reusable_blocks );
+		}
+	}
+
+	/**
+	 * Note that a reusable block is about to render. Meant to be used with the
+	 * render_block_data hook.
+	 *
+	 * @param array $parsed_block parsed block
+	 * @return array the parsed block, unchanged
+	 */
+	public static function note_open_reusable_block( $parsed_block ) {
+		if ( self::is_reusable_block( $parsed_block ) ) {
+			$reusable_block = get_post( (int) $parsed_block['attrs']['ref'] );
+
+			// a ref that resolves to nothing is still pushed, so that the array_pop() in
+			// render_reusable_block() does not pop an empty array
+			self::$open_reusable_blocks[] = $reusable_block instanceof \WP_Post ? $reusable_block : null;
+		}
+		return $parsed_block;
+	}
+
+	/**
+	 * @param array $block parsed block
+	 * @return bool whether the block embeds a reusable block
+	 */
+	private static function is_reusable_block( $block ) {
+		return ! empty( $block['blockName'] )
+			&& 'core/block' === $block['blockName']
+			&& ! empty( $block['attrs']['ref'] );
+	}
+
+	/**
+	 * @param string $block_content rendered block markup
+	 * @param array  $block         parsed block
+	 * @return string block markup with this plugin's shortcodes resolved
+	 */
+	private function resolve_shortcodes_of_reusable_block( $block_content, $block ) {
 		global $shortcode_tags, $post;
 
 		// only run the gate if we need to (ie, the block has the shortcode in it)
-		if ( empty( $block['blockName'] ) || 'core/block' !== $block['blockName'] || empty( $block['attrs']['ref'] ) ) {
-			return $block_content;
-		}
 		if ( ! isset( $shortcode_tags[ self::TAG ] ) || false === strpos( $block_content, '[' . self::TAG ) ) {
 			return $block_content;
 		}
@@ -113,11 +180,15 @@ class Shortcode {
 
 		$all_tags   = $shortcode_tags;
 		$saved_post = $post;
+		$embedding  = $saved_post instanceof \WP_Post;
 		// the post is swapped because that is where the gate reads its subject from.
 		// phpcs:disable WordPress.WP.GlobalVariablesOverride.Prohibited
 		try {
 			$shortcode_tags = array( self::TAG => $all_tags[ self::TAG ] );
 			$post           = $reusable_block;
+			if ( $embedding ) {
+				self::$embedding_posts[] = $saved_post;
+			}
 
 			// do_shortcode() peels one bracket level off [[wp-piwik]] rather than
 			// expanding it, so a single pass would hand the tag on to the content wide
@@ -135,6 +206,9 @@ class Shortcode {
 		} finally {
 			$shortcode_tags = $all_tags;
 			$post           = $saved_post;
+			if ( $embedding ) {
+				array_pop( self::$embedding_posts );
+			}
 		}
 		// phpcs:enable WordPress.WP.GlobalVariablesOverride.Prohibited
 
@@ -214,20 +288,21 @@ class Shortcode {
 
 		$post       = get_post();
 		$post       = $post instanceof \WP_Post ? $post : null;
-		$author_id  = null !== $post ? (int) $post->post_author : 0;
+		$author_ids = $this->get_authors_to_authorize( $post );
 		$authorized = true;
 		$reason     = 'filtered';
 
-		if (
-			$this->settings->get_global_option( 'shortcode_author_check' )
-			&& null !== $post
-			&& ! user_can( $author_id, 'wp-piwik_read_stats' )
-		) {
-			$authorized = false;
-			$reason     = 'author';
+		if ( $this->settings->get_global_option( 'shortcode_author_check' ) ) {
+			foreach ( $author_ids as $author_id ) {
+				if ( ! user_can( $author_id, 'wp-piwik_read_stats' ) ) {
+					$authorized = false;
+					$reason     = 'author';
+					break;
+				}
+			}
 		}
-		// $post === null means the shortcode text comes from a theme template, a sidebar
-		// widget or WP-CLI. editing any of those needs capabilities well above
+		// an empty author list means the shortcode text comes from a theme template, a
+		// sidebar widget or WP-CLI. editing any of those needs capabilities well above
 		// wp-piwik_read_stats, so there is nobody left to authorize and the shortcode
 		// is allowed through. sites that want this closed can use the filter below.
 
@@ -238,7 +313,7 @@ class Shortcode {
 				$reason     = 'no_post';
 			} elseif (
 				null !== $attributes['url']
-				&& ! $this->is_url_allowed( $attributes['url'], $author_id )
+				&& ! $this->is_url_allowed( $attributes['url'], $author_ids )
 			) {
 				$authorized = false;
 				$reason     = 'url';
@@ -264,15 +339,41 @@ class Shortcode {
 	}
 
 	/**
+	 * Collect everyone who has to authorize a shortcode before it can be used.
+	 *
+	 * Shortcode text rendered inside a reusable block could have been written by any
+	 * post in the embedding chain rather than by the block itself, since a pattern
+	 * override lets an embedding post supply it. Each of these authors is collected
+	 * here and the caller requires all of them to be allowed.
+	 *
+	 * @param \WP_Post|null $post post the shortcode is rendered in, if any
+	 * @return int[] author IDs, without duplicates
+	 */
+	private function get_authors_to_authorize( $post ) {
+		$posts = array_merge( self::$open_reusable_blocks, self::$embedding_posts );
+		if ( null !== $post ) {
+			array_unshift( $posts, $post );
+		}
+		// drop the refs that named no post
+		$posts = array_filter( $posts );
+
+		$author_ids = array_map( 'intval', wp_list_pluck( $posts, 'post_author' ) );
+		$author_ids = array_unique( $author_ids );
+		$author_ids = array_values( $author_ids );
+
+		return $author_ids;
+	}
+
+	/**
 	 * Check whether a post shortcode may report on a URL
 	 *
 	 * @param string $url
 	 *          URL requested by the shortcode's url attribute
-	 * @param int    $author_id
-	 *          author of the post containing the shortcode
-	 * @return bool true if the URL is a post on this site the author may read
+	 * @param int[]  $author_ids
+	 *          everybody who has to authorize the shortcode
+	 * @return bool true if the URL is a post on this site every author may read
 	 */
-	private function is_url_allowed( $url, $author_id ) {
+	private function is_url_allowed( $url, $author_ids ) {
 		// url_to_postid() below looks for ?p= anywhere in the string it is given, ahead
 		// of stripping the fragment itself, so a fragment left on here could name a
 		// post other than the one the path names and authorize against that instead.
@@ -290,7 +391,12 @@ class Shortcode {
 		if ( ! $post_id ) {
 			return false;
 		}
-		return user_can( $author_id, 'read_post', $post_id );
+		foreach ( $author_ids as $author_id ) {
+			if ( ! user_can( $author_id, 'read_post', $post_id ) ) {
+				return false;
+			}
+		}
+		return true;
 	}
 
 	/**
