@@ -768,6 +768,88 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		);
 	}
 
+	public function test_render_should_authorize_a_nested_pattern_against_an_ancestor_that_rendered_another_pattern_first() {
+		$target_id = $this->create_synced_pattern(
+			$this->create_author( true ),
+			[ $this->make_paragraph_block( 'no statistics here', true ) ]
+		);
+		$this->require_working_pattern_overrides( $target_id );
+
+		$sibling_id = $this->create_synced_pattern(
+			$this->create_author( true ),
+			[ $this->make_paragraph_block( 'nothing to authorize here' ) ]
+		);
+
+		// post with two patterns: the first one is fine and has no shortcode, the second has
+		// the shortcode as an override
+		$outer_id = $this->create_synced_pattern(
+			$this->create_author( false ),
+			[
+				$this->make_synced_pattern_block( $sibling_id ),
+				$this->make_synced_pattern_block( $target_id, 'injected shortcode: [wp-piwik module=overview]' ),
+			]
+		);
+		$content  = serialize_block( $this->make_synced_pattern_block( $outer_id ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ), $content );
+
+		$output = $this->render_post_content( $content );
+
+		$this->assertStringContainsString(
+			'injected shortcode',
+			$output,
+			'the shortcode override was not processed'
+		);
+		$this->assertStringNotContainsString(
+			'<table',
+			$output,
+			'the pattern in between supplied the text, so it has to pass the gate as well'
+		);
+		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
+	}
+
+	public function test_render_should_authorize_a_pattern_rendered_through_the_block_renderer_route_against_the_requester() {
+		// the route takes the block attributes from the request, so the override text
+		// belongs to whoever asked for the render rather than to the pattern's author
+
+		$pattern_id = $this->create_synced_pattern(
+			$this->create_author( true ),
+			[ $this->make_paragraph_block( 'no statistics here', true ) ]
+		);
+		$this->require_working_pattern_overrides( $pattern_id );
+
+		// edit_posts is all the route asks for when no post_id is passed
+		$requester = self::factory()->user->create( [ 'role' => 'contributor' ] );
+		$this->assertFalse( user_can( $requester, 'wp-piwik_read_stats' ), 'precondition: the requester may not see the statistics' );
+		wp_set_current_user( $requester );
+		$this->set_current_post( null );
+
+		$request = new \WP_REST_Request( 'GET', '/wp/v2/block-renderer/core/block' );
+		$request->set_param( 'context', 'edit' );
+		$request->set_param(
+			'attributes',
+			[
+				'ref'     => $pattern_id,
+				'content' => [ self::OVERRIDABLE_NAME => [ 'content' => 'injected shortcode: [wp-piwik module=overview]' ] ],
+			]
+		);
+		$response = rest_get_server()->dispatch( $request );
+		$rendered = $response->get_data();
+		$rendered = isset( $rendered['rendered'] ) ? $rendered['rendered'] : '';
+
+		$this->assertSame( 200, $response->get_status(), 'precondition: the route rendered the pattern for the requester' );
+		$this->assertStringContainsString(
+			'injected shortcode',
+			$rendered,
+			'the shortcode override was not processed'
+		);
+		$this->assertStringNotContainsString(
+			'<table',
+			$rendered,
+			'the requester supplied the text, so the requester has to pass the gate'
+		);
+		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
+	}
+
 	public function test_render_should_ignore_blocks_that_are_not_reusable() {
 		$this->create_post_and_set_as_current( $this->create_author( false ) );
 		$shortcode = new Shortcode( $GLOBALS['wp-piwik'], \WP_Piwik::get_settings() );
