@@ -56,7 +56,8 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		add_shortcode( Shortcode::TAG, array( $GLOBALS['wp-piwik'], 'shortcode' ) );
 		add_filter( 'render_block', array( $GLOBALS['wp-piwik'], 'render_shortcodes_in_reusable_block' ), 10, 2 );
 		add_filter( 'render_block_data', array( '\WP_Piwik\Shortcode', 'record_open_reusable_block' ), 10, 1 );
-		add_filter( 'rest_pre_dispatch', array( '\WP_Piwik\Shortcode', 'note_rest_route' ), 10, 3 );
+		add_filter( 'rest_request_before_callbacks', array( '\WP_Piwik\Shortcode', 'record_open_rest_route' ), 10, 3 );
+		add_filter( 'rest_request_after_callbacks', array( '\WP_Piwik\Shortcode', 'close_rest_route' ), 10, 1 );
 
 		wp_set_current_user( 0 );
 		$this->set_current_post( null );
@@ -617,12 +618,43 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 			$output,
 			'the bracket escape has to keep working inside a pattern, as it does in a post'
 		);
+		// the entity is the one disarm_leftover_tags() writes: &#91; would be turned back
+		// into a bracket by the next do_shortcode() rather than left as text
 		$this->assertStringContainsString(
-			'&#91;wp-piwik module=overview&#93;',
+			'&#091;wp-piwik module=overview]',
 			$output,
 			'the escaped shortcode has to reach the reader as text'
 		);
 		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
+	}
+
+	public function test_render_should_not_expand_a_shortcode_that_appears_in_the_shortcodes_own_denial_output() {
+		// a filter denies using the shortcode with an error message that includes the
+		// shortcode. the error message shortcode should not be expanded.
+
+		$author_id  = $this->create_author( true );
+		$pattern_id = $this->create_synced_pattern(
+			$author_id,
+			[ $this->make_paragraph_block( '[wp-piwik module=overview]' ) ]
+		);
+		$content    = serialize_block( $this->make_synced_pattern_block( $pattern_id ) );
+		$this->create_post_and_set_as_current( $author_id, $content );
+
+		$this->deny_through_the_authorized_filter( 'the editorial policy forbids stats here, see [wp-piwik module=opt-out]' );
+		wp_set_current_user( self::factory()->user->create( [ 'role' => 'administrator' ] ) );
+
+		$output = $this->render_post_content( $content );
+
+		$this->assertStringNotContainsString(
+			'<iframe',
+			$output,
+			'what the block level pass produced may not be handed back to another lap of it'
+		);
+		$this->assertStringContainsString(
+			'&#091;wp-piwik module=opt-out]',
+			$output,
+			'the tag has to reach the reader as text instead'
+		);
 	}
 
 	public function test_render_should_authorize_a_pattern_override_against_the_embedding_post_author() {

@@ -320,15 +320,26 @@ class WP_Piwik {
 				1
 			);
 			// the REST block renderer renders a block from attributes the request
-			// carries, so the gate has to know when that is what it is looking at
+			// carries, so the gate has to know when that is what it is looking at. a
+			// route handler can dispatch a request of its own, so both ends of one are
+			// recorded rather than only its start.
 			add_filter(
-				'rest_pre_dispatch',
+				'rest_request_before_callbacks',
 				array(
 					'\WP_Piwik\Shortcode',
-					'note_rest_route',
+					'record_open_rest_route',
 				),
 				10,
 				3
+			);
+			add_filter(
+				'rest_request_after_callbacks',
+				array(
+					'\WP_Piwik\Shortcode',
+					'close_rest_route',
+				),
+				10,
+				1
 			);
 		}
 	}

@@ -9,8 +9,6 @@ class Shortcode {
 
 	const TAG = 'wp-piwik';
 
-	const MAX_BLOCK_PASSES = 10;
-
 	private $available = array(
 		'opt-out'  => 'OptOut',
 		'post'     => 'Post',
@@ -77,17 +75,18 @@ class Shortcode {
 	 * whether it is really the one on top. The post is null where the ref named no
 	 * post.
 	 *
-	 * @var array<array{ref: int, post: \WP_Post|null}>
+	 * @var array<array{ref: mixed, post: \WP_Post|null}>
 	 */
 	private static $open_reusable_blocks = array();
 
 	/**
-	 * Route of the REST request being dispatched, an empty string outside one.
-	 * Used to detect if we are in the block rendering REST request.
+	 * Stack of routes of REST requests being dispatched, outermost first.
 	 *
-	 * @var string
+	 * Used to detect if we are in the block-rendering REST request.
+	 *
+	 * @var string[]
 	 */
-	private static $rest_route = '';
+	private static $open_rest_routes = array();
 
 	/**
 	 * @param \WP_Piwik $wp_piwik
@@ -140,7 +139,7 @@ class Shortcode {
 		try {
 			return $this->resolve_shortcodes_of_reusable_block( $block_content, $block );
 		} finally {
-			self::close_reusable_block( (int) $block['attrs']['ref'] );
+			self::close_reusable_block( $block['attrs']['ref'] );
 		}
 	}
 
@@ -153,8 +152,10 @@ class Shortcode {
 	 */
 	public static function record_open_reusable_block( $parsed_block ) {
 		if ( self::is_reusable_block( $parsed_block ) ) {
-			$ref            = (int) $parsed_block['attrs']['ref'];
-			$reusable_block = get_post( $ref );
+			// the ref is kept exactly as the block attribute spells it, see
+			// close_reusable_block()
+			$ref            = $parsed_block['attrs']['ref'];
+			$reusable_block = get_post( (int) $ref );
 
 			// a ref that resolves to nothing is still noted, so that closing the block
 			// finds the entry it expects
@@ -168,26 +169,43 @@ class Shortcode {
 
 	/**
 	 * Note which route a REST request is asking for. Meant to be used with the
-	 * rest_pre_dispatch hook.
+	 * rest_request_before_callbacks hook.
 	 *
-	 * @param mixed            $result  response to send instead of dispatching, if any
-	 * @param mixed            $server  the REST server
-	 * @param \WP_REST_Request $request request being dispatched
-	 * @return mixed the result, unchanged
+	 * @param mixed            $response response to send instead of calling the handler, if any
+	 * @param array            $handler  route handler matched for the request
+	 * @param \WP_REST_Request $request  request being dispatched
+	 * @return mixed the response, unchanged
 	 */
-	public static function note_rest_route( $result, $server, $request ) {
-		self::$rest_route = (string) $request->get_route();
-		return $result;
+	public static function record_open_rest_route( $response, $handler, $request ) {
+		self::$open_rest_routes[] = (string) $request->get_route();
+		return $response;
+	}
+
+	/**
+	 * Drop the route noted by record_open_rest_route() for a REST request whose handler
+	 * has returned. Meant to be used with the rest_request_after_callbacks hook.
+	 *
+	 * @param mixed $response response the handler produced
+	 * @return mixed the response, unchanged
+	 */
+	public static function close_rest_route( $response ) {
+		array_pop( self::$open_rest_routes );
+		return $response;
 	}
 
 	/**
 	 * Drop the entry record_open_reusable_block() made for a block that has finished
 	 * rendering.
 	 *
-	 * @param int $ref post the block embeds
+	 * @param mixed $ref post the block embeds, as the block attribute spells it
 	 */
 	private static function close_reusable_block( $ref ) {
 		$open = count( self::$open_reusable_blocks );
+
+		// the ref is compared exactly as it was spelled, the way core keys the guard
+		// that stops a block from embedding itself. two spellings of the same number
+		// are two blocks to core, so they have to be two blocks here as well, or a copy
+		// of a block closes the one it is nested in.
 		if ( $open > 0 && $ref === self::$open_reusable_blocks[ $open - 1 ]['ref'] ) {
 			array_pop( self::$open_reusable_blocks );
 		} // if ref doesn't match, this has already been popped by a previous call
@@ -232,19 +250,13 @@ class Shortcode {
 				self::$embedding_posts[] = $saved_post;
 			}
 
-			// do_shortcode() peels one bracket level off [[wp-piwik]] rather than
-			// expanding it, so a single pass would hand the tag on to the content wide
-			// pass, which authorizes against the embedding post instead. keep expanding
-			// while there is something here of ours left to expand.
-			$passes = 0;
-			do {
-				$before        = $block_content;
-				$block_content = do_shortcode( $block_content );
-			} while (
-				$before !== $block_content
-				&& false !== strpos( $block_content, '[' . self::TAG )
-				&& ++$passes < self::MAX_BLOCK_PASSES
-			);
+			// exactly one pass, the way the content wide pass would expand this, so that
+			// [[wp-piwik]] is peeled down to text rather than expanded.
+			//
+			// disarm_leftover_tags() below is what keeps whatever is left of ours from
+			// reaching the content wide pass, which would authorize it against the
+			// embedding post instead.
+			$block_content = do_shortcode( $block_content );
 		} finally {
 			$shortcode_tags = $all_tags;
 			$post           = $saved_post;
@@ -258,12 +270,17 @@ class Shortcode {
 	}
 
 	private function disarm_leftover_tags( $block_content ) {
-		// &#091; and not &#91;, which do_shortcode() turns back into a bracket
-		return preg_replace(
-			'/\[(?=\[*' . preg_quote( self::TAG, '/' ) . '(?![\w-]))/',
-			'&#091;',
+		$disarmed = preg_replace(
+			'/\[(' . preg_quote( self::TAG, '/' ) . '(?![\w-]))/',
+			'&#091;$1',
 			$block_content
 		);
+		if ( null === $disarmed ) {
+			error_log( 'wp-piwik: could not disarm the shortcodes of a reusable block (preg_last_error ' . preg_last_error() . '), dropped its content' );
+			return '';
+		}
+
+		return $disarmed;
 	}
 
 	/**
@@ -425,14 +442,26 @@ class Shortcode {
 	 * the text it renders, which makes them an author of it like an embedding post
 	 * would be.
 	 *
+	 * Every route being dispatched is looked at, not just the innermost one: no matter
+	 * what else made REST requests while the block rendered, the block attributes still
+	 * came from the request, so the caller must be authorized.
+	 *
 	 * @return bool
 	 */
 	private static function is_block_renderer_request() {
 		$in_rest_request = function_exists( 'wp_is_rest_endpoint' )
 			? wp_is_rest_endpoint()
 			: ( defined( 'REST_REQUEST' ) && REST_REQUEST );
+		if ( ! $in_rest_request ) {
+			return false;
+		}
 
-		return $in_rest_request && 0 === strpos( self::$rest_route, '/wp/v2/block-renderer/' );
+		foreach ( self::$open_rest_routes as $route ) {
+			if ( 0 === strpos( $route, '/wp/v2/block-renderer/' ) ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**
