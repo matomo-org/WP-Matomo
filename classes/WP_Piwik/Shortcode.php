@@ -514,9 +514,9 @@ class Shortcode {
 			// the shortcode into one of these has to be allowed as well
 			$author_ids = array_merge( $author_ids, self::get_recorded_shortcode_authors( $chain_post->ID ) );
 		}
-		if ( self::is_block_renderer_request() ) {
-			// this is a REST request to render a block, we need to authorize the caller
-			// in this case too
+		if ( self::is_block_renderer_request() || self::is_preview_request() ) {
+			// the caller supplied what is being rendered rather than reading it back out
+			// of a post, so the caller has to be authorized as well
 			$author_ids[] = get_current_user_id();
 		}
 		$author_ids = array_unique( $author_ids );
@@ -563,6 +563,24 @@ class Shortcode {
 			}
 		}
 		return false;
+	}
+
+	/**
+	 * Checks whether a post is being previewed rather than read.
+	 *
+	 * The reader of a preview is treated the way the caller of the block
+	 * renderer route is: the text being rendered is theirs. Previewing one's own work
+	 * costs nothing, since the author is on the list already.
+	 *
+	 * @return bool
+	 */
+	private static function is_preview_request() {
+		// is_preview() reads the main query, which is not set up for WP-CLI, cron or a
+		// REST request, and warns rather than answering when it is missing
+		if ( ! isset( $GLOBALS['wp_query'] ) || ! $GLOBALS['wp_query'] instanceof \WP_Query ) {
+			return false;
+		}
+		return is_preview();
 	}
 
 	/**
