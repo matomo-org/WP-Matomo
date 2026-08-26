@@ -307,17 +307,16 @@ class WP_Piwik {
 				10,
 				2
 			);
-			// render_block only fires once the inner blocks have rendered, which is too
-			// late to see what pattern that contains a nested pattern. this one fires on the
-			// way down, so we can record each block as we see it.
+			// wrap the render callback of the block to record each pattern as it is
+			// processed.
 			add_filter(
-				'render_block_data',
+				'register_block_type_args',
 				array(
 					'\WP_Piwik\Shortcode',
-					'record_open_reusable_block',
+					'wrap_reusable_block_renderer',
 				),
 				10,
-				1
+				2
 			);
 			// the REST block renderer renders a block from attributes the request
 			// carries, so the gate has to know when that is what it is looking at. a

@@ -52,30 +52,20 @@ class Shortcode {
 	private $settings;
 
 	/**
-	 * The chain of posts a reusable block is currently being rendered in.
+	 * The reusable blocks currently being rendered, outermost first.
 	 *
 	 * Used to get the authors to authorize against should the [wp-piwik] shortcode
-	 * be used in a re-usable block.
+	 * be used in a re-usable block. A pattern can embed another pattern and hand it
+	 * text through pattern overrides, so every pattern on the way down could have
+	 * written a shortcode the innermost one renders.
+	 *
+	 * An entry is null where the ref named no post. Retained in the array so the entry
+	 * a caller closes is always the one it opened.
 	 *
 	 * Must be static because WP_Piwik::shortcode() builds a fresh instance for every
 	 * shortcode it expands.
 	 *
-	 * @var \WP_Post[]
-	 */
-	private static $embedding_posts = array();
-
-	/**
-	 * The reusable blocks currently being rendered, outermost first.
-	 *
-	 * A pattern can embed another pattern and hand it text through pattern
-	 * overrides, so every pattern on the way down could have written a shortcode the
-	 * innermost one renders.
-	 *
-	 * Every entry carries the ref it was opened for, so that closing one can tell
-	 * whether it is really the one on top. The post is null where the ref named no
-	 * post.
-	 *
-	 * @var array<array{ref: mixed, post: \WP_Post|null}>
+	 * @var array<\WP_Post|null>
 	 */
 	private static $open_reusable_blocks = array();
 
@@ -122,10 +112,10 @@ class Shortcode {
 	}
 
 	/**
-	 * Resolve the shortcodes of a reusable block against the block's own author as
-	 * well as the embedding post's author. Must be done before the content-wide
-	 * do_shortcode pass expands it in order to get the author of the block (this
-	 * information is lost afterward).
+	 * Resolve the shortcodes of a reusable block against its own author as well as
+	 * every author on the way to it. Must be done before the content-wide
+	 * do_shortcode pass expands it, because which pattern the text came from is lost
+	 * afterward.
 	 *
 	 * @param string $block_content rendered block markup
 	 * @param array  $block         parsed block
@@ -136,35 +126,50 @@ class Shortcode {
 			return $block_content;
 		}
 
-		try {
-			return $this->resolve_shortcodes_of_reusable_block( $block_content, $block );
-		} finally {
-			self::close_reusable_block( $block['attrs']['ref'] );
-		}
+		return $this->resolve_shortcodes_of_reusable_block( $block_content, $block );
 	}
 
 	/**
-	 * Record that a reusable block is about to render. Meant to be used with the
-	 * render_block_data hook.
+	 * Record every pattern while it renders, by wrapping the render callback of the
+	 * core/block block. Meant to be used with the register_block_type_args filter.
 	 *
-	 * @param array $parsed_block parsed block
-	 * @return array the parsed block, unchanged
+	 * The render callback is the one thing every path core takes to a pattern goes
+	 * through, so we use this approach instead of using block hooks.
+	 *
+	 * @param array  $args block type arguments
+	 * @param string $name block type name, including its namespace
+	 * @return array the arguments, with the render callback of core/block wrapped
 	 */
-	public static function record_open_reusable_block( $parsed_block ) {
-		if ( self::is_reusable_block( $parsed_block ) ) {
-			// the ref is kept exactly as the block attribute spells it, see
-			// close_reusable_block()
-			$ref            = $parsed_block['attrs']['ref'];
-			$reusable_block = get_post( (int) $ref );
-
-			// a ref that resolves to nothing is still noted, so that closing the block
-			// finds the entry it expects
-			self::$open_reusable_blocks[] = array(
-				'ref'  => $ref,
-				'post' => $reusable_block instanceof \WP_Post ? $reusable_block : null,
-			);
+	public static function wrap_reusable_block_renderer( $args, $name ) {
+		if (
+			'core/block' !== $name
+			|| ! isset( $args['render_callback'] )
+			|| ! is_callable( $args['render_callback'] )
+		) {
+			return $args;
 		}
-		return $parsed_block;
+
+		$render_pattern = $args['render_callback'];
+
+		$args['render_callback'] = function ( $attributes, $content, $block ) use ( $render_pattern ) {
+			// core renders nothing at all for a block without a ref, so there is nobody to
+			// record for one
+			$ref    = isset( $attributes['ref'] ) ? $attributes['ref'] : 0;
+			$opened = ! empty( $ref );
+			if ( $opened ) {
+				self::open_reusable_block( get_post( (int) $ref ) );
+			}
+
+			try {
+				return call_user_func( $render_pattern, $attributes, $content, $block );
+			} finally {
+				if ( $opened ) {
+					self::close_reusable_block();
+				}
+			}
+		};
+
+		return $args;
 	}
 
 	/**
@@ -194,21 +199,33 @@ class Shortcode {
 	}
 
 	/**
-	 * Drop the entry record_open_reusable_block() made for a block that has finished
-	 * rendering.
+	 * Record a reusable block that is about to render.
 	 *
-	 * @param mixed $ref post the block embeds, as the block attribute spells it
+	 * @param \WP_Post|mixed $reusable_block post the block embeds, anything else if the ref named none
 	 */
-	private static function close_reusable_block( $ref ) {
-		$open = count( self::$open_reusable_blocks );
+	private static function open_reusable_block( $reusable_block ) {
+		self::$open_reusable_blocks[] = $reusable_block instanceof \WP_Post ? $reusable_block : null;
+	}
 
-		// the ref is compared exactly as it was spelled, the way core keys the guard
-		// that stops a block from embedding itself. two spellings of the same number
-		// are two blocks to core, so they have to be two blocks here as well, or a copy
-		// of a block closes the one it is nested in.
-		if ( $open > 0 && $ref === self::$open_reusable_blocks[ $open - 1 ]['ref'] ) {
-			array_pop( self::$open_reusable_blocks );
-		} // if ref doesn't match, this has already been popped by a previous call
+	/**
+	 * Drop the entry a matching open_reusable_block() call made.
+	 */
+	private static function close_reusable_block() {
+		array_pop( self::$open_reusable_blocks );
+	}
+
+	/**
+	 * @param \WP_Post $reusable_block post a block embeds
+	 * @return bool whether the innermost block still open is that same post
+	 */
+	private static function is_innermost_open_reusable_block( $reusable_block ) {
+		$open = count( self::$open_reusable_blocks );
+		if ( 0 === $open ) {
+			return false;
+		}
+
+		$innermost = self::$open_reusable_blocks[ $open - 1 ];
+		return $innermost instanceof \WP_Post && $innermost->ID === $reusable_block->ID;
 	}
 
 	/**
@@ -227,7 +244,7 @@ class Shortcode {
 	 * @return string block markup with this plugin's shortcodes resolved
 	 */
 	private function resolve_shortcodes_of_reusable_block( $block_content, $block ) {
-		global $shortcode_tags, $post;
+		global $shortcode_tags;
 
 		// only run the gate if we need to (ie, the block has the shortcode in it)
 		if ( ! isset( $shortcode_tags[ self::TAG ] ) || false === strpos( $block_content, '[' . self::TAG ) ) {
@@ -238,30 +255,29 @@ class Shortcode {
 			return $block_content;
 		}
 
-		$all_tags   = $shortcode_tags;
-		$saved_post = $post;
-		$embedding  = $saved_post instanceof \WP_Post;
-		// the post is swapped because that is where the gate reads its subject from.
+		// ensure the block being rendered is included in the authorization check,
+		// even if it was never opened or was closed before we get here.
+		$opened_here = ! self::is_innermost_open_reusable_block( $reusable_block );
+		if ( $opened_here ) {
+			self::open_reusable_block( $reusable_block );
+		}
+
+		$all_tags = $shortcode_tags;
 		// phpcs:disable WordPress.WP.GlobalVariablesOverride.Prohibited
 		try {
 			$shortcode_tags = array( self::TAG => $all_tags[ self::TAG ] );
-			$post           = $reusable_block;
-			if ( $embedding ) {
-				self::$embedding_posts[] = $saved_post;
-			}
 
 			// exactly one pass, the way the content wide pass would expand this, so that
 			// [[wp-piwik]] is peeled down to text rather than expanded.
 			//
 			// disarm_leftover_tags() below is what keeps whatever is left of ours from
 			// reaching the content wide pass, which would authorize it against the
-			// embedding post instead.
+			// embedding post alone.
 			$block_content = do_shortcode( $block_content );
 		} finally {
 			$shortcode_tags = $all_tags;
-			$post           = $saved_post;
-			if ( $embedding ) {
-				array_pop( self::$embedding_posts );
+			if ( $opened_here ) {
+				self::close_reusable_block();
 			}
 		}
 		// phpcs:enable WordPress.WP.GlobalVariablesOverride.Prohibited
@@ -412,11 +428,10 @@ class Shortcode {
 		$posts = array();
 		foreach ( self::$open_reusable_blocks as $open_block ) {
 			// a ref that named no post has nobody to authorize
-			if ( null !== $open_block['post'] ) {
-				$posts[] = $open_block['post'];
+			if ( null !== $open_block ) {
+				$posts[] = $open_block;
 			}
 		}
-		$posts = array_merge( $posts, self::$embedding_posts );
 		if ( null !== $post ) {
 			array_unshift( $posts, $post );
 		}
