@@ -580,7 +580,15 @@ class Shortcode {
 		if ( ! isset( $GLOBALS['wp_query'] ) || ! $GLOBALS['wp_query'] instanceof \WP_Query ) {
 			return false;
 		}
-		return is_preview();
+		if ( ! is_preview() ) {
+			return false;
+		}
+
+		// the preview query var is public and asks for no capability, so anybody can put
+		// it on any URL. WP_Query only hands the newest autosave to somebody who may edit
+		// the post, so everyone else is just being shown the saved post.
+		$previewed = $GLOBALS['wp_query']->get_queried_object();
+		return $previewed instanceof \WP_Post && current_user_can( 'edit_post', $previewed->ID );
 	}
 
 	/**

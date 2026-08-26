@@ -1010,6 +1010,28 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
 	}
 
+	public function test_render_should_still_render_a_shortcode_when_a_visitor_asks_for_a_preview_and_post_author_can_read_data() {
+		$post_id = $this->create_post_and_set_as_current( $this->create_author( true ) );
+		$this->set_current_post( null );
+		wp_set_current_user( 0 );
+
+		$this->go_to( add_query_arg( 'preview', 'true', get_permalink( $post_id ) ) );
+		the_post();
+
+		$this->assertTrue(
+			is_preview(),
+			'precondition: the query var alone is enough to make this a preview'
+		);
+
+		$this->render( 'module=overview' );
+
+		$this->assertSame(
+			[ 'VisitsSummary.get' ],
+			$this->get_registered_methods(),
+			'a visitor who may not edit the post did not write what is being previewed'
+		);
+	}
+
 	/**
 	 * @dataProvider get_permissions_for_nested_pattern_tests
 	 */
