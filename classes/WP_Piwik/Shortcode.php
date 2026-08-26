@@ -9,6 +9,15 @@ class Shortcode {
 
 	const TAG = 'wp-piwik';
 
+	/**
+	 * Post meta key the users who wrote a shortcode into somebody else's post are kept
+	 * under.
+	 *
+	 * The name is protected, so the custom fields box cannot write it, and the meta
+	 * is deliberately left unregistered, so the REST API cannot write it either.
+	 */
+	const AUTHORS_META_KEY = '_wp-piwik_shortcode_authors';
+
 	private $available = array(
 		'opt-out'  => 'OptOut',
 		'post'     => 'Post',
@@ -170,6 +179,55 @@ class Shortcode {
 		};
 
 		return $args;
+	}
+
+	/**
+	 * Record that somebody who is not the author of a post has written this plugin's
+	 * shortcode into it. Meant to be used with the wp_after_insert_post hook.
+	 *
+	 * The gate authorizes against post_author, which names who created a post rather
+	 * than who wrote what is in it now. Anybody with edit_others_posts can write a
+	 * shortcode into a post, or into a pattern, that somebody else is the author of,
+	 * and wp_block maps that capability the same way an ordinary post does. Everyone
+	 * who edits is collected here, so that the gate can authorize against them as well.
+	 *
+	 * @param int           $post_id     post that was written
+	 * @param \WP_Post      $post        post as it was written
+	 * @param bool          $update      whether the post already existed
+	 * @param \WP_Post|null $post_before post as it was before, null if it did not
+	 */
+	public static function record_shortcode_author( $post_id, $post, $update, $post_before ) {
+		// a revision, and an autosave with it, is a copy of a post that is recorded in
+		// its own right
+		if ( 'revision' === $post->post_type ) {
+			return;
+		}
+
+		$writer = get_current_user_id();
+		if ( 0 === $writer || (int) $post->post_author === $writer ) {
+			// nobody is signed in, so this is WP-CLI, cron or a plugin writing on nobody's
+			// behalf and there is nobody to record. or the author wrote it, whom the gate
+			// reads anyway.
+			return;
+		}
+
+		// a save that did not modify post content does not need to be processed
+		if ( $update && $post_before instanceof \WP_Post && $post_before->post_content === $post->post_content ) {
+			return;
+		}
+
+		// posts without the shortcode do not need to be processed
+		if ( false === strpos( $post->post_content, '[' . self::TAG ) ) {
+			return;
+		}
+
+		$writers = self::get_recorded_shortcode_authors( $post_id );
+		if ( in_array( $writer, $writers, true ) ) {
+			return;
+		}
+
+		$writers[] = $writer;
+		update_post_meta( $post_id, self::AUTHORS_META_KEY, $writers );
 	}
 
 	/**
@@ -437,6 +495,11 @@ class Shortcode {
 		}
 
 		$author_ids = array_map( 'intval', wp_list_pluck( $posts, 'post_author' ) );
+		foreach ( $posts as $chain_post ) {
+			// post_author only names who created a post, so anybody else who has written
+			// the shortcode into one of these has to be allowed as well
+			$author_ids = array_merge( $author_ids, self::get_recorded_shortcode_authors( $chain_post->ID ) );
+		}
 		if ( self::is_block_renderer_request() ) {
 			// this is a REST request to render a block, we need to authorize the caller
 			// in this case too
@@ -446,6 +509,15 @@ class Shortcode {
 		$author_ids = array_values( $author_ids );
 
 		return $author_ids;
+	}
+
+	/**
+	 * @param int $post_id post to read
+	 * @return int[] users other than its author who have written the shortcode into it
+	 */
+	private static function get_recorded_shortcode_authors( $post_id ) {
+		$writers = get_post_meta( $post_id, self::AUTHORS_META_KEY, true );
+		return is_array( $writers ) ? array_map( 'intval', $writers ) : array();
 	}
 
 	/**

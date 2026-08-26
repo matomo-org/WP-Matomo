@@ -807,6 +807,64 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
 	}
 
+	public function test_render_should_render_a_shortcode_someone_else_wrote_who_may_read_stats() {
+		$editor_id = self::factory()->user->create( [ 'role' => 'editor' ] );
+		( new \WP_User( $editor_id ) )->add_cap( 'wp-piwik_read_stats' );
+
+		$pattern_id = $this->create_synced_pattern(
+			$this->create_author( true ),
+			[ $this->make_paragraph_block( 'no statistics here' ) ]
+		);
+
+		wp_set_current_user( $editor_id );
+		$this->set_pattern_blocks( $pattern_id, [ $this->make_paragraph_block( '[wp-piwik module=overview]' ) ] );
+		wp_set_current_user( 0 );
+
+		$content = serialize_block( $this->make_synced_pattern_block( $pattern_id ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ), $content );
+
+		$this->render_post_content( $content );
+
+		$this->assertSame(
+			[ 'VisitsSummary.get' ],
+			$this->get_registered_methods(),
+			'requiring whoever wrote a shortcode may not stop somebody who is allowed to'
+		);
+	}
+
+	public function test_render_should_still_render_a_shortcode_after_a_save_that_left_the_content_alone() {
+		$author_id  = $this->create_author( true );
+		$pattern_id = $this->create_synced_pattern(
+			$author_id,
+			[ $this->make_paragraph_block( '[wp-piwik module=overview]' ) ]
+		);
+
+		$editor_id = self::factory()->user->create( [ 'role' => 'editor' ] );
+		$this->assertFalse(
+			user_can( $editor_id, 'wp-piwik_read_stats' ),
+			'precondition: the editor may not see the statistics'
+		);
+		wp_set_current_user( $editor_id );
+		wp_update_post(
+			[
+				'ID'         => $pattern_id,
+				'post_title' => 'a title the editor changed',
+			]
+		);
+		wp_set_current_user( 0 );
+
+		$content = serialize_block( $this->make_synced_pattern_block( $pattern_id ) );
+		$this->create_post_and_set_as_current( $author_id, $content );
+
+		$this->render_post_content( $content );
+
+		$this->assertSame(
+			[ 'VisitsSummary.get' ],
+			$this->get_registered_methods(),
+			'a save that carried the content past unchanged wrote no shortcode'
+		);
+	}
+
 	/**
 	 * @dataProvider get_permissions_for_nested_pattern_tests
 	 */
@@ -995,7 +1053,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		// core/widget-group renders what it holds twice, which results in a call to
 		// get data, but this result is thrown away, so the reader still does not see
 		// what they are not authorized to see.
-		$this->assertSame( [ 'VisitsSummary.get' ], Shortcode_Test_Request::get_registered() );
+		$this->assertSame( [ 'VisitsSummary.get' ], $this->get_registered_methods() );
 	}
 
 	public function test_render_should_authorize_a_pattern_rendered_through_the_block_renderer_route_against_the_requester() {

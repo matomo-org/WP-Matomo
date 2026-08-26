@@ -291,7 +291,7 @@ class Settings extends \WP_Piwik\Admin {
 			$this->show_checkbox(
 				'shortcode_author_check',
 				__( 'Restrict shortcodes to authorized authors', 'wp-piwik' ),
-				__( 'Only show the statistics of a shortcode if the author of the post containing it is allowed to see the statistics (see &raquo;Display stats to&laquo; above). In a reusable block, every author on the way to it has to be allowed: the block\'s own author, the authors of any blocks it is nested in, and the author of the post embedding them. Note: the opt-out shortcode is always displayed.', 'wp-piwik' ),
+				__( 'Only show the statistics of a shortcode if the author of the post containing it is allowed to see the statistics (see &raquo;Display stats to&laquo; above). In a reusable block, every author on the way to it has to be allowed: the block\'s own author, the authors of any blocks it is nested in, and the author of the post embedding them. Anybody who writes a shortcode into a post somebody else is the author of has to be allowed as well. Note: the opt-out shortcode is always displayed.', 'wp-piwik' ),
 				! self::$settings->get_global_option( 'shortcodes' ),
 				'wp-piwik-shortcode-option'
 			);

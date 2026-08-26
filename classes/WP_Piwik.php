@@ -72,6 +72,21 @@ class WP_Piwik {
 	 * Register WordPress actions
 	 */
 	private function add_actions() {
+		// the shortcode gate authorizes against the author of the post a shortcode is
+		// in, which names who created that post rather than who wrote what is in it now.
+		// this records anybody else who edits one. it is registered whether or not
+		// shortcodes are switched on, so that switching them on later does not expose
+		// what was written into a post while they were off.
+		add_action(
+			'wp_after_insert_post',
+			array(
+				'\WP_Piwik\Shortcode',
+				'record_shortcode_author',
+			),
+			10,
+			4
+		);
+
 		if ( is_admin() ) {
 			add_action(
 				'admin_menu',
