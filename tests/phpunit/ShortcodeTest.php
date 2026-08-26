@@ -683,6 +683,54 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
 	}
 
+	public function get_places_the_halves_of_a_tag_can_come_from() {
+		return [
+			'the pattern opens the tag'  => [ 'pattern', 'post' ],
+			'the pattern closes the tag' => [ 'post', 'pattern' ],
+			'one pattern for each half'  => [ 'pattern', 'pattern' ],
+		];
+	}
+
+	/**
+	 * @dataProvider get_places_the_halves_of_a_tag_can_come_from
+	 */
+	public function test_render_should_not_render_a_shortcode_assembled_across_a_block_boundary(
+		$where_the_opening_half_comes_from,
+		$where_the_closing_half_comes_from
+	) {
+		// do_blocks concatenates what each block rendered and the content wide pass
+		// scans the join, so a tag split over the seam is no tag anywhere the gate
+		// looks at it and a whole one where it does not.
+
+		$pattern_author = $this->create_author( false );
+		$post_author    = $this->create_author( true );
+
+		$halves  = [
+			'[wp-'                   => $where_the_opening_half_comes_from,
+			'piwik module=overview]' => $where_the_closing_half_comes_from,
+		];
+		$content = '';
+		foreach ( $halves as $half => $comes_from ) {
+			if ( 'post' === $comes_from ) {
+				$content .= $half;
+				continue;
+			}
+			$pattern_id = $this->create_synced_pattern( $pattern_author, [ $this->make_raw_html_block( $half ) ] );
+			$content   .= serialize_block( $this->make_synced_pattern_block( $pattern_id ) );
+		}
+
+		$this->create_post_and_set_as_current( $post_author, $content );
+
+		$output = $this->render_post_content( $content );
+
+		$this->assertStringNotContainsString(
+			'<table',
+			$output,
+			'a pattern supplied half of this tag, so its author has to pass the gate as well'
+		);
+		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
+	}
+
 	public function test_render_should_not_expand_a_shortcode_that_appears_in_the_shortcodes_own_denial_output() {
 		// a filter denies using the shortcode with an error message that includes the
 		// shortcode. the error message shortcode should not be expanded.
@@ -1517,6 +1565,23 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 			'innerBlocks'  => [],
 			'innerHTML'    => '<p>' . $text . '</p>',
 			'innerContent' => [ '<p>' . $text . '</p>' ],
+		];
+	}
+
+	/**
+	 * A block that renders its text verbatim, so a fragment sits at the very edge of
+	 * whatever the block it is placed in rendered.
+	 *
+	 * @param string $html text the block renders
+	 * @return array parsed block, as serialize_block expects it
+	 */
+	private function make_raw_html_block( $html ) {
+		return [
+			'blockName'    => 'core/html',
+			'attrs'        => [],
+			'innerBlocks'  => [],
+			'innerHTML'    => $html,
+			'innerContent' => [ $html ],
 		];
 	}
 
