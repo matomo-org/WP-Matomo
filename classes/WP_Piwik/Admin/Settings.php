@@ -13,6 +13,12 @@ namespace WP_Piwik\Admin;
 class Settings extends \WP_Piwik\Admin {
 
 	/**
+	 * Name of the field the shortcode editor tool posts, which is also the action its
+	 * nonce is made for.
+	 */
+	const CLEAR_SHORTCODE_AUTHORS = 'wp-piwik_clear_shortcode_authors';
+
+	/**
 	 * Builds and displays the settings page
 	 */
 	public function show() {
@@ -20,8 +26,22 @@ class Settings extends \WP_Piwik\Admin {
 			new \WP_Piwik\Admin\Sitebrowser( self::$wp_piwik );
 			return;
 		}
-		if ( ! empty( $_GET['clear'] ) && check_admin_referer() ) {
+
+		// the shortcode editor tool posts, so that its nonce does not travel in a URL
+		$cleared = false;
+		if ( ! empty( $_POST[ self::CLEAR_SHORTCODE_AUTHORS ] ) ) {
+			check_admin_referer( self::CLEAR_SHORTCODE_AUTHORS );
+			$this->clear_recorded_shortcode_authors(
+				isset( $_POST['post_id'] ) ? (int) $_POST['post_id'] : 0,
+				isset( $_POST['blog_id'] ) ? (int) $_POST['blog_id'] : 0
+			);
+			$cleared = true;
+		} elseif ( ! empty( $_GET['clear'] ) && check_admin_referer() ) {
 			$this->clear( 2 === (int) $_GET['clear'] );
+			$cleared = true;
+		}
+
+		if ( $cleared ) {
 			self::$wp_piwik->reset_request();
 			$page = isset( $_GET['page'] ) ? sanitize_key( wp_unslash( $_GET['page'] ) ) : '';
 			echo '<form method="post" action="?page=' . esc_attr( $page ) . '"><input type="submit" value="' . esc_attr__( 'Reload', 'wp-piwik' ) . '" /></form>';
@@ -1092,6 +1112,65 @@ class Settings extends \WP_Piwik\Admin {
 			<li><a href="<?php echo esc_attr( wp_nonce_url( admin_url( ( self::$settings->check_network_activation() ? 'network/settings' : 'options-general' ) . '.php?page=' . esc_attr( rawurlencode( $page ) ) . '&clear=1' ) ) ); ?>"><?php esc_html_e( 'Clear cache', 'wp-piwik' ); ?></a></li>
 			<li><a onclick="return confirm(<?php echo esc_attr( wp_json_encode( __( 'Are you sure you want to clear all settings?', 'wp-piwik' ) ) ); ?>)"
 					href="<?php echo esc_attr( wp_nonce_url( admin_url( ( self::$settings->check_network_activation() ? 'network/settings' : 'options-general' ) . '.php?page=' . rawurlencode( $page ) . '&clear=2' ) ) ); ?>"><?php esc_html_e( 'Reset WP-Matomo', 'wp-piwik' ); ?></a></li>
+			<li>
+				<?php esc_html_e( 'Clear the recorded shortcode editors of one post', 'wp-piwik' ); ?>:
+				<?php if ( self::$settings->check_network_activation() ) { ?>
+					<label for="wp-piwik-shortcode-editors-blog"><?php esc_html_e( 'Site ID', 'wp-piwik' ); ?></label>
+					<input type="number" min="1" step="1" class="small-text" id="wp-piwik-shortcode-editors-blog" value="<?php echo esc_attr( (string) get_current_blog_id() ); ?>" />
+				<?php } ?>
+				<label for="wp-piwik-shortcode-editors-post"><?php esc_html_e( 'Post ID', 'wp-piwik' ); ?></label>
+				<input type="number" min="1" step="1" class="small-text" id="wp-piwik-shortcode-editors-post" />
+				<button type="button" class="button" id="wp-piwik-shortcode-editors-clear"
+					data-action="<?php echo esc_attr( admin_url( ( self::$settings->check_network_activation() ? 'network/settings' : 'options-general' ) . '.php?page=' . rawurlencode( $page ) ) ); ?>"
+					data-field="<?php echo esc_attr( self::CLEAR_SHORTCODE_AUTHORS ); ?>"
+					data-nonce="<?php echo esc_attr( wp_create_nonce( self::CLEAR_SHORTCODE_AUTHORS ) ); ?>"><?php esc_html_e( 'Clear', 'wp-piwik' ); ?></button>
+				<script>
+					document.addEventListener( 'DOMContentLoaded', function () {
+						var button = document.getElementById( 'wp-piwik-shortcode-editors-clear' );
+						var post   = document.getElementById( 'wp-piwik-shortcode-editors-post' );
+						// only shown when the plugin is network activated
+						var blog = document.getElementById( 'wp-piwik-shortcode-editors-blog' );
+
+						if ( ! button || ! post ) {
+							return;
+						}
+
+						button.addEventListener( 'click', function () {
+							if ( ! post.value ) {
+								post.focus();
+								return;
+							}
+
+							var fields = {
+								_wpnonce: button.dataset.nonce,
+								post_id: post.value
+							};
+							fields[ button.dataset.field ] = '1';
+							if ( blog ) {
+								fields.blog_id = blog.value;
+							}
+
+							// the settings page is one big form already, so this one is built
+							// outside it rather than nested in it
+							var form = document.createElement( 'form' );
+							form.method = 'post';
+							form.action = button.dataset.action;
+
+							Object.keys( fields ).forEach( function ( name ) {
+								var field = document.createElement( 'input' );
+								field.type  = 'hidden';
+								field.name  = name;
+								field.value = fields[ name ];
+								form.appendChild( field );
+							} );
+
+							document.body.appendChild( form );
+							form.submit();
+						} );
+					} );
+				</script>
+				<br /><span class="description"><?php esc_html_e( 'A shortcode is only shown if everybody who has written one into the post is allowed to see the statistics, and the post remembers old editors even after their text is gone. Use this if a shortcode stopped being shown after somebody who is not allowed to see Matomo data edited the post it is in.', 'wp-piwik' ); ?></span>
+			</li>
 		</ol>
 		<h3><?php esc_html_e( 'Latest support threads on WordPress.org', 'wp-piwik' ); ?></h3>
 		<?php
@@ -1167,6 +1246,47 @@ class Settings extends \WP_Piwik\Admin {
 			$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE '_transient_timeout_wp-piwik_%'" );
 		}
 		$this->show_box( 'updated', 'yes', esc_html__( 'Cache cleared.', 'wp-piwik' ) );
+	}
+
+	/**
+	 * Forget who has written a shortcode into a post.
+	 *
+	 * @param int $post_id post to forget
+	 * @param int $blog_id blog the post is on, 0 for the one being looked at
+	 */
+	private function clear_recorded_shortcode_authors( $post_id, $blog_id = 0 ) {
+		$switched = $blog_id > 0
+			&& self::$settings->check_network_activation()
+			&& get_current_blog_id() !== $blog_id;
+		if ( $switched ) {
+			switch_to_blog( $blog_id );
+		}
+
+		try {
+			// the settings page already asks for manage_options, so this only rules out a
+			// post that is not there
+			$post = $post_id > 0 ? get_post( $post_id ) : null;
+			if ( $post instanceof \WP_Post && current_user_can( 'edit_post', $post->ID ) ) {
+				\WP_Piwik\Shortcode::forget_recorded_shortcode_authors( $post->ID );
+				$type    = 'updated';
+				$icon    = 'yes';
+				$message = sprintf(
+					/* translators: %d: post ID */
+					esc_html__( 'Cleared the recorded shortcode editors of post %d.', 'wp-piwik' ),
+					$post->ID
+				);
+			} else {
+				$type    = 'error';
+				$icon    = 'no';
+				$message = esc_html__( 'There is no post with that ID that you are allowed to edit.', 'wp-piwik' );
+			}
+		} finally {
+			if ( $switched ) {
+				restore_current_blog();
+			}
+		}
+
+		$this->show_box( $type, $icon, $message );
 	}
 
 	/**

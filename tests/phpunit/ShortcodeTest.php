@@ -832,6 +832,68 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		);
 	}
 
+	public function test_forget_recorded_shortcode_authors_should_let_a_shortcode_an_editor_wrote_render_again() {
+		$author_id  = $this->create_author( true );
+		$editor_id  = self::factory()->user->create( [ 'role' => 'editor' ] );
+		$pattern_id = $this->create_synced_pattern(
+			$author_id,
+			[ $this->make_paragraph_block( 'no statistics here' ) ]
+		);
+
+		wp_set_current_user( $editor_id );
+		$this->set_pattern_blocks( $pattern_id, [ $this->make_paragraph_block( '[wp-piwik module=overview]' ) ] );
+		wp_set_current_user( 0 );
+
+		$content = serialize_block( $this->make_synced_pattern_block( $pattern_id ) );
+		$this->create_post_and_set_as_current( $author_id, $content );
+
+		$this->render_post_content( $content );
+		$this->assertSame(
+			[],
+			Shortcode_Test_Request::get_registered(),
+			'precondition: the editor the record names may not see the statistics'
+		);
+
+		Shortcode::forget_recorded_shortcode_authors( $pattern_id );
+		$output = $this->render_post_content( $content );
+
+		$this->assertStringContainsString( '<table', $output );
+		$this->assertSame( [ 'VisitsSummary.get' ], $this->get_registered_methods() );
+	}
+
+	public function test_forget_recorded_shortcode_authors_should_leave_the_record_of_another_post_alone() {
+		$author_id   = $this->create_author( true );
+		$editor_id   = self::factory()->user->create( [ 'role' => 'editor' ] );
+		$forgiven_id = $this->create_synced_pattern( $author_id, [] );
+		$other_id    = $this->create_synced_pattern( $author_id, [] );
+
+		wp_set_current_user( $editor_id );
+		foreach ( [ $forgiven_id, $other_id ] as $pattern_id ) {
+			$this->set_pattern_blocks( $pattern_id, [ $this->make_paragraph_block( '[wp-piwik module=overview]' ) ] );
+		}
+		wp_set_current_user( 0 );
+
+		$this->assertNotEmpty( get_post_meta( $forgiven_id, Shortcode::AUTHORS_META_KEY, true ) );
+		$this->assertNotEmpty( get_post_meta( $other_id, Shortcode::AUTHORS_META_KEY, true ) );
+
+		Shortcode::forget_recorded_shortcode_authors( $forgiven_id );
+
+		$this->assertEmpty( get_post_meta( $forgiven_id, Shortcode::AUTHORS_META_KEY, true ) );
+		$this->assertNotEmpty( get_post_meta( $other_id, Shortcode::AUTHORS_META_KEY, true ) );
+
+		$content = serialize_block( $this->make_synced_pattern_block( $other_id ) );
+		$this->create_post_and_set_as_current( $author_id, $content );
+
+		$output = $this->render_post_content( $content );
+
+		$this->assertStringNotContainsString(
+			'<table',
+			$output,
+			'forgetting one post may not forgive the editor everywhere else'
+		);
+		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
+	}
+
 	public function test_render_should_still_render_a_shortcode_after_a_save_that_left_the_content_alone() {
 		$author_id  = $this->create_author( true );
 		$pattern_id = $this->create_synced_pattern(

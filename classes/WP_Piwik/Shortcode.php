@@ -231,6 +231,16 @@ class Shortcode {
 	}
 
 	/**
+	 * Forget everybody record_shortcode_author() has recorded for a single post.
+	 *
+	 * @param int $post_id post to forget
+	 * @return bool whether there was anything recorded for it
+	 */
+	public static function forget_recorded_shortcode_authors( $post_id ) {
+		return delete_post_meta( $post_id, self::AUTHORS_META_KEY );
+	}
+
+	/**
 	 * Note which route a REST request is asking for. Meant to be used with the
 	 * rest_request_before_callbacks hook.
 	 *
