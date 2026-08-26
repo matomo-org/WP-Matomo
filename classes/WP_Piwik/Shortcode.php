@@ -190,7 +190,7 @@ class Shortcode {
 		$open = count( self::$open_reusable_blocks );
 		if ( $open > 0 && $ref === self::$open_reusable_blocks[ $open - 1 ]['ref'] ) {
 			array_pop( self::$open_reusable_blocks );
-		}
+		} // if ref doesn't match, this has already been popped by a previous call
 	}
 
 	/**

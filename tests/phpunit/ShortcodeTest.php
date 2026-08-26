@@ -599,6 +599,32 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		];
 	}
 
+	public function test_render_should_leave_an_escaped_shortcode_in_a_reusable_block_to_the_reader_as_text() {
+		// an author who escaped the tag on purpose still has to get text rather than a resolved widget.
+
+		$author_id  = $this->create_author( true );
+		$pattern_id = $this->create_synced_pattern(
+			$author_id,
+			[ $this->make_paragraph_block( '[[wp-piwik module=overview]]' ) ]
+		);
+		$content    = serialize_block( $this->make_synced_pattern_block( $pattern_id ) );
+		$this->create_post_and_set_as_current( $author_id, $content );
+
+		$output = $this->render_post_content( $content );
+
+		$this->assertStringNotContainsString(
+			'<table',
+			$output,
+			'the bracket escape has to keep working inside a pattern, as it does in a post'
+		);
+		$this->assertStringContainsString(
+			'&#91;wp-piwik module=overview&#93;',
+			$output,
+			'the escaped shortcode has to reach the reader as text'
+		);
+		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
+	}
+
 	public function test_render_should_authorize_a_pattern_override_against_the_embedding_post_author() {
 		$pattern_id = $this->create_synced_pattern(
 			$this->create_author( true ),
@@ -808,6 +834,45 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
 	}
 
+	public function test_render_should_authorize_a_nested_pattern_against_an_ancestor_that_also_embeds_itself() {
+		$target_id = $this->create_synced_pattern(
+			$this->create_author( true ),
+			[ $this->make_paragraph_block( 'no statistics here', true ) ]
+		);
+		$this->require_working_pattern_overrides( $target_id );
+
+		// core does not normalize refs in the recursion guard that stops a pattern from embedding
+		// itself by the ref verbatim, so a ref spelled as a numeric string is a different pattern
+		// to it and gets rendered rather than halted. closing the block that renders has
+		// to tell that copy apart from the one it is nested in, however the two spell
+		// the same ref.
+		$outer_id = $this->create_synced_pattern( $this->create_author( false ), [] );
+		$this->set_pattern_blocks(
+			$outer_id,
+			[
+				$this->make_synced_pattern_block( ' ' . $outer_id ), // ' 5' will be converted to 05 when used in core WordPress
+				$this->make_synced_pattern_block( $target_id, 'injected shortcode: [wp-piwik module=overview]' ),
+			]
+		);
+
+		$content = serialize_block( $this->make_synced_pattern_block( $outer_id ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ), $content );
+
+		$output = $this->render_post_content( $content );
+
+		$this->assertStringContainsString(
+			'injected shortcode',
+			$output,
+			'the shortcode override was not processed'
+		);
+		$this->assertStringNotContainsString(
+			'<table',
+			$output,
+			'the pattern in between supplied the text, so it has to pass the gate as well'
+		);
+		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
+	}
+
 	public function test_render_should_authorize_a_pattern_rendered_through_the_block_renderer_route_against_the_requester() {
 		// the route takes the block attributes from the request, so the override text
 		// belongs to whoever asked for the render rather than to the pattern's author
@@ -847,6 +912,50 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 			'<table',
 			$rendered,
 			'the requester supplied the text, so the requester has to pass the gate'
+		);
+		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
+	}
+
+	public function test_render_should_authorize_the_block_renderer_route_against_the_requester_across_a_nested_rest_request() {
+		// anything that renders while the route is being served may itself ask the REST
+		// server for something, and the route the gate reads has to survive that.
+
+		$pattern_id = $this->create_synced_pattern(
+			$this->create_author( true ),
+			[ $this->make_paragraph_block( 'no statistics here', true ) ]
+		);
+		$this->require_working_pattern_overrides( $pattern_id );
+
+		$requester = self::factory()->user->create( [ 'role' => 'contributor' ] );
+		$this->assertFalse( user_can( $requester, 'wp-piwik_read_stats' ), 'precondition: the requester may not see the statistics' );
+		wp_set_current_user( $requester );
+		$this->set_current_post( null );
+
+		$this->dispatch_a_nested_rest_request_while_a_block_renders();
+
+		$request = new \WP_REST_Request( 'GET', '/wp/v2/block-renderer/core/block' );
+		$request->set_param( 'context', 'edit' );
+		$request->set_param(
+			'attributes',
+			[
+				'ref'     => $pattern_id,
+				'content' => [ self::OVERRIDABLE_NAME => [ 'content' => 'injected shortcode: [wp-piwik module=overview]' ] ],
+			]
+		);
+		$response = rest_get_server()->dispatch( $request );
+		$rendered = $response->get_data();
+		$rendered = isset( $rendered['rendered'] ) ? $rendered['rendered'] : '';
+
+		$this->assertSame( 200, $response->get_status(), 'precondition: the route rendered the pattern for the requester' );
+		$this->assertStringContainsString(
+			'injected shortcode',
+			$rendered,
+			'the shortcode override was not processed'
+		);
+		$this->assertStringNotContainsString(
+			'<table',
+			$rendered,
+			'the requester still supplied the text, whatever else asked the REST server for something meanwhile'
 		);
 		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
 	}
@@ -1053,6 +1162,43 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 				'post_author'  => $author_id,
 				'post_content' => serialize_blocks( $blocks ),
 			]
+		);
+	}
+
+	/**
+	 * Replace what a pattern consists of. Used for a pattern that has to embed its own ID.
+	 *
+	 * @param int     $pattern_id wp_block post ID
+	 * @param array[] $blocks     parsed blocks the pattern consists of
+	 */
+	private function set_pattern_blocks( $pattern_id, $blocks ) {
+		wp_update_post(
+			[
+				'ID'           => $pattern_id,
+				'post_content' => serialize_blocks( $blocks ),
+			]
+		);
+	}
+
+	/**
+	 * Make one block ask the REST server for something while it renders, the way a
+	 * block that fetches its own data would.
+	 */
+	private function dispatch_a_nested_rest_request_while_a_block_renders() {
+		$dispatched = false;
+		add_filter(
+			// the plugin resolves the shortcodes of a block on the same hook at 10
+			// phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
+			'render_block',
+			function ( $block_content, $block ) use ( &$dispatched ) {
+				if ( ! $dispatched && 'core/block' === ( isset( $block['blockName'] ) ? $block['blockName'] : '' ) ) {
+					$dispatched = true;
+					rest_do_request( new \WP_REST_Request( 'GET', '/wp/v2/types' ) );
+				}
+				return $block_content;
+			},
+			9,
+			2
 		);
 	}
 
