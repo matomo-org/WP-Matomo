@@ -324,7 +324,8 @@ abstract class Widget {
 				break;
 		}
 
-		if ( isset( $_GET['date'] ) ) {
+		// only allow overriding the date via query parameter when not rendering the shortcode
+		if ( ! $this->is_shortcode && isset( $_GET['date'] ) ) {
 			$date = intval( wp_unslash( $_GET['date'] ) );
 			// phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
 			$description = $this->date_format( wp_unslash( $_GET['date'] ), $period );

@@ -225,6 +225,15 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		$this->assertSame( 'last30', $parameters['date'] );
 	}
 
+	public function test_render_should_ignore_a_date_query_parameter() {
+		$_GET['date'] = '20200101';
+
+		$this->render( 'module=overview' );
+
+		$parameters = $this->get_registered_parameters( 'VisitsSummary.get' );
+		$this->assertSame( 'yesterday', $parameters['date'], 'the default date setting decides, not the reader' );
+	}
+
 	public function test_render_should_drop_a_malformed_language() {
 		$output = $this->render( 'module=opt-out language=de&idsite=9' );
 
