@@ -546,6 +546,21 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		$this->assertArrayHasKey( 'wp-piwik', $GLOBALS['shortcode_tags'], 'the narrowed tag list has to be restored' );
 	}
 
+	public function test_render_should_report_on_the_embedding_post_when_a_pattern_asks_for_the_post_module() {
+		$author_id  = $this->create_author( true );
+		$pattern_id = $this->create_synced_pattern(
+			$author_id,
+			[ $this->make_paragraph_block( '[wp-piwik module=post period=day date=today]' ) ]
+		);
+		$content    = serialize_block( $this->make_synced_pattern_block( $pattern_id ) );
+		$post_id    = $this->create_post_and_set_as_current( $author_id, $content );
+
+		$this->render_post_content( $content );
+
+		$parameters = $this->get_registered_parameters( 'Actions.getPageUrl' );
+		$this->assertSame( get_permalink( $post_id ), $parameters['pageUrl'] );
+	}
+
 	public function test_render_should_leave_other_shortcodes_in_a_reusable_block_to_the_usual_pass() {
 		$block_id = self::factory()->post->create(
 			[
@@ -755,6 +770,39 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
 	}
 
+	public function test_render_should_not_render_a_shortcode_someone_else_wrote_into_a_pattern() {
+		$editor_id = self::factory()->user->create( [ 'role' => 'editor' ] );
+		$this->assertFalse(
+			user_can( $editor_id, 'wp-piwik_read_stats' ),
+			'precondition: the editor may not see the statistics'
+		);
+
+		$pattern_id = $this->create_synced_pattern(
+			$this->create_author( true ),
+			[ $this->make_paragraph_block( 'no statistics here' ) ]
+		);
+
+		wp_set_current_user( $editor_id );
+		$this->assertTrue(
+			current_user_can( 'edit_post', $pattern_id ),
+			'precondition: the editor may rewrite a pattern somebody else created'
+		);
+		$this->set_pattern_blocks( $pattern_id, [ $this->make_paragraph_block( '[wp-piwik module=overview]' ) ] );
+		wp_set_current_user( 0 );
+
+		$content = serialize_block( $this->make_synced_pattern_block( $pattern_id ) );
+		$this->create_post_and_set_as_current( $this->create_author( true ), $content );
+
+		$output = $this->render_post_content( $content );
+
+		$this->assertStringNotContainsString(
+			'<table',
+			$output,
+			'the editor wrote the shortcode, so the editor has to pass the gate'
+		);
+		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
+	}
+
 	/**
 	 * @dataProvider get_permissions_for_nested_pattern_tests
 	 */
@@ -901,6 +949,42 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 			'<table',
 			$output,
 			'the pattern in between supplied the text, so it has to pass the gate as well'
+		);
+		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
+	}
+
+	public function test_render_should_authorize_a_nested_pattern_against_an_ancestor_a_block_widget_rendered() {
+		// core/widget-group renders what it holds with a bare WP_Block::render(), which
+		// skips render_block_data. core/navigation and its two link blocks also render
+		// their children the same way.
+
+		$inner_id = $this->create_synced_pattern(
+			$this->create_author( true ),
+			[ $this->make_paragraph_block( 'no statistics here', true ) ]
+		);
+		$this->require_working_pattern_overrides( $inner_id );
+
+		$outer_id = $this->create_synced_pattern(
+			$this->create_author( false ),
+			[ $this->make_synced_pattern_block( $inner_id, 'injected shortcode: [wp-piwik module=overview]' ) ]
+		);
+
+		$content = serialize_block(
+			$this->make_widget_group_block( [ $this->make_synced_pattern_block( $outer_id ) ] )
+		);
+		$this->create_post_and_set_as_current( $this->create_author( true ), $content );
+
+		$output = $this->render_post_content( $content );
+
+		$this->assertStringContainsString(
+			'injected shortcode',
+			$output,
+			'the shortcode override was not processed'
+		);
+		$this->assertStringNotContainsString(
+			'<table',
+			$output,
+			'the pattern in between supplied the text, whichever block rendered it'
 		);
 		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
 	}
@@ -1178,6 +1262,26 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 			'innerBlocks'  => [],
 			'innerHTML'    => '',
 			'innerContent' => [],
+		];
+	}
+
+	/**
+	 * Wrap blocks in the block a sidebar widget is made of.
+	 *
+	 * @param array[] $blocks parsed blocks the widget group holds
+	 * @return array parsed block, as serialize_block expects it
+	 */
+	private function make_widget_group_block( $blocks ) {
+		return [
+			'blockName'    => 'core/widget-group',
+			'attrs'        => [],
+			'innerBlocks'  => $blocks,
+			'innerHTML'    => '<div class="wp-block-widget-group"></div>',
+			'innerContent' => array_merge(
+				[ '<div class="wp-block-widget-group">' ],
+				array_fill( 0, count( $blocks ), null ),
+				[ '</div>' ]
+			),
 		];
 	}
 
