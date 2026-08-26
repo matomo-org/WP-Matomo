@@ -320,7 +320,11 @@ class Shortcode {
 		}
 		$reusable_block = get_post( (int) $block['attrs']['ref'] );
 		if ( ! $reusable_block instanceof \WP_Post ) {
-			return $block_content;
+			// core renders nothing for a ref that names no post, so the content can only
+			// have come from somewhere this method knows nothing about. there is no author
+			// to authorize with, so it is disarmed rather than handed on to the content
+			// wide pass, which would authorize it against the embedding post alone.
+			return $this->disarm_leftover_tags( $block_content );
 		}
 
 		// ensure the block being rendered is included in the authorization check,

@@ -1263,7 +1263,7 @@ class Settings extends \WP_Piwik\Admin {
 		}
 
 		try {
-			// the settings page already asks for manage_options, so this only rules out a
+			// the settings page already asks for activate_plugins or manage_sites, so this only rules out a
 			// post that is not there
 			$post = $post_id > 0 ? get_post( $post_id ) : null;
 			if ( $post instanceof \WP_Post && current_user_can( 'edit_post', $post->ID ) ) {

@@ -85,6 +85,11 @@ function wp_matomo_uninstall() {
 		'dashboard_revision',
 	);
 
+	// \WP_Piwik\Shortcode::AUTHORS_META_KEY, spelled out because uninstall.php runs
+	// without the plugin's classes. the leading underscore that makes it protected
+	// meta also keeps it out of the two meta_key sweeps below.
+	$shortcode_authors_meta_key = '_wp-piwik_shortcode_authors';
+
 	if ( function_exists( 'is_multisite' ) && is_multisite() ) {
 		// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$ary_blogs = $wpdb->get_results( "SELECT blog_id FROM {$wpdb->blogs} ORDER BY blog_id", ARRAY_A );
@@ -95,6 +100,7 @@ function wp_matomo_uninstall() {
 				}
 				switch_to_blog( $ary_blog['blog_id'] );
 				$wpdb->query( "DELETE FROM $wpdb->postmeta WHERE meta_key LIKE 'wp-piwik_%'" );
+				$wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->postmeta WHERE meta_key = %s", $shortcode_authors_meta_key ) );
 				$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE '_transient_wp-piwik_%'" );
 				$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE '_transient_timeout_wp-piwik_%'" );
 				restore_current_blog();
@@ -119,6 +125,7 @@ function wp_matomo_uninstall() {
 	delete_option( 'wp-piwik-notices' );
 
 	$wpdb->query( "DELETE FROM $wpdb->postmeta WHERE meta_key LIKE 'wp-piwik-%'" );
+	$wpdb->query( $wpdb->prepare( "DELETE FROM $wpdb->postmeta WHERE meta_key = %s", $shortcode_authors_meta_key ) );
 	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE '_transient_wp-piwik_%'" );
 	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE '_transient_timeout_wp-piwik_%'" );
 }
