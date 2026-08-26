@@ -698,10 +698,6 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		$where_the_opening_half_comes_from,
 		$where_the_closing_half_comes_from
 	) {
-		// do_blocks concatenates what each block rendered and the content wide pass
-		// scans the join, so a tag split over the seam is no tag anywhere the gate
-		// looks at it and a whole one where it does not.
-
 		$pattern_author = $this->create_author( false );
 		$post_author    = $this->create_author( true );
 
@@ -1569,8 +1565,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 	}
 
 	/**
-	 * A block that renders its text verbatim, so a fragment sits at the very edge of
-	 * whatever the block it is placed in rendered.
+	 * A block that renders its text verbatim.
 	 *
 	 * @param string $html text the block renders
 	 * @return array parsed block, as serialize_block expects it

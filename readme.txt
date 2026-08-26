@@ -152,6 +152,7 @@ Add WP-Matomo to your /wp-content/plugins folder and enable it as [Network Plugi
 * Security: a reusable block rendered through the REST block renderer is now authorized against the author of the request as well, because that request supplies the block's attributes.
 * Security: a shortcode is now authorized against anybody who has written one into a post or reusable block somebody else is the author of. The Support tab has a tool to clear that record for a post.
 * Security: a shortcode in a post preview is now authorized against whoever is reading the preview as well, because a preview shows the newest autosave rather than the saved post.
+* Security: a shortcode written half into a reusable block and half into what follows it is no longer rendered, as neither half was a shortcode when the block was authorized.
 * Security: the url attribute of the post shortcode is now restricted to posts the author is allowed to read.
 * Security: shortcodes ignore period, date and language attributes Matomo would not accept, and fall back to their default instead.
 * Bug fix: the post shortcode no longer triggers a request when there is no post to report on.

@@ -314,10 +314,18 @@ class Shortcode {
 	private function resolve_shortcodes_of_reusable_block( $block_content, $block ) {
 		global $shortcode_tags;
 
-		// only run the gate if we need to (ie, the block has the shortcode in it)
-		if ( ! isset( $shortcode_tags[ self::TAG ] ) || false === strpos( $block_content, '[' . self::TAG ) ) {
+		// nothing can expand our tag, so there is nothing to keep from the content wide pass
+		if ( ! isset( $shortcode_tags[ self::TAG ] ) ) {
 			return $block_content;
 		}
+
+		// only run the authorization gate if we need to (ie, the block has a whole shortcode in it).
+		if ( false === strpos( $block_content, '[' . self::TAG ) ) {
+			// disarm the edges no matter what, because half a tag here and half a tag
+			// in the next block will make a whole tag once do_blocks joins them.
+			return $this->disarm_leftover_tags( $block_content );
+		}
+
 		$reusable_block = get_post( (int) $block['attrs']['ref'] );
 		if ( ! $reusable_block instanceof \WP_Post ) {
 			// core renders nothing for a ref that names no post, so the content can only
@@ -357,18 +365,63 @@ class Shortcode {
 		return $this->disarm_leftover_tags( $block_content );
 	}
 
+	/**
+	 * Keep whatever is left of this plugin's shortcodes in a rendered block from
+	 * reaching the content wide pass, which would authorize it against the embedding
+	 * post alone.
+	 *
+	 * Every replacement is the character reference of the character it replaces, so the
+	 * reader is left the same text either way.
+	 *
+	 * @param string $block_content rendered block markup
+	 * @return string the markup with this plugin's tags, whole and half, neutralised
+	 */
 	private function disarm_leftover_tags( $block_content ) {
 		$disarmed = preg_replace(
-			'/\[(' . preg_quote( self::TAG, '/' ) . '(?![\w-]))/',
+			array(
+				// a whole tag, the way core recognises one
+				'/\[(' . preg_quote( self::TAG, '/' ) . '(?![\w-]))/',
+				// a bracket this block ends on, which whatever renders next could finish
+				'/\[(' . self::get_tag_prefixes_pattern() . ')$/',
+			),
 			'&#091;$1',
 			$block_content
 		);
 		if ( null === $disarmed ) {
-			error_log( 'wp-piwik: could not disarm the shortcodes of a reusable block (preg_last_error ' . preg_last_error() . '), dropped its content' );
-			return '';
+			return $this->drop_undisarmable_content();
+		}
+
+		// escape the first character of the block content that could potentially finish a shortcode
+		// when joined with the previously rendered block.
+		$disarmed = preg_replace_callback(
+			'/^[' . self::get_tag_characters_pattern() . ']/',
+			static function ( $matches ) {
+				return '&#' . ord( $matches[0] ) . ';';
+			},
+			$disarmed
+		);
+		if ( null === $disarmed ) {
+			return $this->drop_undisarmable_content();
 		}
 
 		return $disarmed;
+	}
+
+	private function drop_undisarmable_content() {
+		error_log( 'wp-piwik: could not disarm the shortcodes of a reusable block (preg_last_error ' . preg_last_error() . '), dropped its content' );
+		return '';
+	}
+
+	private static function get_tag_prefixes_pattern() {
+		$prefixes = array();
+		for ( $length = strlen( self::TAG ) - 1; $length >= 0; $length-- ) {
+			$prefixes[] = preg_quote( substr( self::TAG, 0, $length ), '/' );
+		}
+		return implode( '|', $prefixes );
+	}
+
+	private static function get_tag_characters_pattern() {
+		return preg_quote( implode( '', array_unique( str_split( self::TAG ) ) ), '/' );
 	}
 
 	/**
