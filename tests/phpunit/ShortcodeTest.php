@@ -55,7 +55,8 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 
 		add_shortcode( Shortcode::TAG, array( $GLOBALS['wp-piwik'], 'shortcode' ) );
 		add_filter( 'render_block', array( $GLOBALS['wp-piwik'], 'render_shortcodes_in_reusable_block' ), 10, 2 );
-		add_filter( 'render_block_data', array( '\WP_Piwik\Shortcode', 'note_open_reusable_block' ), 10, 1 );
+		add_filter( 'render_block_data', array( '\WP_Piwik\Shortcode', 'record_open_reusable_block' ), 10, 1 );
+		add_filter( 'rest_pre_dispatch', array( '\WP_Piwik\Shortcode', 'note_rest_route' ), 10, 3 );
 
 		wp_set_current_user( 0 );
 		$this->set_current_post( null );

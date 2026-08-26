@@ -71,11 +71,23 @@ class Shortcode {
 	 *
 	 * A pattern can embed another pattern and hand it text through pattern
 	 * overrides, so every pattern on the way down could have written a shortcode the
-	 * innermost one renders. Entries are null where the ref named no post.
+	 * innermost one renders.
 	 *
-	 * @var array<\WP_Post|null>
+	 * Every entry carries the ref it was opened for, so that closing one can tell
+	 * whether it is really the one on top. The post is null where the ref named no
+	 * post.
+	 *
+	 * @var array<array{ref: int, post: \WP_Post|null}>
 	 */
 	private static $open_reusable_blocks = array();
+
+	/**
+	 * Route of the REST request being dispatched, an empty string outside one.
+	 * Used to detect if we are in the block rendering REST request.
+	 *
+	 * @var string
+	 */
+	private static $rest_route = '';
 
 	/**
 	 * @param \WP_Piwik $wp_piwik
@@ -128,27 +140,57 @@ class Shortcode {
 		try {
 			return $this->resolve_shortcodes_of_reusable_block( $block_content, $block );
 		} finally {
-			// pop the entry note_open_reusable_block() added
-			array_pop( self::$open_reusable_blocks );
+			self::close_reusable_block( (int) $block['attrs']['ref'] );
 		}
 	}
 
 	/**
-	 * Note that a reusable block is about to render. Meant to be used with the
+	 * Record that a reusable block is about to render. Meant to be used with the
 	 * render_block_data hook.
 	 *
 	 * @param array $parsed_block parsed block
 	 * @return array the parsed block, unchanged
 	 */
-	public static function note_open_reusable_block( $parsed_block ) {
+	public static function record_open_reusable_block( $parsed_block ) {
 		if ( self::is_reusable_block( $parsed_block ) ) {
-			$reusable_block = get_post( (int) $parsed_block['attrs']['ref'] );
+			$ref            = (int) $parsed_block['attrs']['ref'];
+			$reusable_block = get_post( $ref );
 
-			// a ref that resolves to nothing is still pushed, so that the array_pop() in
-			// render_reusable_block() does not pop an empty array
-			self::$open_reusable_blocks[] = $reusable_block instanceof \WP_Post ? $reusable_block : null;
+			// a ref that resolves to nothing is still noted, so that closing the block
+			// finds the entry it expects
+			self::$open_reusable_blocks[] = array(
+				'ref'  => $ref,
+				'post' => $reusable_block instanceof \WP_Post ? $reusable_block : null,
+			);
 		}
 		return $parsed_block;
+	}
+
+	/**
+	 * Note which route a REST request is asking for. Meant to be used with the
+	 * rest_pre_dispatch hook.
+	 *
+	 * @param mixed            $result  response to send instead of dispatching, if any
+	 * @param mixed            $server  the REST server
+	 * @param \WP_REST_Request $request request being dispatched
+	 * @return mixed the result, unchanged
+	 */
+	public static function note_rest_route( $result, $server, $request ) {
+		self::$rest_route = (string) $request->get_route();
+		return $result;
+	}
+
+	/**
+	 * Drop the entry record_open_reusable_block() made for a block that has finished
+	 * rendering.
+	 *
+	 * @param int $ref post the block embeds
+	 */
+	private static function close_reusable_block( $ref ) {
+		$open = count( self::$open_reusable_blocks );
+		if ( $open > 0 && $ref === self::$open_reusable_blocks[ $open - 1 ]['ref'] ) {
+			array_pop( self::$open_reusable_blocks );
+		}
 	}
 
 	/**
@@ -350,18 +392,47 @@ class Shortcode {
 	 * @return int[] author IDs, without duplicates
 	 */
 	private function get_authors_to_authorize( $post ) {
-		$posts = array_merge( self::$open_reusable_blocks, self::$embedding_posts );
+		$posts = array();
+		foreach ( self::$open_reusable_blocks as $open_block ) {
+			// a ref that named no post has nobody to authorize
+			if ( null !== $open_block['post'] ) {
+				$posts[] = $open_block['post'];
+			}
+		}
+		$posts = array_merge( $posts, self::$embedding_posts );
 		if ( null !== $post ) {
 			array_unshift( $posts, $post );
 		}
-		// drop the refs that named no post
-		$posts = array_filter( $posts );
 
 		$author_ids = array_map( 'intval', wp_list_pluck( $posts, 'post_author' ) );
+		if ( self::is_block_renderer_request() ) {
+			// this is a REST request to render a block, we need to authorize the caller
+			// in this case too
+			$author_ids[] = get_current_user_id();
+		}
 		$author_ids = array_unique( $author_ids );
 		$author_ids = array_values( $author_ids );
 
 		return $author_ids;
+	}
+
+	/**
+	 * Checks whether the REST block renderer is what is rendering right now.
+	 *
+	 * /wp/v2/block-renderer/<name> renders a block from attributes the request
+	 * carries and asks for nothing beyond edit_posts. A requester can therefore
+	 * point it at somebody else's pattern and, through a pattern override, supply
+	 * the text it renders, which makes them an author of it like an embedding post
+	 * would be.
+	 *
+	 * @return bool
+	 */
+	private static function is_block_renderer_request() {
+		$in_rest_request = function_exists( 'wp_is_rest_endpoint' )
+			? wp_is_rest_endpoint()
+			: ( defined( 'REST_REQUEST' ) && REST_REQUEST );
+
+		return $in_rest_request && 0 === strpos( self::$rest_route, '/wp/v2/block-renderer/' );
 	}
 
 	/**

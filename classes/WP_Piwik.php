@@ -314,10 +314,21 @@ class WP_Piwik {
 				'render_block_data',
 				array(
 					'\WP_Piwik\Shortcode',
-					'note_open_reusable_block',
+					'record_open_reusable_block',
 				),
 				10,
 				1
+			);
+			// the REST block renderer renders a block from attributes the request
+			// carries, so the gate has to know when that is what it is looking at
+			add_filter(
+				'rest_pre_dispatch',
+				array(
+					'\WP_Piwik\Shortcode',
+					'note_rest_route',
+				),
+				10,
+				3
 			);
 		}
 	}
