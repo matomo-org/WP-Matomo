@@ -647,6 +647,33 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
 	}
 
+	public function test_render_should_disarm_a_shortcode_of_a_reusable_block_whose_post_is_gone() {
+		$block_id      = self::factory()->post->create(
+			[
+				'post_type'    => 'wp_block',
+				'post_status'  => 'publish',
+				'post_author'  => $this->create_author( false ),
+				'post_content' => '[wp-piwik module=overview]',
+			]
+		);
+		$block_content = get_post( $block_id )->post_content;
+		wp_delete_post( $block_id, true );
+
+		// an embedding author who may see the statistics is what the shortcode would be
+		// authorized against if it were handed on
+		$this->create_post_and_set_as_current( $this->create_author( true ) );
+
+		$output = $this->render_reusable_block( $block_id, $block_content );
+
+		$this->assertStringContainsString(
+			'&#091;wp-piwik module=overview]',
+			$output,
+			'a tag with nobody left to authorize it has to be disarmed rather than handed on'
+		);
+		$this->assertStringNotContainsString( '<table', do_shortcode( $output ) );
+		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
+	}
+
 	public function test_render_should_not_expand_a_shortcode_that_appears_in_the_shortcodes_own_denial_output() {
 		// a filter denies using the shortcode with an error message that includes the
 		// shortcode. the error message shortcode should not be expanded.
@@ -925,6 +952,62 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 			$this->get_registered_methods(),
 			'a save that carried the content past unchanged wrote no shortcode'
 		);
+	}
+
+	public function test_render_should_not_render_a_shortcode_an_editor_only_put_in_an_autosave_and_previews() {
+		$author_id = $this->create_author( true );
+		$post_id   = self::factory()->post->create(
+			[
+				'post_author'  => $author_id,
+				'post_status'  => 'publish',
+				'post_content' => 'no statistics here',
+			]
+		);
+
+		$editor_id = self::factory()->user->create( [ 'role' => 'editor' ] );
+		$this->assertFalse(
+			user_can( $editor_id, 'wp-piwik_read_stats' ),
+			'precondition: the editor may not see the statistics'
+		);
+		wp_set_current_user( $editor_id );
+		$this->set_current_post( null );
+
+		$request = new \WP_REST_Request( 'POST', '/wp/v2/posts/' . $post_id . '/autosaves' );
+		$request->set_param( 'id', $post_id );
+		$request->set_param( 'content', '[wp-piwik module=overview]' );
+		$response = rest_get_server()->dispatch( $request );
+		$this->assertSame(
+			200,
+			$response->get_status(),
+			'precondition: the editor autosaved the post without saving it'
+		);
+		$this->assertSame(
+			'no statistics here',
+			get_post( $post_id )->post_content,
+			'precondition: the autosave left the post itself alone'
+		);
+
+		// what _show_post_preview() does for the preview_id and preview_nonce that the
+		// autosave route hands back, whose nonce the editor creates for itself
+		add_filter( 'the_preview', '_set_preview' );
+		$this->go_to( get_preview_post_link( $post_id ) );
+		the_post();
+
+		$content = get_post()->post_content;
+		$this->assertStringContainsString(
+			'[wp-piwik',
+			$content,
+			'precondition: the preview is showing what the editor wrote'
+		);
+
+		$output = $this->render_post_content( $content );
+
+		$this->assertStringNotContainsString(
+			'<table',
+			$output,
+			'the editor supplied the content of this preview, so the editor has to pass the gate'
+		);
+		$this->assertSame( [], Shortcode_Test_Request::get_registered() );
 	}
 
 	/**
