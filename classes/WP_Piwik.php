@@ -153,6 +153,13 @@ class WP_Piwik {
 					)
 				);
 			}
+			add_action(
+				$this->is_network_mode() ? 'network_admin_notices' : 'admin_notices',
+				array(
+					$this,
+					'show_php_mode_deprecation_notice_if_in_use',
+				)
+			);
 			if ( $this->is_dashboard_active() ) {
 				add_action(
 					'wp_dashboard_setup',
@@ -409,6 +416,31 @@ class WP_Piwik {
 			}
 		}
 		$this->update_word_press_option( 'wp-piwik-notices', $notices );
+	}
+
+	public static function get_php_mode_deprecation_message() {
+		return '<strong>' . esc_html__( 'The "Self-hosted (PHP API)" connection method is deprecated and will be removed by November 2026 at the latest.', 'wp-piwik' ) . '</strong><br/><br/>'
+			. esc_html__( 'It loads Matomo into WordPress instead of requesting the reports over http(s), which requires having Matomo code locally, gives the Matomo code full access to your WordPress installation and offers nothing the HTTP API does not. It will be removed in the next major release of WP-Matomo.', 'wp-piwik' ) . ' '
+			. esc_html__( 'Please switch this site to "Self-hosted (HTTP API)" and enter the URL of your Matomo instance.', 'wp-piwik' );
+	}
+
+	public function show_php_mode_deprecation_notice_if_in_use() {
+		if ( ! $this->is_php_mode() ) {
+			return;
+		}
+
+		// only show to users that can actually change the setting
+		if ( ! current_user_can( $this->is_network_mode() ? 'manage_sites' : 'activate_plugins' ) ) {
+			return;
+		}
+
+		printf(
+			'<div class="notice notice-warning"><p>%s <br/><br/><a href="%s">%s</a></p></div>',
+			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped by get_php_mode_deprecation_message()
+			self::get_php_mode_deprecation_message(),
+			esc_attr( $this->get_settings_url() ),
+			esc_html__( 'Open the WP-Matomo settings', 'wp-piwik' )
+		);
 	}
 
 	/**
@@ -937,6 +969,9 @@ class WP_Piwik {
 	/**
 	 * Check if PHP mode is chosen
 	 *
+	 * @deprecated 1.1.11 the PHP API is deprecated and will be removed in the next major
+	 *             release, see get_php_mode_deprecation_message().
+	 *
 	 * @return bool Is PHP mode chosen?
 	 */
 	public function is_php_mode() {
@@ -1035,6 +1070,10 @@ class WP_Piwik {
 
 	/**
 	 * Define Piwik constants for PHP reporting API
+	 *
+	 * @deprecated 1.1.11 the PHP API is deprecated and will be removed in the next major
+	 *             release, see get_php_mode_deprecation_message().
+	 *
 	 * @phpcs:disable WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedConstantFound
 	 */
 	public static function define_piwik_constants() {

@@ -126,17 +126,16 @@ class Settings extends \WP_Piwik\Admin {
 				$this->show_box( 'error', 'no', esc_html__( 'Neither cURL nor fopen are available. So WP-Matomo can not use the HTTP API and not connect to InnoCraft Cloud.', 'wp-piwik' ) . ' ' . sprintf( '<a href="%s">%s.</a>', 'https://wordpress.org/plugins/wp-piwik/faq/', esc_html__( 'More information', 'wp-piwik' ) ) );
 			}
 
-			$description = sprintf( '%s<br /><strong>%s:</strong> %s<br /><strong>%s:</strong> %s<br /><strong>%s:</strong> %s', esc_html__( 'You can choose between three connection methods:', 'wp-piwik' ), esc_html__( 'Self-hosted (HTTP API, default)', 'wp-piwik' ), esc_html__( 'This is the default option for a self-hosted Matomo and should work for most configurations. WP-Matomo will connect to Matomo using http(s).', 'wp-piwik' ), esc_html__( 'Self-hosted (PHP API)', 'wp-piwik' ), esc_html__( 'Choose this, if your self-hosted Matomo and WordPress are running on the same machine and you know the full server path to your Matomo instance.', 'wp-piwik' ), esc_html__( 'Cloud-hosted', 'wp-piwik' ), esc_html__( 'If you are using a cloud-hosted Matomo by InnoCraft, you can simply use this option. Be carefull to choose the option which fits to your cloud domain (matomo.cloud or innocraft.cloud).', 'wp-piwik' ) );
+			// the message is already escaped, show_box() passes its content through unescaped
+			if ( 'php' === self::$settings->get_global_option( 'piwik_mode' ) ) {
+				$this->show_box( 'notice notice-warning', 'warning', \WP_Piwik::get_php_mode_deprecation_message() );
+			}
+
+			$description = sprintf( '%s<br /><strong>%s:</strong> %s<br /><strong>%s:</strong> %s', esc_html__( 'You can choose between two connection methods:', 'wp-piwik' ), esc_html__( 'Self-hosted (HTTP API, default)', 'wp-piwik' ), esc_html__( 'This is the default option for a self-hosted Matomo and should work for most configurations. WP-Matomo will connect to Matomo using http(s).', 'wp-piwik' ), esc_html__( 'Cloud-hosted', 'wp-piwik' ), esc_html__( 'If you are using a cloud-hosted Matomo by InnoCraft, you can simply use this option. Be careful to choose the option that matches your cloud domain (matomo.cloud or innocraft.cloud).', 'wp-piwik' ) );
 			$this->show_select(
 				'piwik_mode',
 				__( 'Matomo Mode', 'wp-piwik' ),
-				array(
-					'disabled'     => __( 'Disabled (WP-Matomo will not connect to Matomo)', 'wp-piwik' ),
-					'http'         => __( 'Self-hosted (HTTP API, default)', 'wp-piwik' ),
-					'php'          => __( 'Self-hosted (PHP API)', 'wp-piwik' ),
-					'cloud-matomo' => __( 'Cloud-hosted (Innocraft Cloud, *.matomo.cloud)', 'wp-piwik' ),
-					'cloud'        => __( 'Cloud-hosted (InnoCraft Cloud, *.innocraft.cloud)', 'wp-piwik' ),
-				),
+				$this->get_matomo_mode_options(),
 				$description,
 				'jQuery(\'tr.wp-piwik-mode-option\').addClass(\'hidden\'); jQuery(\'.wp-piwik-mode-option-\' + jQuery(\'#piwik_mode\').val()).removeClass(\'hidden\');',
 				false,
@@ -145,7 +144,9 @@ class Settings extends \WP_Piwik\Admin {
 			);
 
 			$this->show_input( 'piwik_url', __( 'Matomo URL', 'wp-piwik' ), __( 'Enter your Matomo URL. This is the same URL you use to access your Matomo instance, e.g. http://www.example.com/matomo/.', 'wp-piwik' ), 'http' !== self::$settings->get_global_option( 'piwik_mode' ), 'wp-piwik-mode-option', 'http', self::$wp_piwik->is_configured(), true );
-			$this->show_input( 'piwik_path', __( 'Matomo path', 'wp-piwik' ), __( 'Enter the file path to your Matomo instance, e.g. /var/www/matomo/.', 'wp-piwik' ), 'php' !== self::$settings->get_global_option( 'piwik_mode' ), 'wp-piwik-mode-option', 'php', self::$wp_piwik->is_configured(), true );
+			if ( 'php' === self::$settings->get_global_option( 'piwik_mode' ) ) {
+				$this->show_input( 'piwik_path', __( 'Matomo path (deprecated)', 'wp-piwik' ), __( 'Enter the file path to your Matomo instance, e.g. /var/www/matomo/. Only used by the deprecated "Self-hosted (PHP API)" connection method.', 'wp-piwik' ), 'php' !== self::$settings->get_global_option( 'piwik_mode' ), 'wp-piwik-mode-option', 'php', self::$wp_piwik->is_configured(), true );
+			}
 			$this->show_input( 'piwik_user', __( 'Innocraft subdomain', 'wp-piwik' ), __( 'Enter your InnoCraft Cloud subdomain. It is also part of your URL: https://SUBDOMAIN.innocraft.cloud.', 'wp-piwik' ), 'cloud' !== self::$settings->get_global_option( 'piwik_mode' ), 'wp-piwik-mode-option', 'cloud', self::$wp_piwik->is_configured() );
 			$this->show_input( 'matomo_user', __( 'Matomo subdomain', 'wp-piwik' ), __( 'Enter your Matomo Cloud subdomain. It is also part of your URL: https://SUBDOMAIN.matomo.cloud.', 'wp-piwik' ), 'cloud-matomo' !== self::$settings->get_global_option( 'piwik_mode' ), 'wp-piwik-mode-option', 'cloud-matomo', self::$wp_piwik->is_configured() );
 			$this->show_input( 'piwik_token', __( 'Auth token', 'wp-piwik' ), __( 'Enter your Matomo auth token here. It is an alphanumerical code like 0a1b2c34d56e78901fa2bc3d45678efa.', 'wp-piwik' ) . ' ' . sprintf( __( 'See %1$sWP-Matomo FAQ%2$s.', 'wp-piwik' ), '<a href="https://wordpress.org/plugins/wp-piwik/faq/" target="_BLANK">', '</a>' ), false, '', '', self::$wp_piwik->is_configured(), true, 'password' );
@@ -745,6 +746,21 @@ class Settings extends \WP_Piwik\Admin {
 	</form>
 </div>
 		<?php
+	}
+
+	public function get_matomo_mode_options() {
+		$options = array(
+			'disabled' => __( 'Disabled (WP-Matomo will not connect to Matomo)', 'wp-piwik' ),
+			'http'     => __( 'Self-hosted (HTTP API, default)', 'wp-piwik' ),
+		);
+		// the PHP API is deprecated and is no longer offered, but a site that still uses it keeps
+		// the entry, so saving the settings page cannot silently change its connection method.
+		if ( 'php' === self::$settings->get_global_option( 'piwik_mode' ) ) {
+			$options['php'] = __( 'Self-hosted (PHP API, deprecated)', 'wp-piwik' );
+		}
+		$options['cloud-matomo'] = __( 'Cloud-hosted (Innocraft Cloud, *.matomo.cloud)', 'wp-piwik' );
+		$options['cloud']        = __( 'Cloud-hosted (InnoCraft Cloud, *.innocraft.cloud)', 'wp-piwik' );
+		return $options;
 	}
 
 	/**

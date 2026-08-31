@@ -77,6 +77,12 @@ The response output contains...
 
 If this does not help as well, feel free to open a [topic in the support forum](https://wordpress.org/support/plugin/wp-piwik/). Please share all available information including the test script result, if possible.
 
+= WP-Matomo tells me the "Self-hosted (PHP API)" connection method is deprecated. What should I do? =
+
+The PHP API loads Matomo into the WordPress process instead of requesting the reports over http(s). That gives the Matomo code full access to your WordPress installation and offers nothing the HTTP API does not, so it is deprecated and will be removed in the next major release of WP-Matomo, which will be published by November 2026 at the latest.
+
+To switch over, open the WP-Matomo settings, choose "Self-hosted (HTTP API, default)" as the Matomo Mode and enter the URL you use to access your Matomo instance in the browser, e.g. http://www.example.com/matomo/. Your auth token and site selection stay as they are. Until you switch, the PHP API keeps working as before.
+
 = PHP Compatibility Checker reports PHP7 compatbility issues with WP-Matomo. =
 
 The Compatibility Checker shows two false positives. WP-Matomo is 100% PHP7 compatible, you can ignore the report.
@@ -147,6 +153,7 @@ Add WP-Matomo to your /wp-content/plugins folder and enable it as [Network Plugi
 == Changelog ==
 
 = 1.1.11 =
+* Deprecation: the "Self-hosted (PHP API)" connection method is deprecated and will be removed in the next major release, which will be published by November 2026 at the latest. It is no longer offered when connecting a new site, and sites still using it are shown a notice. Switch to "Self-hosted (HTTP API)" and enter the URL of your Matomo instance instead.
 * Security: the overview and post shortcodes are no longer rendered if the author of the post containing them is not allowed to see the statistics.
 * Security: the url attribute of the post shortcode is now restricted to posts the author is allowed to read.
 * Security: shortcodes ignore period, date and language attributes Matomo would not accept, and fall back to their default instead.

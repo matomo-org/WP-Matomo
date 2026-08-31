@@ -6,16 +6,24 @@ use WP_Piwik\Admin\Settings as AdminSettings;
 
 class AdminSettingsTest extends WP_Piwik_TestCase {
 
-	private function render_select( $settings, $id, array $options, $is_global ) {
-		$admin = new AdminSettings( new \WP_Piwik_Test_Mock_Plugin(), $settings );
-		ob_start();
-		$admin->show_select( $id, 'Select site', $options, '', '', false, '', true, $is_global );
-		return ob_get_clean();
+	public function test_get_matomo_mode_options_should_not_offer_the_deprecated_php_api() {
+		$admin = new AdminSettings( new \WP_Piwik_Test_Mock_Plugin(), $this->create_settings( [ 'piwik_mode' => 'http' ] ) );
+
+		$this->assertSame(
+			[ 'disabled', 'http', 'cloud-matomo', 'cloud' ],
+			array_keys( $admin->get_matomo_mode_options() )
+		);
 	}
 
-	private function get_selected_option_values( $html ) {
-		preg_match_all( '/<option value="([^"]*)"[^>]*selected="selected"/', $html, $matches );
-		return $matches[1];
+	public function test_get_matomo_mode_options_should_keep_the_php_api_for_a_site_still_using_it() {
+		$admin = new AdminSettings( new \WP_Piwik_Test_Mock_Plugin(), $this->create_settings( [ 'piwik_mode' => 'php' ] ) );
+
+		$options = $admin->get_matomo_mode_options();
+
+		// dropping the entry would make saving the settings page silently switch the
+		// site to another connection method
+		$this->assertSame( [ 'disabled', 'http', 'php', 'cloud-matomo', 'cloud' ], array_keys( $options ) );
+		$this->assertStringContainsString( 'deprecated', $options['php'] );
 	}
 
 	public function test_show_select_marks_the_stored_option_as_selected_for_integer_keys() {
@@ -66,5 +74,17 @@ class AdminSettingsTest extends WP_Piwik_TestCase {
 		$html = $this->render_select( $settings, 'default_date', $options, true );
 
 		$this->assertSame( [ 'last_month' ], $this->get_selected_option_values( $html ) );
+	}
+
+	private function render_select( $settings, $id, array $options, $is_global ) {
+		$admin = new AdminSettings( new \WP_Piwik_Test_Mock_Plugin(), $settings );
+		ob_start();
+		$admin->show_select( $id, 'Select site', $options, '', '', false, '', true, $is_global );
+		return ob_get_clean();
+	}
+
+	private function get_selected_option_values( $html ) {
+		preg_match_all( '/<option value="([^"]*)"[^>]*selected="selected"/', $html, $matches );
+		return $matches[1];
 	}
 }
