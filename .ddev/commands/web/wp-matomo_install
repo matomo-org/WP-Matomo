@@ -102,7 +102,61 @@ install_site() {
 		--admin_password=admin \
 		--admin_email=admin@example.com \
 		--skip-email
-	wp rewrite structure '/%postname%/' --path="$path" --hard
+	# no --hard here: it delegates to write_htaccess() below instead. See there.
+	wp rewrite structure '/%postname%/' --path="$path"
+}
+
+# WordPress' own .htaccess writer, save_mod_rewrite_rules(), is a silent no-op
+# under WP-CLI. It needs $_SERVER['SERVER_SOFTWARE'] to recognise Apache and
+# $_SERVER['SCRIPT_FILENAME'] to locate the docroot, and neither exists outside a
+# web request, so it returns early -- while "wp rewrite flush --hard" still exits
+# 0. The .htaccess file is still necessary, so it's written manually here.
+write_htaccess() {
+	local path="$1" flavour="$2"
+
+	if [ -f "${path}/.htaccess" ] && [ "$FORCE" != "1" ]; then
+		echo "    .htaccess already present, leaving it alone"
+		return
+	fi
+
+	if [ "$flavour" = "multisite" ]; then
+		# the subdirectory-network rules, which wp-cli cannot generate at all
+		cat >"${path}/.htaccess" <<'HTACCESS'
+# BEGIN WordPress
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+RewriteBase /
+RewriteRule ^index\.php$ - [L]
+
+# add a trailing slash to /wp-admin
+RewriteRule ^([_0-9a-zA-Z-]+/)?wp-admin$ $1wp-admin/ [R=301,L]
+
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+RewriteRule ^([_0-9a-zA-Z-]+/)?(wp-(content|admin|includes).*) $2 [L]
+RewriteRule ^([_0-9a-zA-Z-]+/)?(.*\.php)$ $2 [L]
+RewriteRule . index.php [L]
+</IfModule>
+# END WordPress
+HTACCESS
+	else
+		cat >"${path}/.htaccess" <<'HTACCESS'
+# BEGIN WordPress
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+RewriteBase /
+RewriteRule ^index\.php$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.php [L]
+</IfModule>
+# END WordPress
+HTACCESS
+	fi
+	echo "    wrote .htaccess"
 }
 
 activate_plugin() {
@@ -122,6 +176,7 @@ if wants single; then
 	download_core "${DOCROOT}/single" "$WP_VERSION"
 	write_config "${DOCROOT}/single" "wp_"
 	install_site "${DOCROOT}/single" "${DDEV_PRIMARY_URL}" "Connect Matomo (single site)"
+	write_htaccess "${DOCROOT}/single" single
 	activate_plugin "${DOCROOT}/single" 0
 fi
 
@@ -137,6 +192,7 @@ if wants multisite; then
 		echo "    converting to a subdirectory network"
 		wp core multisite-convert --path="${DOCROOT}/multisite" --title="Connect Matomo network"
 	fi
+	write_htaccess "${DOCROOT}/multisite" multisite
 	activate_plugin "${DOCROOT}/multisite" 1
 fi
 

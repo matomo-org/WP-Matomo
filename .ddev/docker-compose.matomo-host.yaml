@@ -4,4 +4,4 @@
 services:
   web:
     extra_hosts:
-      - "matomo.ddev.site:host-gateway"
+
