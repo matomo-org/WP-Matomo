@@ -53,6 +53,7 @@ class Settings {
 		'tracking_code'    => 'prepare_tracking_code',
 		'noscript_code'    => 'prepare_nocscript_code',
 		'cookie_allowlist' => 'check_cookie_allowlist',
+		'piwik_mode'       => 'check_piwik_mode',
 	);
 
 	/**
@@ -422,6 +423,30 @@ class Settings {
 	 */
 	private function check_cookie_allowlist( $value ) {
 		return implode( ', ', self::parse_cookie_allowlist( $value ) );
+	}
+
+
+	public function check_piwik_mode( $value ) {
+		$options = $this->get_matomo_mode_options();
+		if ( ! in_array( $value, array_keys( $options ), true ) ) {
+			return $this->get_global_option( 'piwik_mode' );
+		}
+		return $value;
+	}
+
+	public function get_matomo_mode_options() {
+		$options = array(
+			'disabled' => __( 'Disabled (WP-Matomo will not connect to Matomo)', 'wp-piwik' ),
+			'http'     => __( 'Self-hosted (HTTP API, default)', 'wp-piwik' ),
+		);
+		// the PHP API is deprecated and is no longer offered, but a site that still uses it keeps
+		// the entry, so saving the settings page cannot silently change its connection method.
+		if ( 'php' === $this->get_global_option( 'piwik_mode' ) ) {
+			$options['php'] = __( 'Self-hosted (PHP API, deprecated)', 'wp-piwik' );
+		}
+		$options['cloud-matomo'] = __( 'Cloud-hosted (Innocraft Cloud, *.matomo.cloud)', 'wp-piwik' );
+		$options['cloud']        = __( 'Cloud-hosted (InnoCraft Cloud, *.innocraft.cloud)', 'wp-piwik' );
+		return $options;
 	}
 
 	/**

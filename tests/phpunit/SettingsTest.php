@@ -297,6 +297,94 @@ class SettingsTest extends WP_Piwik_TestCase {
 		}
 	}
 
+	public function test_get_matomo_mode_options_should_not_offer_the_deprecated_php_api() {
+		$settings = $this->create_settings( [ 'piwik_mode' => 'http' ] );
+
+		$this->assertSame(
+			[ 'disabled', 'http', 'cloud-matomo', 'cloud' ],
+			array_keys( $settings->get_matomo_mode_options() )
+		);
+	}
+
+	public function test_get_matomo_mode_options_should_keep_the_php_api_for_a_site_still_using_it() {
+		$settings = $this->create_settings( [ 'piwik_mode' => 'php' ] );
+
+		$options = $settings->get_matomo_mode_options();
+
+		// dropping the entry would make saving the settings page silently switch the
+		// site to another connection method
+		$this->assertSame( [ 'disabled', 'http', 'php', 'cloud-matomo', 'cloud' ], array_keys( $options ) );
+		$this->assertStringContainsString( 'deprecated', $options['php'] );
+	}
+
+	/**
+	 * @dataProvider get_offered_connection_methods
+	 */
+	public function test_check_piwik_mode_should_keep_a_connection_method_the_settings_page_offers( $piwik_mode ) {
+		$settings = $this->create_settings();
+
+		$this->assertSame( $piwik_mode, $settings->check_piwik_mode( $piwik_mode ) );
+	}
+
+	public function get_offered_connection_methods() {
+		return [
+			'disabled'     => [ 'disabled' ],
+			'http'         => [ 'http' ],
+			'cloud'        => [ 'cloud' ],
+			'cloud-matomo' => [ 'cloud-matomo' ],
+		];
+	}
+
+	public function test_check_piwik_mode_should_keep_the_deprecated_php_api_for_a_site_still_using_it() {
+		$settings = $this->create_settings( [ 'piwik_mode' => 'php' ] );
+		$this->assertSame( 'php', $settings->check_piwik_mode( 'php' ) );
+	}
+
+	public function test_check_piwik_mode_should_reject_the_deprecated_php_api_for_a_site_not_using_it() {
+		$settings = $this->create_settings( [ 'piwik_mode' => 'cloud' ] );
+		$this->assertSame( 'cloud', $settings->check_piwik_mode( 'php' ) );
+	}
+
+	/**
+	 * @dataProvider get_values_that_are_not_a_connection_method
+	 */
+	public function test_check_piwik_mode_should_reject_a_value_that_is_not_a_connection_method( $value ) {
+		$settings = $this->create_settings( [ 'piwik_mode' => 'cloud' ] );
+		$this->assertSame( 'cloud', $settings->check_piwik_mode( $value ) );
+	}
+
+	public function get_values_that_are_not_a_connection_method() {
+		return [
+			'an unknown method' => [ 'ftp' ],
+			'the option label'  => [ 'Self-hosted (HTTP API, default)' ],
+			'an empty string'   => [ '' ],
+			'null'              => [ null ],
+			'an array'          => [ [ 'http' ] ],
+		];
+	}
+
+	public function test_apply_changes_should_reject_a_connection_method_the_settings_page_does_not_offer() {
+		$settings = $this->create_settings( [ 'piwik_mode' => 'cloud' ] );
+
+		$settings->apply_changes( [ 'piwik_mode' => 'php' ] );
+
+		$this->assertSame( 'cloud', $settings->get_global_option( 'piwik_mode' ) );
+	}
+
+	public function test_apply_changes_should_keep_the_deprecated_php_api_for_a_site_still_using_it() {
+		$settings = $this->create_settings( [ 'piwik_mode' => 'php' ] );
+
+		$settings->apply_changes(
+			[
+				'piwik_mode' => 'php',
+				'piwik_path' => '/var/www/matomo/',
+			]
+		);
+
+		$this->assertSame( 'php', $settings->get_global_option( 'piwik_mode' ) );
+		$this->assertSame( '/var/www/matomo/', $settings->get_global_option( 'piwik_path' ) );
+	}
+
 	public function test_check_network_activation_is_false_when_not_network_activated() {
 		$settings = $this->create_settings();
 

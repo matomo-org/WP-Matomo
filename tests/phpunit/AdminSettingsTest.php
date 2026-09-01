@@ -6,18 +6,6 @@ use WP_Piwik\Admin\Settings as AdminSettings;
 
 class AdminSettingsTest extends WP_Piwik_TestCase {
 
-	private function render_select( $settings, $id, array $options, $is_global ) {
-		$admin = new AdminSettings( new \WP_Piwik_Test_Mock_Plugin(), $settings );
-		ob_start();
-		$admin->show_select( $id, 'Select site', $options, '', '', false, '', true, $is_global );
-		return ob_get_clean();
-	}
-
-	private function get_selected_option_values( $html ) {
-		preg_match_all( '/<option value="([^"]*)"[^>]*selected="selected"/', $html, $matches );
-		return $matches[1];
-	}
-
 	public function test_show_select_marks_the_stored_option_as_selected_for_integer_keys() {
 		// site_id stored as an integer.
 		update_option( 'wp-piwik-site_id', 2 );
@@ -66,5 +54,17 @@ class AdminSettingsTest extends WP_Piwik_TestCase {
 		$html = $this->render_select( $settings, 'default_date', $options, true );
 
 		$this->assertSame( [ 'last_month' ], $this->get_selected_option_values( $html ) );
+	}
+
+	private function render_select( $settings, $id, array $options, $is_global ) {
+		$admin = new AdminSettings( new \WP_Piwik_Test_Mock_Plugin(), $settings );
+		ob_start();
+		$admin->show_select( $id, 'Select site', $options, '', '', false, '', true, $is_global );
+		return ob_get_clean();
+	}
+
+	private function get_selected_option_values( $html ) {
+		preg_match_all( '/<option value="([^"]*)"[^>]*selected="selected"/', $html, $matches );
+		return $matches[1];
 	}
 }

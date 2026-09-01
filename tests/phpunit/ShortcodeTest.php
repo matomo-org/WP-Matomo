@@ -690,6 +690,67 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 		$this->assertStringContainsString( 'not allowed to see the statistics', $output );
 	}
 
+	/**
+	 * @dataProvider get_deprecated_shortcodes
+	 */
+	public function test_render_should_record_a_deprecated_module_it_rendered( $attributes, $module ) {
+		$this->create_post_and_set_as_current( $this->create_author( true ) );
+
+		$this->render( $attributes );
+
+		$this->assertSame( [ $module ], $this->get_recorded_deprecated_shortcodes() );
+	}
+
+	public function get_deprecated_shortcodes() {
+		return [
+			'overview'            => [ 'module=overview', 'overview' ],
+			'post'                => [ 'module=post key=nb_visits', 'post' ],
+			'overview by default' => [ '', 'overview' ],
+		];
+	}
+
+	public function test_render_should_not_record_the_opt_out_module() {
+		$this->render( 'module=opt-out' );
+
+		$this->assertSame( [], $this->get_recorded_deprecated_shortcodes(), 'the opt-out shortcode is not deprecated' );
+	}
+
+	public function test_render_should_not_record_an_unknown_module() {
+		$this->render( 'module=nope' );
+
+		$this->assertSame( [], $this->get_recorded_deprecated_shortcodes() );
+	}
+
+	public function test_render_should_record_a_shortcode_it_refused_to_render() {
+		$this->create_post_and_set_as_current( $this->create_author( false ) );
+
+		$this->render( 'module=overview' );
+
+		$this->assertSame( [ 'overview' ], $this->get_recorded_deprecated_shortcodes(), 'nothing was rendered, but the shortcode use still needs to be warned about' );
+	}
+
+	public function test_render_should_not_write_the_record_again_for_a_module_already_on_it() {
+		$writes = 0;
+		add_filter(
+			'pre_update_option_' . \WP_Piwik::DEPRECATED_SHORTCODES_OPTION,
+			function ( $value ) use ( &$writes ) {
+				++$writes;
+				return $value;
+			}
+		);
+
+		// the shortcode renders on the front end, so it must not write on every page view
+		$this->render( 'module=overview' );
+		$this->render( 'module=overview' );
+
+		$this->assertSame( 1, $writes );
+		$this->assertSame( [ 'overview' ], $this->get_recorded_deprecated_shortcodes() );
+	}
+
+	private function get_recorded_deprecated_shortcodes() {
+		return $GLOBALS['wp-piwik']->get_recorded_deprecated_shortcodes();
+	}
+
 	private function render( $attributes ) {
 		$shortcode = new Shortcode( $GLOBALS['wp-piwik'], \WP_Piwik::get_settings() );
 		return $shortcode->render( shortcode_parse_atts( $attributes ) );

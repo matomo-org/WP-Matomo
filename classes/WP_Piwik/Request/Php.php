@@ -2,6 +2,13 @@
 
 namespace WP_Piwik\Request;
 
+/**
+ * Perform reporting API requests by loading Matomo into the WordPress process
+ *
+ * @deprecated 1.1.11 the "Self-hosted (PHP API)" connection method is deprecated and will be
+ *             removed in the next major release. Use \WP_Piwik\Request\Rest instead, see
+ *             \WP_Piwik::get_php_mode_deprecation_message().
+ */
 class Php extends \WP_Piwik\Request {
 
 	/**
