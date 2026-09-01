@@ -105,6 +105,7 @@ function wp_matomo_uninstall() {
 		}
 		delete_site_option( 'wp-piwik-manually' );
 		delete_site_option( 'wp-piwik-notices' );
+		delete_site_option( 'wp-piwik-deprecated_shortcodes' );
 	}
 
 	foreach ( $settings as $key ) {
@@ -117,6 +118,7 @@ function wp_matomo_uninstall() {
 
 	delete_option( 'wp-piwik-manually' );
 	delete_option( 'wp-piwik-notices' );
+	delete_option( 'wp-piwik-deprecated_shortcodes' );
 
 	$wpdb->query( "DELETE FROM $wpdb->postmeta WHERE meta_key LIKE 'wp-piwik-%'" );
 	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE '_transient_wp-piwik_%'" );

@@ -42,10 +42,13 @@ class Settings extends \WP_Piwik\Admin {
 		}
 		global $wp_roles;
 		?>
-<div id="plugin-options-wrap" class="widefat">
+		<div class="wrap">
 		<?php
 		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		echo $this->get_headline( 1, 'admin-generic', 'Settings', true );
+		?>
+<div id="plugin-options-wrap" class="widefat">
+		<?php
 		if ( ! empty( $_GET['testscript'] ) ) {
 			$this->run_testscript();
 		}
@@ -145,7 +148,7 @@ class Settings extends \WP_Piwik\Admin {
 
 			$this->show_input( 'piwik_url', __( 'Matomo URL', 'wp-piwik' ), __( 'Enter your Matomo URL. This is the same URL you use to access your Matomo instance, e.g. http://www.example.com/matomo/.', 'wp-piwik' ), 'http' !== self::$settings->get_global_option( 'piwik_mode' ), 'wp-piwik-mode-option', 'http', self::$wp_piwik->is_configured(), true );
 			if ( 'php' === self::$settings->get_global_option( 'piwik_mode' ) ) {
-				$this->show_input( 'piwik_path', __( 'Matomo path (deprecated)', 'wp-piwik' ), __( 'Enter the file path to your Matomo instance, e.g. /var/www/matomo/. Only used by the deprecated "Self-hosted (PHP API)" connection method.', 'wp-piwik' ), 'php' !== self::$settings->get_global_option( 'piwik_mode' ), 'wp-piwik-mode-option', 'php', self::$wp_piwik->is_configured(), true );
+				$this->show_input( 'piwik_path', __( 'Matomo path (deprecated)', 'wp-piwik' ), __( 'Enter the file path to your Matomo instance, e.g. /var/www/matomo/. Only used by the deprecated "Self-hosted (PHP API)" connection method.', 'wp-piwik' ), false, 'wp-piwik-mode-option', 'php', self::$wp_piwik->is_configured(), true );
 			}
 			$this->show_input( 'piwik_user', __( 'Innocraft subdomain', 'wp-piwik' ), __( 'Enter your InnoCraft Cloud subdomain. It is also part of your URL: https://SUBDOMAIN.innocraft.cloud.', 'wp-piwik' ), 'cloud' !== self::$settings->get_global_option( 'piwik_mode' ), 'wp-piwik-mode-option', 'cloud', self::$wp_piwik->is_configured() );
 			$this->show_input( 'matomo_user', __( 'Matomo subdomain', 'wp-piwik' ), __( 'Enter your Matomo Cloud subdomain. It is also part of your URL: https://SUBDOMAIN.matomo.cloud.', 'wp-piwik' ), 'cloud-matomo' !== self::$settings->get_global_option( 'piwik_mode' ), 'wp-piwik-mode-option', 'cloud-matomo', self::$wp_piwik->is_configured() );
@@ -744,6 +747,7 @@ class Settings extends \WP_Piwik\Admin {
 		<input type="hidden" name="wp-piwik[proxy_url]"
 			value="<?php echo esc_attr( self::$settings->get_global_option( 'proxy_url' ) ); ?>" />
 	</form>
+</div>
 </div>
 		<?php
 	}

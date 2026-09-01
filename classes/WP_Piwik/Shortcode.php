@@ -63,6 +63,17 @@ class Shortcode {
 	}
 
 	/**
+	 * Get the modules that are deprecated and will be removed in the next major release
+	 *
+	 * @see \WP_Piwik::get_deprecated_shortcode_message()
+	 *
+	 * @return string[] module names of the deprecated shortcodes
+	 */
+	public static function get_deprecated_modules() {
+		return array( 'overview', 'post' );
+	}
+
+	/**
 	 * Execute the shortcode
 	 *
 	 * @param array|string $attributes
@@ -76,6 +87,12 @@ class Shortcode {
 			$attributes
 		);
 		$attributes = $this->sanitize_attributes( $attributes );
+
+		if ( in_array( $attributes['module'], self::get_deprecated_modules(), true ) ) {
+			// there is no way to find these by looking at the site, so the admin notice
+			// is driven by what actually renders
+			$this->wp_piwik->record_deprecated_shortcode_use( $attributes['module'] );
+		}
 
 		// authorize before any API request is sent
 		$denial = $this->check_authorization( $attributes );

@@ -10,6 +10,20 @@ use WP_Piwik\Widget\Post;
  */
 class WP_Piwik {
 
+	/**
+	 * Option holding the deprecated shortcode modules this site has rendered
+	 *
+	 * @see record_deprecated_shortcode_use()
+	 */
+	const DEPRECATED_SHORTCODES_OPTION = 'wp-piwik-deprecated_shortcodes';
+
+	/**
+	 * Query argument, and nonce action, of the deprecated shortcode notice's dismiss link
+	 *
+	 * @see on_deprecated_shortcode_notice_dismissed()
+	 */
+	const DISMISS_SHORTCODE_NOTICE_ARG = 'wp-piwik-dismiss-shortcode-notice';
+
 	private static $revision_id = 2023092201;
 	private static $version     = '1.1.11';
 	private static $blog_id;
@@ -158,6 +172,20 @@ class WP_Piwik {
 				array(
 					$this,
 					'show_php_mode_deprecation_notice_if_in_use',
+				)
+			);
+			add_action(
+				$this->is_network_mode() ? 'network_admin_notices' : 'admin_notices',
+				array(
+					$this,
+					'show_deprecated_shortcode_notice_if_in_use',
+				)
+			);
+			add_action(
+				'admin_init',
+				array(
+					$this,
+					'on_deprecated_shortcode_notice_dismissed',
 				)
 			);
 			if ( $this->is_dashboard_active() ) {
@@ -338,6 +366,7 @@ class WP_Piwik {
 			exit();
 		}
 		self::delete_word_press_option( 'wp-piwik-notices' );
+		self::delete_word_press_option( self::DEPRECATED_SHORTCODES_OPTION );
 		self::$settings->reset_settings();
 	}
 
@@ -440,6 +469,185 @@ class WP_Piwik {
 			self::get_php_mode_deprecation_message(),
 			esc_attr( $this->get_settings_url() ),
 			esc_html__( 'Open the WP-Matomo settings', 'wp-piwik' )
+		);
+	}
+
+	/**
+	 * Record that a deprecated shortcode module was rendered on this site.
+	 *
+	 * Nothing about a site says where its shortcodes are: they can sit in a post, a
+	 * reusable block, a sidebar widget or a theme template. So the admin notice is driven
+	 * by what actually renders.
+	 *
+	 * @param string $module deprecated shortcode module that was rendered
+	 */
+	public function record_deprecated_shortcode_use( $module ) {
+		$record          = $this->get_deprecated_shortcode_record();
+		$dismissed_until = $record['dismissed_until'];
+		$last_seen       = isset( $record['modules'][ $module ] ) ? $record['modules'][ $module ] : 0;
+
+		if ( $last_seen > $dismissed_until ) {
+			return; // record already showing
+		}
+
+		if ( time() <= $dismissed_until ) {
+			return; // notice is dismissed, no need to record
+		}
+
+		// the dismissal has run out and a deprecated shortcode rendered again, so this
+		// render is what brings the notice back
+		$record['modules'][ $module ] = time();
+		$this->update_word_press_option( self::DEPRECATED_SHORTCODES_OPTION, $record );
+	}
+
+	/**
+	 * Get the deprecated shortcode modules whose use this site should be warned about.
+	 *
+	 * A module drops off the list while the notice is dismissed, and stays off unless it
+	 * renders again once the dismissal has run out.
+	 *
+	 * @return string[] module names, in the order \WP_Piwik\Shortcode declares them
+	 */
+	public function get_recorded_deprecated_shortcodes() {
+		$record  = $this->get_deprecated_shortcode_record();
+		$modules = array();
+		foreach ( $record['modules'] as $module => $last_seen ) {
+			if ( $last_seen > $record['dismissed_until'] ) {
+				$modules[] = $module;
+			}
+		}
+		return $modules;
+	}
+
+	/**
+	 * Keep the deprecated shortcode notice away for a week.
+	 *
+	 * It comes back when a deprecated shortcode renders again after that, so a site that
+	 * removed its shortcodes in the meantime is not warned a second time.
+	 *
+	 * @see record_deprecated_shortcode_use()
+	 */
+	public function dismiss_deprecated_shortcode_notice() {
+		$record                    = $this->get_deprecated_shortcode_record();
+		$record['dismissed_until'] = time() + WEEK_IN_SECONDS;
+		$this->update_word_press_option( self::DEPRECATED_SHORTCODES_OPTION, $record );
+	}
+
+	/**
+	 * Handle the dismiss link of the deprecated shortcode notice
+	 */
+	public function on_deprecated_shortcode_notice_dismissed() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( ! isset( $_GET[ self::DISMISS_SHORTCODE_NOTICE_ARG ] ) ) {
+			return;
+		}
+
+		check_admin_referer( self::DISMISS_SHORTCODE_NOTICE_ARG );
+
+		if ( current_user_can( $this->is_network_mode() ? 'manage_sites' : 'activate_plugins' ) ) {
+			$this->dismiss_deprecated_shortcode_notice();
+		}
+
+		// reload the current page without the dismissal query param
+		if ( wp_safe_redirect( remove_query_arg( array( self::DISMISS_SHORTCODE_NOTICE_ARG, '_wpnonce' ) ) ) ) {
+			exit;
+		}
+	}
+
+	/**
+	 * Read what this site has recorded about the deprecated shortcodes
+	 *
+	 * @return array modules (module name => timestamp of the render that armed the notice)
+	 *          and dismissed_until (timestamp, 0 if the notice was never dismissed)
+	 */
+	private function get_deprecated_shortcode_record() {
+		$stored          = $this->get_word_press_option( self::DEPRECATED_SHORTCODES_OPTION, array() );
+		$stored          = is_array( $stored ) ? $stored : array();
+		$stored_modules  = isset( $stored['modules'] ) && is_array( $stored['modules'] ) ? $stored['modules'] : array();
+		$dismissed_until = isset( $stored['dismissed_until'] ) && is_numeric( $stored['dismissed_until'] ) ? (int) $stored['dismissed_until'] : 0;
+
+		// make sure the module entries in the option are valid modules
+		$modules = array();
+		foreach ( \WP_Piwik\Shortcode::get_deprecated_modules() as $module ) {
+			if ( isset( $stored_modules[ $module ] ) && is_numeric( $stored_modules[ $module ] ) ) {
+				$modules[ $module ] = (int) $stored_modules[ $module ];
+			}
+		}
+
+		return array(
+			'modules'         => $modules,
+			'dismissed_until' => $dismissed_until,
+		);
+	}
+
+	/**
+	 * @param string[] $modules deprecated shortcode modules the site has rendered
+	 * @return string message HTML, already escaped
+	 */
+	public static function get_deprecated_shortcode_message( $modules ) {
+		$tags = array();
+		foreach ( $modules as $module ) {
+			$tags[] = self::get_shortcode_example( $module );
+		}
+
+		return '<strong>'
+			. esc_html__( 'The statistics shortcodes are deprecated and will be removed by November 2026 at the latest.', 'wp-piwik' )
+			. '</strong><br/><br/>'
+			. sprintf(
+				/* translators: %s: comma separated list of shortcodes, e.g. [wp-piwik module="overview"] */
+				esc_html__( 'This site renders %s, which report Matomo data into a page using the auth token WP-Matomo stores for the whole site. They will be removed in the next major release of WP-Matomo.', 'wp-piwik' ),
+				implode( ', ', $tags )
+			)
+			. ' '
+			. sprintf(
+				/* translators: %1$s: opening link tag to the Matomo Widgetize documentation, %2$s: closing link tag */
+				esc_html__( 'Matomo\'s %1$sWidgetize%2$s feature is the supported replacement: it serves the same reports from Matomo itself. Create a dedicated read-only auth token in Matomo to use with it, so that an embedded report cannot reach anything else.', 'wp-piwik' ),
+				'<a href="https://matomo.org/docs/embed-piwik-report/" target="_blank" rel="noreferrer noopener">',
+				'</a>'
+			)
+			. '<br/><br/>'
+			. sprintf(
+				/* translators: %s: the opt-out shortcode, e.g. [wp-piwik module="opt-out"] */
+				esc_html__( 'The %s shortcode is not deprecated and will continue to function.', 'wp-piwik' ),
+				self::get_shortcode_example( 'opt-out' )
+			)
+			. '<br/><br/>';
+	}
+
+	/**
+	 * Render a shortcode for a message to show it in
+	 *
+	 * @param string $module module the example uses
+	 * @return string shortcode HTML, already escaped
+	 */
+	private static function get_shortcode_example( $module ) {
+		return '<code>' . esc_html( '[' . \WP_Piwik\Shortcode::TAG . ' module="' . $module . '"]' ) . '</code>';
+	}
+
+	/**
+	 * Show a deprecation notice if this site renders the deprecated statistics shortcodes
+	 *
+	 * @see get_deprecated_shortcode_message()
+	 */
+	public function show_deprecated_shortcode_notice_if_in_use() {
+		$modules = $this->get_recorded_deprecated_shortcodes();
+		if ( empty( $modules ) ) {
+			return;
+		}
+
+		// only show to users who can act on it
+		if ( ! current_user_can( $this->is_network_mode() ? 'manage_sites' : 'activate_plugins' ) ) {
+			return;
+		}
+
+		printf(
+			'<div class="notice notice-warning"><p>%s</p><p><a href="%s">%s</a> | <a href="%s" target="_blank" rel="noreferrer noopener">%s</a></p></div>',
+			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped by get_deprecated_shortcode_message()
+			self::get_deprecated_shortcode_message( $modules ),
+			esc_url( wp_nonce_url( add_query_arg( self::DISMISS_SHORTCODE_NOTICE_ARG, '1' ), self::DISMISS_SHORTCODE_NOTICE_ARG ) ),
+			esc_html__( 'Dismiss this notice for a week', 'wp-piwik' ),
+			esc_attr( 'https://matomo.org/faq/reports/embed-a-matomo-report-in-a-html-page/' ),
+			esc_html__( 'Learn how to embed a Matomo report', 'wp-piwik' )
 		);
 	}
 

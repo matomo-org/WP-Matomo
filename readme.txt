@@ -35,17 +35,12 @@ To use this plugin the Matomo web analytics application is required. If you do n
 = Shortcodes =
 You can use following shortcodes if activated:
 
-    [wp-piwik module="overview" title="" period="day" date="yesterday"]
-Shows overview table like WP-Matomo's overview dashboard. See Matomo API documentation on VisitsSummary.get to get more information on period and day. Multiple data arrays will be cumulated. If you fill the title attribute, its content will be shown in the table's title.
-
     [wp-piwik module="opt-out" language="en" width="100%" height="200px"]
-Shows the Matomo opt-out Iframe. You can change the Iframe's language by the language attribute (e.g. de for German language) and its width and height using the corresponding attributes.
+Shows the Matomo opt-out Iframe. You can change the Iframe's language by the language attribute (e.g. de for German language) and its width and height using the corresponding attributes. This shortcode is not deprecated.
 
-    [wp-piwik module="post" period="range" date="last30" key="sum_daily_nb_uniq_visitors"]
-Shows the chosen keys value related to the current post. You can define a date (format: lastN, previousN, today, yesterday, YYYY-MM-DD or YYYY-MM-DD,YYYY-MM-DD) and the desired value's key (e.g., sum_daily_nb_uniq_visitors, nb_visits or nb_hits - for details see Matomo's API method Actions.getPageUrl using a range). The optional url attribute reports on another post of this site instead of the current one; it is only accepted if it resolves to a post the author of the containing post is allowed to read.
+= Embedding Matomo Reports =
 
-    [wp-piwik]
-is equal to *[wp-piwik module="overview" title="" period="day" date="yesterday"]*.
+If you'd like to embed Matomo reports in WordPress pages and posts, use Matomo's [Widgetize](https://matomo.org/faq/reports/embed-a-matomo-report-in-a-html-page/) feature, with a dedicated read-only auth token created in Matomo.
 
 = Credits and Acknowledgements =
 
@@ -76,6 +71,14 @@ The response output contains...
 - **bool(false)** and no further HTTP response code: The Matomo server does not respond. Very often, this is caused by firewall or mod_security settings. Check your server logfiles to get further information. If you aren’t sure about this, please contact your web hoster for support.
 
 If this does not help as well, feel free to open a [topic in the support forum](https://wordpress.org/support/plugin/wp-piwik/). Please share all available information including the test script result, if possible.
+
+= WP-Matomo tells me the statistics shortcodes are deprecated. What should I do? =
+
+`[wp-piwik]`, `[wp-piwik module="overview"]` and `[wp-piwik module="post"]` report Matomo data into a page. They are considred insecure and redundant, so they will be removed in the next major release of WP-Matomo, which will be published by November 2026 at the latest.
+
+Matomo's [Widgetize](https://matomo.org/faq/reports/embed-a-matomo-report-in-a-html-page/) feature is the supported replacement: Matomo serves the report itself and you embed it. Create a dedicated auth token in Matomo with view access only, and use that token for the widget, so an embedded report cannot reach anything else.
+
+The opt-out shortcode, `[wp-piwik module="opt-out"]`, is **not** deprecated. It will continue to function.
 
 = WP-Matomo tells me the "Self-hosted (PHP API)" connection method is deprecated. What should I do? =
 
@@ -153,6 +156,7 @@ Add WP-Matomo to your /wp-content/plugins folder and enable it as [Network Plugi
 == Changelog ==
 
 = 1.1.11 =
+* Deprecation: the overview and post shortcodes ([wp-piwik], [wp-piwik module="overview"] and [wp-piwik module="post"]) are deprecated and will be removed in the next major release, which will be published by November 2026 at the latest. Matomo's Widgetize feature is the supported replacement: https://matomo.org/faq/reports/embed-a-matomo-report-in-a-html-page/. The opt-out shortcode is not deprecated.
 * Deprecation: the "Self-hosted (PHP API)" connection method is deprecated and will be removed in the next major release, which will be published by November 2026 at the latest. It is no longer offered when connecting a new site, and sites still using it are shown a notice. Switch to "Self-hosted (HTTP API)" and enter the URL of your Matomo instance instead.
 * Security: the overview and post shortcodes are no longer rendered if the author of the post containing them is not allowed to see the statistics.
 * Security: the url attribute of the post shortcode is now restricted to posts the author is allowed to read.
