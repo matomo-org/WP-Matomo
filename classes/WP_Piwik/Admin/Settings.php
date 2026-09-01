@@ -129,16 +129,11 @@ class Settings extends \WP_Piwik\Admin {
 				$this->show_box( 'error', 'no', esc_html__( 'Neither cURL nor fopen are available. So WP-Matomo can not use the HTTP API and not connect to InnoCraft Cloud.', 'wp-piwik' ) . ' ' . sprintf( '<a href="%s">%s.</a>', 'https://wordpress.org/plugins/wp-piwik/faq/', esc_html__( 'More information', 'wp-piwik' ) ) );
 			}
 
-			// the message is already escaped, show_box() passes its content through unescaped
-			if ( 'php' === self::$settings->get_global_option( 'piwik_mode' ) ) {
-				$this->show_box( 'notice notice-warning', 'warning', \WP_Piwik::get_php_mode_deprecation_message() );
-			}
-
 			$description = sprintf( '%s<br /><strong>%s:</strong> %s<br /><strong>%s:</strong> %s', esc_html__( 'You can choose between two connection methods:', 'wp-piwik' ), esc_html__( 'Self-hosted (HTTP API, default)', 'wp-piwik' ), esc_html__( 'This is the default option for a self-hosted Matomo and should work for most configurations. WP-Matomo will connect to Matomo using http(s).', 'wp-piwik' ), esc_html__( 'Cloud-hosted', 'wp-piwik' ), esc_html__( 'If you are using a cloud-hosted Matomo by InnoCraft, you can simply use this option. Be careful to choose the option that matches your cloud domain (matomo.cloud or innocraft.cloud).', 'wp-piwik' ) );
 			$this->show_select(
 				'piwik_mode',
 				__( 'Matomo Mode', 'wp-piwik' ),
-				$this->get_matomo_mode_options(),
+				self::$settings->get_matomo_mode_options(),
 				$description,
 				'jQuery(\'tr.wp-piwik-mode-option\').addClass(\'hidden\'); jQuery(\'.wp-piwik-mode-option-\' + jQuery(\'#piwik_mode\').val()).removeClass(\'hidden\');',
 				false,
@@ -752,21 +747,6 @@ class Settings extends \WP_Piwik\Admin {
 		<?php
 	}
 
-	public function get_matomo_mode_options() {
-		$options = array(
-			'disabled' => __( 'Disabled (WP-Matomo will not connect to Matomo)', 'wp-piwik' ),
-			'http'     => __( 'Self-hosted (HTTP API, default)', 'wp-piwik' ),
-		);
-		// the PHP API is deprecated and is no longer offered, but a site that still uses it keeps
-		// the entry, so saving the settings page cannot silently change its connection method.
-		if ( 'php' === self::$settings->get_global_option( 'piwik_mode' ) ) {
-			$options['php'] = __( 'Self-hosted (PHP API, deprecated)', 'wp-piwik' );
-		}
-		$options['cloud-matomo'] = __( 'Cloud-hosted (Innocraft Cloud, *.matomo.cloud)', 'wp-piwik' );
-		$options['cloud']        = __( 'Cloud-hosted (InnoCraft Cloud, *.innocraft.cloud)', 'wp-piwik' );
-		return $options;
-	}
-
 	/**
 	 * Show a checkbox option
 	 *
@@ -948,7 +928,7 @@ class Settings extends \WP_Piwik\Admin {
 	 */
 	private function show_box( $type, $icon, $content ) {
 		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-		printf( '<tr><td colspan="2"><div class="%s"><p><span class="dashicons dashicons-%s"></span> %s</p></div></td></tr>', esc_attr( $type ), esc_attr( $icon ), $content );
+		printf( '<tr><td colspan="2"><div class="%s inline"><p><span class="dashicons dashicons-%s"></span> %s</p></div></td></tr>', esc_attr( $type ), esc_attr( $icon ), $content );
 	}
 
 	/**

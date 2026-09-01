@@ -467,7 +467,7 @@ class WP_Piwik {
 			'<div class="notice notice-warning"><p>%s <br/><br/><a href="%s">%s</a></p></div>',
 			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped by get_php_mode_deprecation_message()
 			self::get_php_mode_deprecation_message(),
-			esc_attr( $this->get_settings_url() ),
+			esc_url( $this->get_settings_url() ),
 			esc_html__( 'Open the WP-Matomo settings', 'wp-piwik' )
 		);
 	}
@@ -549,7 +549,7 @@ class WP_Piwik {
 		}
 
 		// reload the current page without the dismissal query param
-		if ( wp_safe_redirect( remove_query_arg( array( self::DISMISS_SHORTCODE_NOTICE_ARG, '_wpnonce' ) ) ) ) {
+		if ( wp_safe_redirect( remove_query_arg( array( self::DISMISS_SHORTCODE_NOTICE_ARG, '_wpnonce', 'clear', 'testscript' ) ) ) ) {
 			exit;
 		}
 	}
@@ -595,7 +595,7 @@ class WP_Piwik {
 			. '</strong><br/><br/>'
 			. sprintf(
 				/* translators: %s: comma separated list of shortcodes, e.g. [wp-piwik module="overview"] */
-				esc_html__( 'This site renders %s, which report Matomo data into a page using the auth token WP-Matomo stores for the whole site. They will be removed in the next major release of WP-Matomo.', 'wp-piwik' ),
+				esc_html__( 'This site renders %s, which display(s) Matomo data in a page using the auth token WP-Matomo stores for the whole site. They will be removed in the next major release of WP-Matomo.', 'wp-piwik' ),
 				implode( ', ', $tags )
 			)
 			. ' '
@@ -615,8 +615,6 @@ class WP_Piwik {
 	}
 
 	/**
-	 * Render a shortcode for a message to show it in
-	 *
 	 * @param string $module module the example uses
 	 * @return string shortcode HTML, already escaped
 	 */
@@ -624,11 +622,6 @@ class WP_Piwik {
 		return '<code>' . esc_html( '[' . \WP_Piwik\Shortcode::TAG . ' module="' . $module . '"]' ) . '</code>';
 	}
 
-	/**
-	 * Show a deprecation notice if this site renders the deprecated statistics shortcodes
-	 *
-	 * @see get_deprecated_shortcode_message()
-	 */
 	public function show_deprecated_shortcode_notice_if_in_use() {
 		$modules = $this->get_recorded_deprecated_shortcodes();
 		if ( empty( $modules ) ) {
@@ -646,7 +639,7 @@ class WP_Piwik {
 			self::get_deprecated_shortcode_message( $modules ),
 			esc_url( wp_nonce_url( add_query_arg( self::DISMISS_SHORTCODE_NOTICE_ARG, '1' ), self::DISMISS_SHORTCODE_NOTICE_ARG ) ),
 			esc_html__( 'Dismiss this notice for a week', 'wp-piwik' ),
-			esc_attr( 'https://matomo.org/faq/reports/embed-a-matomo-report-in-a-html-page/' ),
+			esc_url( 'https://matomo.org/faq/reports/embed-a-matomo-report-in-a-html-page/' ),
 			esc_html__( 'Learn how to embed a Matomo report', 'wp-piwik' )
 		);
 	}

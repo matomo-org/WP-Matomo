@@ -726,7 +726,7 @@ class ShortcodeTest extends WP_Piwik_TestCase {
 
 		$this->render( 'module=overview' );
 
-		$this->assertSame( [], $this->get_recorded_deprecated_shortcodes(), 'nothing was rendered, but the shortcode use still needs to be warned about' );
+		$this->assertSame( [ 'overview' ], $this->get_recorded_deprecated_shortcodes(), 'nothing was rendered, but the shortcode use still needs to be warned about' );
 	}
 
 	public function test_render_should_not_write_the_record_again_for_a_module_already_on_it() {

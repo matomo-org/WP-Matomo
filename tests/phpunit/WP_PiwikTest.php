@@ -245,10 +245,144 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 		$this->assertSame( '', $this->render_deprecated_shortcode_notice() );
 	}
 
+	public function test_record_deprecated_shortcode_use_should_store_the_record_for_the_whole_network() {
+		$this->network_activate_the_plugin();
+
+		$GLOBALS['wp-piwik']->record_deprecated_shortcode_use( 'overview' );
+
+		$record = get_site_option( \WP_Piwik::DEPRECATED_SHORTCODES_OPTION );
+		$this->assertArrayHasKey( 'overview', $record['modules'] );
+		$this->assertFalse(
+			get_option( \WP_Piwik::DEPRECATED_SHORTCODES_OPTION ),
+			'a network wide plugin keeps the record out of the individual sites'
+		);
+	}
+
+	public function test_get_recorded_deprecated_shortcodes_should_report_a_network_wide_record_from_another_site() {
+		$this->network_activate_the_plugin();
+		$GLOBALS['wp-piwik']->record_deprecated_shortcode_use( 'overview' );
+
+		switch_to_blog( self::factory()->blog->create() );
+		try {
+			$this->assertSame( array( 'overview' ), $GLOBALS['wp-piwik']->get_recorded_deprecated_shortcodes() );
+		} finally {
+			restore_current_blog();
+		}
+	}
+
+	public function test_show_deprecated_shortcode_notice_if_in_use_should_warn_a_super_admin_on_a_network() {
+		$this->network_activate_the_plugin();
+		$GLOBALS['wp-piwik']->record_deprecated_shortcode_use( 'overview' );
+		$this->log_in_as_settings_administrator();
+
+		$this->assertStringContainsString(
+			'The statistics shortcodes are deprecated',
+			$this->render_deprecated_shortcode_notice()
+		);
+	}
+
+	public function test_show_deprecated_shortcode_notice_if_in_use_should_stay_silent_for_a_network_user_who_cannot_manage_sites() {
+		$this->network_activate_the_plugin();
+		$GLOBALS['wp-piwik']->record_deprecated_shortcode_use( 'overview' );
+		$this->log_in_as_a_site_administrator_who_can_activate_plugins();
+
+		$this->assertSame( '', $this->render_deprecated_shortcode_notice() );
+	}
+
+	public function test_show_deprecated_shortcode_notice_if_in_use_should_warn_a_site_administrator_when_the_plugin_is_not_network_activated() {
+		$this->skip_unless_multisite();
+		$GLOBALS['wp-piwik']->record_deprecated_shortcode_use( 'overview' );
+		$this->log_in_as_a_site_administrator_who_can_activate_plugins();
+
+		$this->assertStringContainsString(
+			'The statistics shortcodes are deprecated',
+			$this->render_deprecated_shortcode_notice()
+		);
+	}
+
+	public function test_on_deprecated_shortcode_notice_dismissed_should_dismiss_the_notice_for_the_whole_network() {
+		$this->network_activate_the_plugin();
+		$GLOBALS['wp-piwik']->record_deprecated_shortcode_use( 'overview' );
+		$this->log_in_as_settings_administrator();
+
+		$this->request_a_notice_dismissal( wp_create_nonce( \WP_Piwik::DISMISS_SHORTCODE_NOTICE_ARG ) );
+
+		$record = get_site_option( \WP_Piwik::DEPRECATED_SHORTCODES_OPTION );
+		$this->assertGreaterThan( time(), $record['dismissed_until'] );
+		$this->assertSame( '', $this->render_deprecated_shortcode_notice() );
+	}
+
+	public function test_on_deprecated_shortcode_notice_dismissed_should_not_let_a_network_user_who_cannot_manage_sites_dismiss_it() {
+		$this->network_activate_the_plugin();
+		$GLOBALS['wp-piwik']->record_deprecated_shortcode_use( 'overview' );
+		$this->log_in_as_a_site_administrator_who_can_activate_plugins();
+
+		$this->request_a_notice_dismissal( wp_create_nonce( \WP_Piwik::DISMISS_SHORTCODE_NOTICE_ARG ) );
+
+		$this->log_in_as_settings_administrator();
+		$this->assertStringContainsString(
+			'The statistics shortcodes are deprecated',
+			$this->render_deprecated_shortcode_notice()
+		);
+	}
+
+	public function test_show_php_mode_deprecation_notice_if_in_use_should_warn_a_super_admin_on_a_network() {
+		$this->network_activate_the_plugin();
+		\WP_Piwik::get_settings()->set_global_option( 'piwik_mode', 'php' );
+		$this->log_in_as_settings_administrator();
+
+		$this->assertStringContainsString(
+			'The &quot;Self-hosted (PHP API)&quot; connection method is deprecated',
+			$this->render_php_mode_deprecation_notice()
+		);
+	}
+
+	public function test_show_php_mode_deprecation_notice_if_in_use_should_stay_silent_for_a_network_user_who_cannot_manage_sites() {
+		$this->network_activate_the_plugin();
+		\WP_Piwik::get_settings()->set_global_option( 'piwik_mode', 'php' );
+		$this->log_in_as_a_site_administrator_who_can_activate_plugins();
+
+		$this->assertSame( '', $this->render_php_mode_deprecation_notice() );
+	}
+
+	public function test_show_php_mode_deprecation_notice_if_in_use_should_warn_a_site_administrator_when_the_plugin_is_not_network_activated() {
+		$this->skip_unless_multisite();
+		\WP_Piwik::get_settings()->set_global_option( 'piwik_mode', 'php' );
+		$this->log_in_as_a_site_administrator_who_can_activate_plugins();
+
+		$this->assertStringContainsString(
+			'connection method is deprecated',
+			$this->render_php_mode_deprecation_notice()
+		);
+	}
+
 	private function render_deprecated_shortcode_notice() {
 		ob_start();
 		$GLOBALS['wp-piwik']->show_deprecated_shortcode_notice_if_in_use();
 		return ob_get_clean();
+	}
+
+	private function skip_unless_multisite() {
+		if ( ! is_multisite() ) {
+			$this->markTestSkipped( 'Network mode requires a multisite installation.' );
+		}
+	}
+
+	private function network_activate_the_plugin() {
+		$this->skip_unless_multisite();
+
+		update_site_option( 'active_sitewide_plugins', array( 'wp-piwik/wp-piwik.php' => time() ) );
+
+		$this->assertTrue( $GLOBALS['wp-piwik']->is_network_mode(), 'precondition: the plugin runs in network mode' );
+	}
+
+	private function log_in_as_a_site_administrator_who_can_activate_plugins() {
+		update_site_option( 'menu_items', array( 'plugins' => 1 ) );
+
+		wp_set_current_user( self::factory()->user->create( array( 'role' => 'administrator' ) ) );
+
+		$this->assertTrue( current_user_can( 'activate_plugins' ), 'precondition: the user can activate plugins' );
+		$this->assertFalse( current_user_can( 'manage_sites' ), 'precondition: the user cannot manage the network' );
 	}
 
 	private function set_up_a_dismissal_that_ran_out() {

@@ -74,7 +74,7 @@ If this does not help as well, feel free to open a [topic in the support forum](
 
 = WP-Matomo tells me the statistics shortcodes are deprecated. What should I do? =
 
-`[wp-piwik]`, `[wp-piwik module="overview"]` and `[wp-piwik module="post"]` report Matomo data into a page. They are considred insecure and redundant, so they will be removed in the next major release of WP-Matomo, which will be published by November 2026 at the latest.
+`[wp-piwik]`, `[wp-piwik module="overview"]` and `[wp-piwik module="post"]` report Matomo data into a page. They are considered insecure and redundant, so they will be removed in the next major release of WP-Matomo, which will be published by November 2026 at the latest.
 
 Matomo's [Widgetize](https://matomo.org/faq/reports/embed-a-matomo-report-in-a-html-page/) feature is the supported replacement: Matomo serves the report itself and you embed it. Create a dedicated auth token in Matomo with view access only, and use that token for the widget, so an embedded report cannot reach anything else.
 
