@@ -67,7 +67,7 @@ class RestIntegrationTest extends WP_Piwik_TestCase {
 			. '/tests/phpunit/rest/mock' . ( $trailing_slash ? '/' : '' );
 	}
 
-	private function perform_bulk_request( $url, $connection, $method ) {
+	private function perform_bulk_request( $url, $connection, $method, $date = '2015-01-01' ) {
 		$settings = $this->create_settings(
 			[
 				'piwik_mode'         => 'http',
@@ -87,7 +87,7 @@ class RestIntegrationTest extends WP_Piwik_TestCase {
 			'VisitsSummary.get',
 			[
 				'period' => 'day',
-				'date'   => '2015-01-01',
+				'date'   => $date,
 			]
 		);
 
@@ -251,5 +251,23 @@ class RestIntegrationTest extends WP_Piwik_TestCase {
 		// to open the stream at all, so the error message wording differs between the transports
 		$this->assertNotSame( '', $error );
 		$this->assertStringContainsString( '500', $error );
+	}
+
+	public function test_perform_should_not_report_an_earlier_responses_status_when_the_matomo_url_is_not_an_http_url() {
+		$not_matomo = $this->runtime . '/not-matomo.txt';
+		$this->write_runtime_file( 'not-matomo.txt', 'this is not JSON' );
+
+		// a first request over HTTP, so that there is a stored 200 response to hand back
+		list( $result ) = $this->perform_bulk_request( $this->mock_url(), 'fopen', 'post' );
+		$this->assertNotFalse( $result );
+
+		// results are keyed by the request id, so the second request has to ask for another date
+		// for the request to be made at all
+		list( $result, $error ) = $this->perform_bulk_request( $not_matomo, 'fopen', 'post', '2015-01-02' );
+		unlink( $not_matomo );
+
+		$this->assertFalse( $result );
+		$this->assertStringContainsString( 'valid JSON', $error );
+		$this->assertStringNotContainsString( '200', $error );
 	}
 }

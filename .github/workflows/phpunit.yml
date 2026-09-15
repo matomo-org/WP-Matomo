@@ -25,9 +25,14 @@ concurrency:
 
 jobs:
   phpunit:
-    name: PHPUnit (DDEV)
+    name: PHPUnit (DDEV, PHP ${{ matrix.php }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      matrix:
+        php: [ "7.4", "8.5" ]
 
     steps:
       - name: Checkout
@@ -39,6 +44,9 @@ jobs:
         uses: ddev/github-action-setup-ddev@fdf2f5c97943bae638f31df6df86f1defa6210c0
         with:
           autostart: false
+
+      - name: Select the PHP version
+        run: ddev config --php-version=${{ matrix.php }}
 
       - name: Start the environment
         run: ddev start
