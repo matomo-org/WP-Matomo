@@ -76,12 +76,12 @@ jobs:
         run: ./scripts/extract_changelog.sh
         env:
           # set in check_tag.sh
-          version: "$version"
+          version: ${{ env.version }}
       - name: "Build releases"
         run: ./scripts/build_releases.sh
         env:
           # set in check_tag.sh
-          version: "$version"
+          version: ${{ env.version }}
       - name: "Create release"
         uses: ncipollo/release-action@c4bf6c1ab090090498fb7f3ddc9f99ba5ab619b9
         with:
