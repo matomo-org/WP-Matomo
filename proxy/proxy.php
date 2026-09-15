@@ -416,6 +416,11 @@ function getHttpContentAndStatus($url, $timeout, $user_agent, $postBody = '')
         // the value.
         $http_response_header = array();
 
+        // WP-Matomo customization: clear any stored response headers before a request
+        if (function_exists('http_clear_last_response_headers')) {
+            http_clear_last_response_headers();
+        }
+
         if ($DEBUG_PROXY) {
             $content = file_get_contents($url, 0, $ctx);
         } else {

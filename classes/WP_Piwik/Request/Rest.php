@@ -145,6 +145,11 @@ class Rest extends \WP_Piwik\Request {
 		// notice merely by loading this file. PHP still overwrites the value.
 		$http_response_header = [];
 
+		// clear any stored response headers before a request
+		if ( function_exists( 'http_clear_last_response_headers' ) ) {
+			http_clear_last_response_headers();
+		}
+
 		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
 		$response = @file_get_contents( $full_url, false, $context );
 

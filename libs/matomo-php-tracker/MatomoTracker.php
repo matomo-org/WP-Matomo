@@ -2208,6 +2208,11 @@ didn't change any existing VisitorId value */
             // otherwise emit a notice merely by loading this file. PHP still overwrites the value.
             $http_response_header = [];
 
+            // clear any stored response headers before a request
+            if (function_exists('http_clear_last_response_headers')) {
+                http_clear_last_response_headers();
+            }
+
             // a tracking request that cannot reach Matomo must not emit a warning into the page
             $response = @file_get_contents($url, 0, $ctx);
             $content = $response;
