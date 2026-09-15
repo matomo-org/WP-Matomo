@@ -140,10 +140,25 @@ class Rest extends \WP_Piwik\Request {
 		}
 		$context = stream_context_create( $context_definition );
 
+		// $http_response_header must be assigned before the fallback read below: PHP 8.5 deprecated
+		// the predefined variable and reports the read at compile time, so it would otherwise emit a
+		// notice merely by loading this file. PHP still overwrites the value.
 		$http_response_header = [];
+
 		// phpcs:ignore WordPress.PHP.NoSilencedErrors.Discouraged
-		$response         = @file_get_contents( $full_url, false, $context );
-		self::$last_error = $this->check_response( $response, isset( $http_response_header[0] ) ? $http_response_header[0] : '' );
+		$response = @file_get_contents( $full_url, false, $context );
+
+		$response_headers = [];
+		if ( function_exists( 'http_get_last_response_headers' ) ) {
+			$headers = http_get_last_response_headers();
+			if ( is_array( $headers ) ) {
+				$response_headers = $headers;
+			}
+		} else {
+			$response_headers = $http_response_header;
+		}
+
+		self::$last_error = $this->check_response( $response, isset( $response_headers[0] ) ? $response_headers[0] : '' );
 		$result           = $this->unserialize( $response );
 		if ( $GLOBALS ['wp-piwik_debug'] ) {
 			self::$debug[ $id ] = [ get_headers( $full_url, 1 ), ( $this->should_use_post() ? 'POST ' : 'GET ' ) . $url . ' ' . $this->build_param_string( $params, true ) ];

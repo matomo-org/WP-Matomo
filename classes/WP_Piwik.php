@@ -25,7 +25,7 @@ class WP_Piwik {
 	const DISMISS_SHORTCODE_NOTICE_ARG = 'wp-piwik-dismiss-shortcode-notice';
 
 	private static $revision_id = 2023092201;
-	private static $version     = '1.1.11';
+	private static $version     = '1.1.12';
 	private static $blog_id;
 	private static $plugin_basename = null;
 	private static $logger;

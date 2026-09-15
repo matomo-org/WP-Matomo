@@ -20,7 +20,11 @@ class AIBotTrackingTest extends WP_Piwik_TestCase {
 
 	private function reset_tracked_flag() {
 		$property = new \ReflectionProperty( AIBotTracking::class, 'ai_bot_tracked' );
-		$property->setAccessible( true );
+		if ( PHP_VERSION_ID < 80100 ) {
+			// implicit since PHP 8.1 and deprecated since PHP 8.5
+			// phpcs:ignore Generic.PHP.DeprecatedFunctions.Deprecated
+			$property->setAccessible( true );
+		}
 		$property->setValue( null, false );
 	}
 

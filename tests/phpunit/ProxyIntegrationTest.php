@@ -207,6 +207,23 @@ class ProxyIntegrationTest extends \WP_UnitTestCase {
 		$this->assertSame( 204, $response->status );
 	}
 
+	public function test_proxy_forwards_an_upstream_error_status_and_its_headers() {
+		$harness = self::$harness;
+		$harness->set_matomo_tracker_response(
+			500,
+			[
+				'Content-Type'                => 'text/plain',
+				'Access-Control-Allow-Origin' => '*',
+			],
+			'Internal Server Error'
+		);
+
+		$response = $harness->get( 'matomo.php', [ 'idsite' => 1 ] );
+
+		$this->assertSame( 500, $response->status );
+		$this->assertSame( '*', $response->headers['access-control-allow-origin'] );
+	}
+
 	public function test_proxy_forwards_whitelisted_headers_and_strips_secure_from_cookies() {
 		$harness = self::$harness;
 		$harness->set_matomo_tracker_response(

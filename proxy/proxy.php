@@ -410,16 +410,32 @@ function getHttpContentAndStatus($url, $timeout, $user_agent, $postBody = '')
     if ($useFopen) {
         $ctx = stream_context_create($stream_options);
 
+        // WP-Matomo customization: $http_response_header must be assigned before the fallback read
+        // below. PHP 8.5 deprecated the predefined variable and reports the read at compile time,
+        // so it would otherwise emit a notice merely by loading this file. PHP still overwrites
+        // the value.
+        $http_response_header = array();
+
         if ($DEBUG_PROXY) {
             $content = file_get_contents($url, 0, $ctx);
         } else {
             $content = @file_get_contents($url, 0, $ctx);
         }
 
+        $responseHeaders = array();
+        if (function_exists('http_get_last_response_headers')) {
+            $headers = http_get_last_response_headers();
+            if (is_array($headers)) {
+                $responseHeaders = $headers;
+            }
+        } else {
+            $responseHeaders = $http_response_header;
+        }
+
         $httpStatus = '';
-        if (isset($http_response_header[0])) {
-            $httpStatus = $http_response_header[0];
-            $httpResponseHeaders = array_slice($http_response_header, 1);
+        if (isset($responseHeaders[0])) {
+            $httpStatus = $responseHeaders[0];
+            $httpResponseHeaders = array_slice($responseHeaders, 1);
             $httpResponseHeaders = array_map('transformHeaderLine', $httpResponseHeaders);
         }
     } else {
@@ -458,7 +474,10 @@ function getHttpContentAndStatus($url, $timeout, $user_agent, $postBody = '')
         if (!empty($httpStatus)) {
             $httpStatus = 'HTTP/1.1 ' . $httpStatus;
         }
-        curl_close($ch);
+        if (version_compare(PHP_VERSION, '8', '<')) {
+            // no-op since PHP 8.0 and deprecated since PHP 8.5
+            curl_close($ch);
+        }
     }
 
     return array(

@@ -2100,6 +2100,14 @@ didn't change any existing VisitorId value */
     /**
      * @ignore
      */
+    protected function hasCurlSupport(): bool
+    {
+        return function_exists('curl_init') && function_exists('curl_exec');
+    }
+
+    /**
+     * @ignore
+     */
     protected function sendRequest(string $url, string $method = 'GET', $data = null, bool $force = false): string
     {
         self::$DEBUG_LAST_REQUESTED_URL = $url;
@@ -2155,7 +2163,7 @@ didn't change any existing VisitorId value */
 
         $content = '';
 
-        if (function_exists('curl_init') && function_exists('curl_exec')) {
+        if ($this->hasCurlSupport()) {
             $options = $this->prepareCurlOptions($url, $method, $data, $forcePostUrlEncoded);
 
             $ch = curl_init();
@@ -2184,17 +2192,37 @@ didn't change any existing VisitorId value */
 
                 $this->parseIncomingCookies(explode("\r\n", $header));
             } finally {
-                curl_close($ch);
+                if (version_compare(PHP_VERSION, '8', '<')) {
+                    // no-op since PHP 8.0 and deprecated since PHP 8.5
+                    curl_close($ch);
+                }
                 ob_end_clean();
             }
         } elseif (function_exists('stream_context_create')) {
             $stream_options = $this->prepareStreamOptions($method, $data, $forcePostUrlEncoded);
 
             $ctx = stream_context_create($stream_options);
-            $response = file_get_contents($url, 0, $ctx);
+
+            // $http_response_header must be assigned before the fallback read below: PHP 8.5
+            // deprecated the predefined variable and reports it when read, so the read would
+            // otherwise emit a notice merely by loading this file. PHP still overwrites the value.
+            $http_response_header = [];
+
+            // a tracking request that cannot reach Matomo must not emit a warning into the page
+            $response = @file_get_contents($url, 0, $ctx);
             $content = $response;
 
-            $this->parseIncomingCookies($http_response_header);
+            $responseHeaders = [];
+            if (function_exists('http_get_last_response_headers')) {
+                $headers = http_get_last_response_headers();
+                if (is_array($headers)) {
+                    $responseHeaders = $headers;
+                }
+            } else {
+                $responseHeaders = $http_response_header;
+            }
+
+            $this->parseIncomingCookies($responseHeaders);
         }
 
         return $content;
