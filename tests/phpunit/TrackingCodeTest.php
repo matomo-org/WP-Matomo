@@ -54,8 +54,22 @@ class TrackingCodeTest extends WP_Piwik_TestCase {
 	public function test_prepare_tracking_code_uses_cdn_url_when_configured() {
 		$result = $this->prepare( [ 'track_cdnurl' => 'cdn.example.org' ] );
 
-		$this->assertStringContainsString( "'https://cdn.example.org/' : 'http://cdn.example.org/'", $result['script'] );
+		$this->assertStringContainsString( '"https:\/\/cdn.example.org\/" : "http:\/\/cdn.example.org\/"', $result['script'] );
 		$this->assertStringContainsString( 'g.src=ucdn+', $result['script'] );
+	}
+
+	public function test_prepare_tracking_code_should_not_let_a_cdn_url_end_the_script_element() {
+		$result = $this->prepare( [ 'track_cdnurl' => '</script><script>alert(1)</script>' ] );
+
+		$this->assertStringNotContainsString( '<script>alert(1)</script>', $result['script'] );
+		$this->assertStringContainsString( '<\/script><script>alert(1)<\/script>', $result['script'] );
+	}
+
+	public function test_prepare_tracking_code_should_not_let_a_cdn_url_end_the_string_it_is_put_in() {
+		$result = $this->prepare( [ 'track_cdnurlssl' => 'cdn.example.org/"+alert(1)+"' ] );
+
+		$this->assertStringNotContainsString( '"+alert(1)+"', $result['script'] );
+		$this->assertStringContainsString( '\"+alert(1)+\"', $result['script'] );
 	}
 
 	public function test_prepare_tracking_code_adds_cfasync_attribute_when_configured() {

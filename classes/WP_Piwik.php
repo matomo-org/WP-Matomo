@@ -24,8 +24,60 @@ class WP_Piwik {
 	 */
 	const DISMISS_SHORTCODE_NOTICE_ARG = 'wp-piwik-dismiss-shortcode-notice';
 
+	/**
+	 * Network option tracking the review of the tracking code of the sites that were
+	 * entering it manually before manual track mode required unfiltered_html.
+	 *
+	 * Holds MANUAL_TRACKING_REVIEW_PENDING while the review is outstanding and
+	 * MANUAL_TRACKING_REVIEW_DONE once a network administrator has made it. Unset on a
+	 * network that never ran a version storing unreviewed code.
+	 *
+	 * @see show_manual_tracking_review_notice()
+	 */
+	const MANUAL_TRACKING_REVIEW_OPTION = 'wp-piwik-manual_tracking_review';
+
+	/**
+	 * Value of MANUAL_TRACKING_REVIEW_OPTION while the review is outstanding
+	 */
+	const MANUAL_TRACKING_REVIEW_PENDING = 'pending';
+
+	/**
+	 * Value of MANUAL_TRACKING_REVIEW_OPTION once the review has been made
+	 */
+	const MANUAL_TRACKING_REVIEW_DONE = 'done';
+
+	/**
+	 * Last version whose settings page let the administrator of a single site of a network
+	 * enter the tracking code by hand
+	 *
+	 * @see note_manual_tracking_review_needed()
+	 */
+	const LAST_UNRESTRICTED_MANUAL_TRACKING_VERSION = '1.1.12';
+
+	/**
+	 * How many of the versions an install has run are kept in the version history
+	 *
+	 * @see record_plugin_version()
+	 */
+	const VERSION_HISTORY_LENGTH = 25;
+
+	/**
+	 * Max number of sites in a network for whom we will look through each site for
+	 * ones that use manual tracking mode.
+	 *
+	 * @see show_manual_tracking_review_notice()
+	 */
+	const MANUAL_TRACKING_REVIEW_SITE_LIMIT = 500;
+
+	/**
+	 * Query argument, and nonce action, of the manual tracking notice's dismiss link
+	 *
+	 * @see on_manual_tracking_review_notice_dismissed()
+	 */
+	const DISMISS_MANUAL_TRACKING_NOTICE_ARG = 'wp-piwik-dismiss-manual-tracking-notice';
+
 	private static $revision_id = 2023092201;
-	private static $version     = '1.1.12';
+	private static $version     = '1.1.13';
 	private static $blog_id;
 	private static $plugin_basename = null;
 	private static $logger;
@@ -71,11 +123,19 @@ class WP_Piwik {
 	 */
 	private function setup() {
 		self::$plugin_basename = plugin_basename( __FILE__ );
-		if ( ! $this->is_installed() ) {
+		$is_installed          = $this->is_installed();
+		if ( ! $is_installed ) {
 			$this->install_plugin();
 		} elseif ( $this->is_updated() ) {
 			$this->update_plugin();
 		}
+
+		$previous_version = $this->record_plugin_version();
+
+		if ( $is_installed ) {
+			$this->note_manual_tracking_review_needed( $previous_version );
+		}
+
 		if ( $this->is_config_submitted() ) {
 			$this->apply_settings();
 		}
@@ -188,6 +248,30 @@ class WP_Piwik {
 					'on_deprecated_shortcode_notice_dismissed',
 				)
 			);
+			add_action(
+				'all_admin_notices',
+				array(
+					$this,
+					'show_manual_tracking_review_notice',
+				)
+			);
+			add_action(
+				'admin_init',
+				array(
+					$this,
+					'on_manual_tracking_review_notice_dismissed',
+				)
+			);
+			// both dashboards, since a network administrator may work in either one
+			foreach ( array( 'wp_dashboard_setup', 'wp_network_dashboard_setup' ) as $dashboard_hook ) {
+				add_action(
+					$dashboard_hook,
+					array(
+						$this,
+						'add_manual_tracking_review_dashboard_widget',
+					)
+				);
+			}
 			if ( $this->is_dashboard_active() ) {
 				add_action(
 					'wp_dashboard_setup',
@@ -394,6 +478,58 @@ class WP_Piwik {
 			$this->add_notice( 'update', sprintf( __( '%1$s updated to %2$s.', 'wp-piwik' ), self::$settings->get_not_empty_global_option( 'plugin_display_name' ), self::$version ), __( 'Please validate your configuration', 'wp-piwik' ) );
 		}
 		$this->install_plugin( true );
+	}
+
+	/**
+	 * Append the running version to the version history
+	 *
+	 * @return string the version that ran before this one, empty for an install that
+	 *                recorded none
+	 */
+	private function record_plugin_version() {
+		$history          = array_values( (array) self::$settings->get_global_option( 'version_history' ) );
+		$previous_version = (string) end( $history );
+		if ( self::$version === $previous_version ) {
+			return $previous_version;
+		}
+
+		$history[] = self::$version;
+
+		// enforce the version history maximum length
+		$history = array_slice( $history, -self::VERSION_HISTORY_LENGTH );
+
+		self::$settings->set_global_option( 'version_history', $history );
+
+		return $previous_version;
+	}
+
+	/**
+	 * Flag the tracking code of this install for review by a network administrator
+	 *
+	 * Only an install that ran a version accepting manual tracking code from a site
+	 * administrator can hold code a network never approved. A version installed fresh at or
+	 * after the unfiltered_html requirement has nothing to review, and neither has a single
+	 * site, whose administrator may publish script anyway.
+	 *
+	 * @param string $previous_version
+	 *          the version this request replaces, empty for a version that stored none
+	 */
+	private function note_manual_tracking_review_needed( $previous_version ) {
+		if ( ! is_multisite() ) {
+			return;
+		}
+
+		// no version was stored up to 1.1.12, so an empty one is one of those releases.
+		// version_compare() already orders it below every real version.
+		if ( ! version_compare( $previous_version, self::LAST_UNRESTRICTED_MANUAL_TRACKING_VERSION, '<=' ) ) {
+			return;
+		}
+
+		if ( get_site_option( self::MANUAL_TRACKING_REVIEW_OPTION ) ) {
+			return;
+		}
+
+		update_site_option( self::MANUAL_TRACKING_REVIEW_OPTION, self::MANUAL_TRACKING_REVIEW_PENDING );
 	}
 
 	/**
@@ -642,6 +778,173 @@ class WP_Piwik {
 			esc_url( 'https://matomo.org/faq/reports/embed-a-matomo-report-in-a-html-page/' ),
 			esc_html__( 'Learn how to embed a Matomo report', 'wp-piwik' )
 		);
+	}
+
+	/**
+	 * Ask the network administrator to review the tracking code of the sites entering it
+	 * manually. Only required for versions updating from at or before 1.1.12, since those
+	 * versions did not require unfiltered_html to use manual tracking mode.
+	 */
+	public function show_manual_tracking_review_notice() {
+		// the dashboard makes the same review its own widget, which is harder to walk past
+		// than a notice. showing both would say it twice on one screen.
+		if ( $this->is_dashboard_screen() ) {
+			return;
+		}
+
+		$review = $this->get_manual_tracking_review_message();
+		if ( '' === $review ) {
+			return;
+		}
+
+		printf(
+			'<div class="notice notice-warning"><p><strong>%s</strong></p>%s</div>',
+			esc_html( $this->get_manual_tracking_review_title() ),
+			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+			$review
+		);
+	}
+
+	/**
+	 * Put the manual tracking code review on the dashboard.
+	 */
+	public function add_manual_tracking_review_dashboard_widget() {
+		$review = $this->get_manual_tracking_review_message();
+		if ( '' === $review ) {
+			return;
+		}
+
+		wp_add_dashboard_widget(
+			'wp-piwik-manual-tracking-review',
+			$this->get_manual_tracking_review_title(),
+			function () use ( $review ) {
+				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+				echo $review;
+			},
+			null,
+			null,
+			'normal',
+			'high'
+		);
+	}
+
+	/**
+	 * Get the heading both the manual tracking review notice and its dashboard widget use
+	 *
+	 * @return string heading
+	 */
+	private function get_manual_tracking_review_title() {
+		return __( 'Connect Matomo: please review your manually entered tracking code', 'wp-piwik' );
+	}
+
+	/**
+	 * Build the body of the manual tracking code review
+	 *
+	 * @return string escaped markup, empty when there is nothing left to review
+	 */
+	private function get_manual_tracking_review_message() {
+		// only the network administrator can review another site's tracking code.
+		if ( ! is_multisite() || ! current_user_can( 'manage_network' ) ) {
+			return '';
+		}
+
+		// a network wide activation can only use manual tracking code if a user with manage
+		// sites enables it, so we don't need to ask for a review here
+		if ( $this->is_network_mode() ) {
+			return '';
+		}
+
+		if ( self::MANUAL_TRACKING_REVIEW_PENDING !== get_site_option( self::MANUAL_TRACKING_REVIEW_OPTION ) ) {
+			// plugin was updated from a version that required unfiltered_html, so there is nothing to check for
+			return '';
+		}
+
+		// do not look through every site in a network if the network is too large for this
+		// to be done in a single request
+		if ( wp_is_large_network() || get_blog_count() > self::MANUAL_TRACKING_REVIEW_SITE_LIMIT ) {
+			$sites = '<li>' . esc_html__( 'Your network is too large to list its sites here. Please check every site whose tracking mode is "Enter manually".', 'wp-piwik' ) . '</li>';
+		} else {
+			$blog_ids = $this->get_sites_using_manual_tracking();
+			if ( empty( $blog_ids ) ) {
+				// no site of this network enters its tracking code by hand
+				update_site_option( self::MANUAL_TRACKING_REVIEW_OPTION, self::MANUAL_TRACKING_REVIEW_DONE );
+				return '';
+			}
+
+			$sites = '';
+			foreach ( $blog_ids as $blog_id ) {
+				$sites .= sprintf(
+					'<li><a href="%s">%s</a></li>',
+					esc_url( get_admin_url( $blog_id, 'options-general.php?page=wp-matomo-settings' ) ),
+					esc_html( get_blog_option( $blog_id, 'blogname', (string) $blog_id ) )
+				);
+			}
+		}
+
+		return sprintf(
+			'<p>%s</p><ul>%s</ul><p><a href="%s">%s</a></p>',
+			esc_html__( 'A site entering its tracking code manually prints that code to every one of its pages as it was entered. Earlier versions of Connect Matomo accepted it from a site administrator, who a network does not allow to publish HTML or JavaScript. Please check that the stored code is what you expect. Only a network administrator can change it from now on.', 'wp-piwik' ),
+			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped above
+			$sites,
+			esc_url( wp_nonce_url( add_query_arg( self::DISMISS_MANUAL_TRACKING_NOTICE_ARG, '1' ), self::DISMISS_MANUAL_TRACKING_NOTICE_ARG ) ),
+			esc_html__( 'I have reviewed these sites, do not show this again', 'wp-piwik' )
+		);
+	}
+
+	/**
+	 * Check whether the screen being rendered is a dashboard
+	 *
+	 * @return boolean is a dashboard shown?
+	 */
+	private function is_dashboard_screen() {
+		if ( ! function_exists( 'get_current_screen' ) ) {
+			return false;
+		}
+		$screen = get_current_screen();
+		return $screen && in_array( $screen->base, array( 'dashboard', 'dashboard-network' ), true );
+	}
+
+	/**
+	 * Handle the dismiss link of the manual tracking code notice
+	 */
+	public function on_manual_tracking_review_notice_dismissed() {
+		// phpcs:ignore WordPress.Security.NonceVerification.Recommended
+		if ( ! isset( $_GET[ self::DISMISS_MANUAL_TRACKING_NOTICE_ARG ] ) ) {
+			return;
+		}
+
+		check_admin_referer( self::DISMISS_MANUAL_TRACKING_NOTICE_ARG );
+
+		if ( current_user_can( 'manage_network' ) ) {
+			update_site_option( self::MANUAL_TRACKING_REVIEW_OPTION, self::MANUAL_TRACKING_REVIEW_DONE );
+		}
+
+		// reload the current page without the dismissal query param
+		if ( wp_safe_redirect( remove_query_arg( array( self::DISMISS_MANUAL_TRACKING_NOTICE_ARG, '_wpnonce', 'clear', 'testscript' ) ) ) ) {
+			exit;
+		}
+	}
+
+	/**
+	 * Get the sites of the network whose tracking code is entered manually.
+	 *
+	 * @return int[] blog IDs
+	 */
+	private function get_sites_using_manual_tracking() {
+		$cached = get_site_transient( WP_Piwik\Settings::MANUAL_TRACKING_SITES_CACHE );
+		if ( is_array( $cached ) ) {
+			return $cached;
+		}
+
+		$blog_ids = array();
+		foreach ( (array) WP_Piwik\Settings::get_blog_list() as $blog ) {
+			if ( 'manually' === get_blog_option( $blog['blog_id'], 'wp-piwik_global-track_mode' ) ) {
+				$blog_ids[] = (int) $blog['blog_id'];
+			}
+		}
+
+		set_site_transient( WP_Piwik\Settings::MANUAL_TRACKING_SITES_CACHE, $blog_ids, DAY_IN_SECONDS );
+		return $blog_ids;
 	}
 
 	/**

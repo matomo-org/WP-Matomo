@@ -92,14 +92,19 @@ class TrackingCode {
 			$code  = preg_replace( '/img src="([^"]*)piwik.php/', 'img src="' . $proxy . 'matomo.php', $code );
 			$code  = preg_replace( '/img src="([^"]*)matomo.php/', 'img src="' . $proxy . 'matomo.php', $code );
 		}
-		if ( $settings->get_global_option( 'track_cdnurl' ) || $settings->get_global_option( 'track_cdnurlssl' ) ) {
+		$cdn_url     = $settings->get_global_option( 'track_cdnurl' );
+		$cdn_url_ssl = $settings->get_global_option( 'track_cdnurlssl' );
+		if ( $cdn_url || $cdn_url_ssl ) {
+			$secure_url   = wp_json_encode( 'https://' . ( $cdn_url_ssl ? $cdn_url_ssl : $cdn_url ) . '/' );
+			$insecure_url = wp_json_encode( 'http://' . ( $cdn_url ? $cdn_url : $cdn_url_ssl ) . '/' );
+
 			$code = str_replace(
 				array(
 					'var d=doc',
 					'g.src=u+',
 				),
 				array(
-					"var ucdn=(('https:' == document.location.protocol) ? 'https://" . ( $settings->get_global_option( 'track_cdnurlssl' ) ? $settings->get_global_option( 'track_cdnurlssl' ) : $settings->get_global_option( 'track_cdnurl' ) ) . "/' : 'http://" . ( $settings->get_global_option( 'track_cdnurl' ) ? $settings->get_global_option( 'track_cdnurl' ) : $settings->get_global_option( 'track_cdnurlssl' ) ) . "/');\nvar d=doc",
+					"var ucdn=(('https:' == document.location.protocol) ? " . $secure_url . ' : ' . $insecure_url . ");\nvar d=doc",
 					'g.src=ucdn+',
 				),
 				$code

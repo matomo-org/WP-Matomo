@@ -6,6 +6,8 @@ use WP_Piwik\Settings;
 
 class SettingsTest extends WP_Piwik_TestCase {
 
+	const CROSS_SITE_PAYLOAD = '<script>alert(1);</script>';
+
 	public function test_global_option_defaults_are_used_when_nothing_is_stored() {
 		$settings = $this->create_settings();
 
@@ -158,6 +160,8 @@ class SettingsTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_apply_changes_normalizes_and_persists_the_configuration() {
+		$this->log_in_as_a_user_who_may_publish_script();
+
 		$settings = $this->create_settings();
 
 		$settings->apply_changes(
@@ -183,6 +187,28 @@ class SettingsTest extends WP_Piwik_TestCase {
 		$this->assertSame( 'manually', get_option( 'wp-piwik_global-track_mode' ) );
 		$this->assertSame( 'yesterday', get_option( 'wp-piwik_global-default_date' ) );
 		$this->assertNotEmpty( $settings->get_global_option( 'last_settings_update' ) );
+	}
+
+	public function test_apply_changes_should_keep_the_version_history_the_settings_form_does_not_carry() {
+		$settings = $this->create_settings( [ 'version_history' => [ '1.1.11', '1.1.12' ] ] );
+
+		$settings->apply_changes( [ 'piwik_mode' => 'http' ] );
+
+		$this->assertSame( [ '1.1.11', '1.1.12' ], $settings->get_global_option( 'version_history' ) );
+		$this->assertSame( [ '1.1.11', '1.1.12' ], get_option( 'wp-piwik_global-version_history' ) );
+	}
+
+	public function test_apply_changes_should_ignore_a_version_history_the_request_carries() {
+		$settings = $this->create_settings( [ 'version_history' => [ '1.1.12' ] ] );
+
+		$settings->apply_changes(
+			[
+				'piwik_mode'      => 'http',
+				'version_history' => [ '9.9.9' ],
+			]
+		);
+
+		$this->assertSame( [ '1.1.12' ], $settings->get_global_option( 'version_history' ) );
 	}
 
 	public function test_get_global_option_defaults_the_shortcode_author_check_to_enabled() {
@@ -403,5 +429,254 @@ class SettingsTest extends WP_Piwik_TestCase {
 		$settings = new Settings( new \WP_Piwik_Test_Mock_Plugin() );
 
 		$this->assertSame( 'https://network.example.org/', $settings->get_global_option( 'piwik_url' ) );
+	}
+
+	public function test_apply_changes_should_not_store_a_script_in_manual_tracking_code_for_a_user_without_unfiltered_html() {
+		$this->log_in_as_a_network_site_administrator();
+
+		$settings = $this->create_settings();
+
+		$settings->apply_changes(
+			[
+				'track_mode'    => 'manually',
+				'tracking_code' => self::CROSS_SITE_PAYLOAD,
+			]
+		);
+
+		$this->assertStringNotContainsString( '<script', $settings->get_option( 'tracking_code' ) );
+	}
+
+	public function test_apply_changes_should_not_store_a_script_in_manual_noscript_code_for_a_user_without_unfiltered_html() {
+		$this->log_in_as_a_network_site_administrator();
+
+		$settings = $this->create_settings();
+
+		$settings->apply_changes(
+			[
+				'track_mode'    => 'manually',
+				'tracking_code' => '',
+				'noscript_code' => self::CROSS_SITE_PAYLOAD,
+			]
+		);
+
+		$this->assertStringNotContainsString( '<script', $settings->get_option( 'noscript_code' ) );
+	}
+
+	public function test_apply_changes_should_store_manual_tracking_code_for_a_user_with_unfiltered_html() {
+		$this->log_in_as_a_user_who_may_publish_script();
+
+		$settings = $this->create_settings();
+
+		$settings->apply_changes(
+			[
+				'track_mode'    => 'manually',
+				'tracking_code' => self::CROSS_SITE_PAYLOAD,
+			]
+		);
+
+		$this->assertSame( self::CROSS_SITE_PAYLOAD, $settings->get_option( 'tracking_code' ) );
+	}
+
+	public function test_apply_changes_should_not_enable_manual_track_mode_for_a_user_without_unfiltered_html() {
+		$this->log_in_as_a_network_site_administrator();
+
+		$settings = $this->create_settings( [ 'track_mode' => 'default' ] );
+
+		$settings->apply_changes( [ 'track_mode' => 'manually' ] );
+
+		$this->assertSame( 'default', $settings->get_global_option( 'track_mode' ) );
+	}
+
+	public function test_apply_changes_should_reject_a_tracking_mode_the_settings_page_does_not_offer() {
+		$this->log_in_as_a_user_who_may_publish_script();
+
+		$settings = $this->create_settings( [ 'track_mode' => 'default' ] );
+
+		$settings->apply_changes( [ 'track_mode' => 'no-such-mode' ] );
+
+		$this->assertSame( 'default', $settings->get_global_option( 'track_mode' ) );
+	}
+
+	public function test_get_track_mode_options_should_offer_manual_mode_to_a_user_with_unfiltered_html() {
+		$this->log_in_as_a_user_who_may_publish_script();
+
+		$this->assertArrayHasKey( 'manually', $this->create_settings()->get_track_mode_options() );
+	}
+
+	public function test_get_track_mode_options_should_not_offer_manual_mode_to_a_user_without_unfiltered_html() {
+		$this->log_in_as_a_network_site_administrator();
+
+		$options = $this->create_settings()->get_track_mode_options();
+
+		$this->assertArrayNotHasKey( 'manually', $options );
+		// the modes whose code Connect Matomo generates itself stay available
+		$this->assertArrayHasKey( 'default', $options );
+		$this->assertArrayHasKey( 'proxy', $options );
+	}
+
+	public function test_get_track_mode_options_should_keep_manual_mode_for_a_site_already_using_it() {
+		$this->log_in_as_a_network_site_administrator();
+
+		$settings = $this->create_settings( [ 'track_mode' => 'manually' ] );
+
+		$this->assertArrayHasKey( 'manually', $settings->get_track_mode_options() );
+	}
+
+	public function test_apply_changes_should_keep_configuring_ordinary_settings_for_a_user_without_unfiltered_html() {
+		$this->log_in_as_a_network_site_administrator();
+
+		$settings = $this->create_settings();
+
+		$settings->apply_changes(
+			[
+				'piwik_mode'       => 'http',
+				'piwik_url'        => 'https://stats.example.org/',
+				'auto_site_config' => false,
+				'site_id'          => '3',
+				'track_mode'       => 'default',
+				'track_search'     => true,
+			]
+		);
+
+		// the delegated administrator is still meant to run analytics on their own site
+		$this->assertSame( 'https://stats.example.org/', $settings->get_global_option( 'piwik_url' ) );
+		$this->assertSame( 3, $settings->get_option( 'site_id' ) );
+		$this->assertSame( 'default', $settings->get_global_option( 'track_mode' ) );
+		$this->assertTrue( (bool) $settings->get_global_option( 'track_search' ) );
+	}
+
+	public function test_apply_changes_should_keep_the_manual_tracking_code_when_the_request_omits_the_track_mode() {
+		$this->log_in_as_a_network_site_administrator();
+
+		$settings = $this->create_settings(
+			[ 'track_mode' => 'manually' ],
+			[
+				'tracking_code' => self::CROSS_SITE_PAYLOAD,
+				'noscript_code' => self::CROSS_SITE_PAYLOAD,
+			]
+		);
+
+		$settings->apply_changes(
+			[
+				'tracking_code' => '',
+				'noscript_code' => '',
+			]
+		);
+
+		$this->assertSame( self::CROSS_SITE_PAYLOAD, $settings->get_option( 'tracking_code' ) );
+		$this->assertSame( self::CROSS_SITE_PAYLOAD, $settings->get_option( 'noscript_code' ) );
+	}
+
+	public function test_apply_changes_should_escape_html_in_the_plugin_display_name() {
+		$this->log_in_as_a_user_who_may_publish_script();
+
+		$settings = $this->create_settings();
+
+		$settings->apply_changes( [ 'plugin_display_name' => '<b>Stats</b> & "more"' ] );
+
+		$this->assertSame( '&lt;b&gt;Stats&lt;/b&gt; &amp; &quot;more&quot;', $settings->get_global_option( 'plugin_display_name' ) );
+	}
+
+	public function test_save_should_not_escape_the_plugin_display_name_again() {
+		$this->log_in_as_a_user_who_may_publish_script();
+
+		$settings = $this->create_settings();
+		$settings->apply_changes( [ 'plugin_display_name' => 'Stats & Insights' ] );
+
+		// a save carrying any other change used to add a layer of escaping to the name
+		$settings->set_global_option( 'revision', 1 );
+		$settings->save();
+
+		$this->assertSame( 'Stats &amp; Insights', $settings->get_global_option( 'plugin_display_name' ) );
+		$this->assertSame( 'Stats &amp; Insights', get_option( 'wp-piwik_global-plugin_display_name' ) );
+	}
+
+	public function test_apply_changes_should_keep_the_tracking_code_a_user_without_unfiltered_html_leaves_manual_mode() {
+		$this->log_in_as_a_network_site_administrator();
+
+		$settings = $this->create_settings(
+			[ 'track_mode' => 'manually' ],
+			[ 'tracking_code' => self::CROSS_SITE_PAYLOAD ]
+		);
+
+		$settings->apply_changes(
+			[
+				'track_mode'    => 'default',
+				'tracking_code' => '',
+			]
+		);
+
+		$this->assertSame( self::CROSS_SITE_PAYLOAD, $settings->get_option( 'tracking_code' ) );
+	}
+
+	public function test_apply_changes_should_clear_the_tracking_code_when_a_user_with_unfiltered_html_leaves_manual_mode() {
+		$this->log_in_as_a_user_who_may_publish_script();
+
+		$settings = $this->create_settings(
+			[ 'track_mode' => 'manually' ],
+			[ 'tracking_code' => self::CROSS_SITE_PAYLOAD ]
+		);
+
+		$settings->apply_changes(
+			[
+				'track_mode'    => 'default',
+				'tracking_code' => '',
+			]
+		);
+
+		$this->assertSame( '', $settings->get_option( 'tracking_code' ) );
+	}
+
+	public function test_apply_changes_should_reject_a_forced_protocol_the_settings_page_does_not_offer() {
+		$this->log_in_as_a_user_who_may_publish_script();
+
+		$settings = $this->create_settings( [ 'force_protocol' => 'https' ] );
+
+		// the protocol is written into the tracker URL of the generated tracking code
+		$settings->apply_changes( [ 'force_protocol' => 'https"+alert(1)+"' ] );
+
+		$this->assertSame( 'https', $settings->get_global_option( 'force_protocol' ) );
+	}
+
+	public function test_apply_changes_should_store_a_forced_protocol_the_settings_page_offers() {
+		$this->log_in_as_a_user_who_may_publish_script();
+
+		$settings = $this->create_settings();
+
+		$settings->apply_changes( [ 'force_protocol' => 'https' ] );
+
+		$this->assertSame( 'https', $settings->get_global_option( 'force_protocol' ) );
+	}
+
+	public function test_get_force_protocol_options_should_offer_the_protocols_the_tracking_code_understands() {
+		$this->assertSame(
+			[ 'disabled', 'http', 'https' ],
+			array_keys( $this->create_settings()->get_force_protocol_options() )
+		);
+	}
+
+	private function log_in_as_a_user_who_may_publish_script() {
+		$user_id = self::factory()->user->create( [ 'role' => 'administrator' ] );
+		if ( is_multisite() ) {
+			grant_super_admin( $user_id );
+		}
+		wp_set_current_user( $user_id );
+
+		$this->assertTrue( current_user_can( 'unfiltered_html' ), 'precondition: the user may publish script' );
+	}
+
+	private function log_in_as_a_network_site_administrator() {
+		if ( ! is_multisite() ) {
+			$this->markTestSkipped( 'Only a network withholds unfiltered_html from an administrator.' );
+		}
+
+		switch_to_blog( self::factory()->blog->create() );
+
+		$user_id = self::factory()->user->create();
+		add_user_to_blog( get_current_blog_id(), $user_id, 'administrator' );
+		wp_set_current_user( $user_id );
+
+		$this->assertTrue( current_user_can( 'manage_options' ), 'precondition: the user may open the settings screen' );
+		$this->assertFalse( current_user_can( 'unfiltered_html' ), 'precondition: the user may not publish script' );
 	}
 }

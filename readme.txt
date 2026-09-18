@@ -3,14 +3,14 @@
 Contributors: Braekling
 Requires at least: 5.0
 Tested up to: 7.0.0
-Stable tag: 1.1.12
+Stable tag: 1.1.13
 Tags: matomo, tracking, statistics, stats, analytics
 
 Adds Matomo (former Piwik) statistics to your WordPress dashboard and is also able to add the Matomo Tracking Code to your blog.
 
 == Description ==
 
-**Version 1.1.11 includes a security related fix, it is highly recommended to update to this or a later version.**
+**Version 1.1.13 includes a security related fix, it is highly recommended to update to this or a later version.**
 
 If you are not yet using Matomo On-Premise, Matomo Cloud or hosting your own instance of Matomo, please use the [Matomo for WordPress plugin](https://wordpress.org/plugins/matomo/).
 
@@ -154,6 +154,12 @@ Add WP-Matomo to your /wp-content/plugins folder and enable it as [Network Plugi
 5. Matomo: Here you'll find your auth token.
 
 == Changelog ==
+
+= 1.1.13 =
+* Security: entering the tracking code manually now requires the "unfiltered_html" capability. Inside a WordPress network only a network administrator holds it, so the "Enter manually" tracking mode and the tracking code and noscript code fields are no longer offered to the administrator of a single site of a network, who a network does not allow to publish HTML or JavaScript. Outside a network an administrator still holds it as before. If your installation defines DISALLOW_UNFILTERED_HTML, WordPress withholds the capability from everyone, and nobody can edit the tracking code by hand any more: choose one of the tracking modes Connect Matomo generates itself instead.
+* Security: the "CDN URL", "CDN URL (SSL)" and "Force Matomo to use a specific protocol" settings are now JSON encoded and validated before being written into the generated tracking code.
+* Diagnostics: If your network was running an earlier version and has sites whose tracking code is entered manually, a notice & dashboard widget ask you to review that code once. Tracking code stored by a site administrator before this release keeps being used until you change it, so please check that it is what you expect.
+* Diagnostics: The versions a site has run are recorded in a new "version_history" setting.
 
 = 1.1.12 =
 * Bug fix: PHP 8.5 no longer reports deprecation notices for the bundled Matomo tracker, the tracking proxy and requests to the Matomo HTTP API.

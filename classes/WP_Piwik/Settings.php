@@ -36,6 +36,13 @@ class Settings {
 	const COOKIE_ALLOWLIST_MAX_LENGTH       = 4096;
 
 	/**
+	 * Network transient holding the blog IDs whose tracking code is entered manually.
+	 *
+	 * @see \WP_Piwik::show_manual_tracking_review_notice()
+	 */
+	const MANUAL_TRACKING_SITES_CACHE = 'wp-piwik-manual_tracking_sites';
+
+	/**
 	 * @var \WP_Piwik variables and default settings container
 	 */
 	private static $wp_piwik;
@@ -47,13 +54,18 @@ class Settings {
 	 * @var array Define callback functions for changed settings
 	 */
 	private $check_settings = array(
-		'piwik_url'        => 'check_piwik_url',
-		'piwik_token'      => 'check_piwik_token',
-		'site_id'          => 'request_piwik_site_id',
-		'tracking_code'    => 'prepare_tracking_code',
-		'noscript_code'    => 'prepare_nocscript_code',
-		'cookie_allowlist' => 'check_cookie_allowlist',
-		'piwik_mode'       => 'check_piwik_mode',
+		// the tracking code callbacks below branch on the track mode, so it has to be
+		// checked first
+		'track_mode'          => 'check_track_mode',
+		'piwik_url'           => 'check_piwik_url',
+		'piwik_token'         => 'check_piwik_token',
+		'site_id'             => 'request_piwik_site_id',
+		'tracking_code'       => 'prepare_tracking_code',
+		'noscript_code'       => 'prepare_nocscript_code',
+		'cookie_allowlist'    => 'check_cookie_allowlist',
+		'piwik_mode'          => 'check_piwik_mode',
+		'force_protocol'      => 'check_force_protocol',
+		'plugin_display_name' => 'prepare_plugin_display_name',
 	);
 
 	/**
@@ -62,6 +74,9 @@ class Settings {
 	private $global_settings = array(
 		// Plugin settings
 		'revision'                    => 0,
+		// every version that ran, oldest first. empty for an install whose last version
+		// was 1.1.12 or older, none of which recorded one.
+		'version_history'             => array(),
 		'last_settings_update'        => 0,
 		// User settings: Piwik configuration
 		'piwik_mode'                  => 'http',
@@ -187,7 +202,6 @@ class Settings {
 			return;
 		}
 		self::$wp_piwik->log( 'Save settings' );
-		$this->global_settings['plugin_display_name'] = htmlspecialchars( $this->global_settings['plugin_display_name'], ENT_QUOTES, 'utf-8' );
 		foreach ( $this->global_settings as $key => $value ) {
 			if ( $this->check_network_activation() ) {
 				update_site_option( 'wp-piwik_global-' . $key, $value );
@@ -354,6 +368,11 @@ class Settings {
 		if ( ! self::$wp_piwik->is_valid_options_post() ) {
 			die( 'Invalid config changes.' );
 		}
+		$previous_track_mode = $this->get_global_option( 'track_mode' );
+
+		// make sure the version history does not change
+		$version_history = $this->get_global_option( 'version_history' );
+
 		$in = $this->check_settings( $in );
 		self::$wp_piwik->log( 'Apply changed settings:' );
 		foreach ( self::$default_settings ['globalSettings'] as $key => $val ) {
@@ -362,8 +381,14 @@ class Settings {
 		foreach ( self::$default_settings ['settings'] as $key => $val ) {
 			$this->set_option( $key, isset( $in [ $key ] ) ? $in [ $key ] : $val );
 		}
+		$this->set_global_option( 'version_history', $version_history );
 		$this->set_global_option( 'last_settings_update', (string) time() );
 		$this->save();
+
+		if ( is_multisite() && $previous_track_mode !== $this->get_global_option( 'track_mode' ) ) {
+			// this site has just started or stopped entering its tracking code manually
+			delete_site_transient( self::MANUAL_TRACKING_SITES_CACHE );
+		}
 	}
 
 	/**
@@ -430,6 +455,72 @@ class Settings {
 		$options = $this->get_matomo_mode_options();
 		if ( ! in_array( $value, array_keys( $options ), true ) ) {
 			return $this->get_global_option( 'piwik_mode' );
+		}
+		return $value;
+	}
+
+	/**
+	 * @return boolean
+	 */
+	public static function can_enter_tracking_code_manually() {
+		return current_user_can( 'unfiltered_html' );
+	}
+
+	/**
+	 * Get the tracking code modes the settings page offers
+	 *
+	 * @return array mode key => descriptive mode name
+	 */
+	public function get_track_mode_options() {
+		$options = array(
+			'disabled' => __( 'Disabled', 'wp-piwik' ),
+			'default'  => __( 'Default tracking', 'wp-piwik' ),
+			'js'       => __( 'Use js/index.php', 'wp-piwik' ),
+			'proxy'    => __( 'Use proxy script', 'wp-piwik' ),
+		);
+		// entering the tracking code by hand publishes unfiltered HTML to every page of
+		// the site, which WordPress only allows some users to do
+		if ( self::can_enter_tracking_code_manually() || 'manually' === $this->get_global_option( 'track_mode' ) ) {
+			$options['manually'] = __( 'Enter manually', 'wp-piwik' );
+		}
+		return $options;
+	}
+
+	/**
+	 * Reject a tracking mode the settings page does not offer the current user
+	 *
+	 * @param mixed $value new tracking mode
+	 * @return string tracking mode
+	 */
+	public function check_track_mode( $value ) {
+		if ( ! is_string( $value ) || ! array_key_exists( $value, $this->get_track_mode_options() ) ) {
+			return $this->get_global_option( 'track_mode' );
+		}
+		return $value;
+	}
+
+	/**
+	 * Get the protocols the settings page offers to force the tracker onto
+	 *
+	 * @return array protocol key => descriptive protocol name
+	 */
+	public function get_force_protocol_options() {
+		return array(
+			'disabled' => __( 'Disabled (default)', 'wp-piwik' ),
+			'http'     => __( 'http', 'wp-piwik' ),
+			'https'    => __( 'https (SSL)', 'wp-piwik' ),
+		);
+	}
+
+	/**
+	 * Reject a protocol the settings page does not offer.
+	 *
+	 * @param mixed $value new protocol
+	 * @return string protocol
+	 */
+	public function check_force_protocol( $value ) {
+		if ( ! is_string( $value ) || ! array_key_exists( $value, $this->get_force_protocol_options() ) ) {
+			return $this->get_global_option( 'force_protocol' );
 		}
 		return $value;
 	}
@@ -513,15 +604,23 @@ class Settings {
 	 * @phpstan-ignore method.unused
 	 */
 	private function prepare_tracking_code( $value, $in ) {
-		if ( 'manually' === $in['track_mode'] || 'disabled' === $in['track_mode'] ) {
-			$value = stripslashes( $value );
-			if ( $this->check_network_activation() ) {
-				update_site_option( 'wp-piwik-manually', $value );
-			}
-			return $value;
+		// the field is read only for a user who may not publish script, so the stored code is
+		// kept whatever mode the set carries. clearing it on a mode change would let such a
+		// user throw away code a privileged user entered, which they could not put back.
+		if ( ! self::can_enter_tracking_code_manually() ) {
+			return $this->get_option( 'tracking_code' );
 		}
 
-		return '';
+		$track_mode = $this->get_submitted_track_mode( $in );
+		if ( 'manually' !== $track_mode && 'disabled' !== $track_mode ) {
+			return '';
+		}
+
+		$value = stripslashes( $value );
+		if ( $this->check_network_activation() ) {
+			update_site_option( 'wp-piwik-manually', $value );
+		}
+		return $value;
 	}
 
 	/**
@@ -535,10 +634,44 @@ class Settings {
 	 * @phpstan-ignore method.unused
 	 */
 	private function prepare_nocscript_code( $value, $in ) {
-		if ( 'manually' === $in['track_mode'] ) {
+		if ( 'manually' === $this->get_submitted_track_mode( $in ) && self::can_enter_tracking_code_manually() ) {
 			return stripslashes( $value );
 		}
 		return $this->get_option( 'noscript_code' );
+	}
+
+	/**
+	 * Escape the plugin display name.
+	 *
+	 * The name is shown in places that do not escape it themselves, the admin menu among
+	 * them, so it is stored escaped. Escaping it here rather than on every save keeps a
+	 * name holding an ampersand or a quote from gaining another layer of escaping each
+	 * time any setting changes.
+	 *
+	 * @param mixed $value new display name
+	 * @return string display name
+	 * @phpstan-ignore method.unused
+	 */
+	private function prepare_plugin_display_name( $value ) {
+		if ( ! is_string( $value ) ) {
+			return $this->get_global_option( 'plugin_display_name' );
+		}
+		return htmlspecialchars( $value, ENT_QUOTES, 'utf-8' );
+	}
+
+	/**
+	 * Get the tracking mode the tracking code callbacks branch on
+	 *
+	 * Only a key the configuration set carries gets a callback of its own, so a set without
+	 * a tracking mode reaches the tracking code callbacks without check_track_mode() having
+	 * corrected one. Falling back to the stored mode keeps them from treating such a set as
+	 * a mode change and dropping the code a privileged user entered.
+	 *
+	 * @param array $in configuration set
+	 * @return string tracking mode
+	 */
+	private function get_submitted_track_mode( $in ) {
+		return isset( $in['track_mode'] ) ? $in['track_mode'] : $this->get_global_option( 'track_mode' );
 	}
 
 	/**
