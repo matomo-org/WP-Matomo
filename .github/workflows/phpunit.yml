@@ -59,12 +59,22 @@ jobs:
       - name: Install WordPress
         run: ddev wp-matomo:install --only=tests
 
+      - name: Install the Matomo to compare the tracking code against
+        run: ddev wp-matomo:matomo up
+
+      # note: --require-live-matomo turns that comparison's "no Matomo installed, skip" into a
+      # failure
       - name: Run PHPUnit
-        run: ddev wp-matomo:test
+        run: ddev wp-matomo:test --require-live-matomo
 
       - name: Run PHPUnit (multisite)
-        run: ddev wp-matomo:test --multisite
+        run: ddev wp-matomo:test --multisite --require-live-matomo
 
       - name: Show web server logs on failure
         if: always()
         run: ddev logs -s web || true
+
+      # named after the ddev project, as wp-matomo:matomo names it
+      - name: Show the Matomo logs on failure
+        if: always()
+        run: docker logs wp-matomo-fidelity-matomo 2>&1 | tail -n 50 || true

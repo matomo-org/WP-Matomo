@@ -118,6 +118,31 @@ ddev wp-matomo:test --filter RestIntegrationTest
 browsable `wp/multisite` install: the suite works on its own `wptests_` tables, which it drops and
 recreates on every run.
 
+### Comparing the tracking code against a running Matomo
+
+The plugin builds the Matomo tracking code itself rather than asking Matomo for it, so
+`TrackingCodeGeneratorIntegrationTest` holds what it builds to what a real Matomo answers. It is an
+ordinary part of the suite; all it needs is a Matomo to ask:
+
+```
+ddev wp-matomo:matomo up
+ddev wp-matomo:test
+ddev wp-matomo:matomo down
+```
+
+`up` runs the latest `matomo:apache` image as `matomo` on the project's docker network, installs it
+against a `matomo` database on this project's database service, and records where it is in
+`/tmp/wp-matomo-live-matomo.json` inside the web container. It is a separate command rather than a
+`.ddev/docker-compose.*.yaml` service because every compose file in `.ddev` starts with the project,
+and this Matomo is only wanted for one test.
+
+Without it those cases skip themselves, which is what should happen for anyone running the suite who
+is not working on the tracking code. CI passes `--require-live-matomo`, which makes the same absence
+a failure instead: a Matomo that never came up must not read as a comparison that passed.
+
+This is unrelated to the external Matomo `ddev wp-matomo:connect` points the plugin at — it is only
+an oracle for the tracking code.
+
 ## Starting over
 
 ```

@@ -22,19 +22,21 @@ class WpPiwikTest extends WP_Piwik_TestCase {
 	public function set_up() {
 		parent::set_up();
 
-		if ( ! self::is_in_wp_env_environment() ) {
-			self::markTestSkipped( 'Not in wp-env environment, cannot run this test' );
+		if ( ! self::is_integration_environment() ) {
+			self::markTestSkipped( 'WP_MATOMO_INTEGRATION_TESTS is not set, cannot run this test' );
 		}
 
 		$this->set_up_mock_endpoint();
-		$this->answer_with_tracking_code( $this->get_matomo_tracking_code() );
+		$this->answer_with_site_urls( [] );
 		$this->configure_plugin();
 	}
 
-	public function test_update_tracking_code_returns_the_tracking_code_matomo_sent() {
+	public function test_update_tracking_code_returns_the_tracking_code_of_the_configured_site() {
 		$script = $this->wp_piwik->update_tracking_code( 1 );
 
 		$this->assertStringContainsString( "_paq.push(['trackPageView']);", $script );
+		$this->assertStringContainsString( "_paq.push(['setSiteId', '1']);", $script );
+		$this->assertStringContainsString( 'var u="//' . $this->mock_host() . '/";', $script );
 		$this->assertStringNotContainsString( '<noscript>', $script );
 	}
 
@@ -52,20 +54,16 @@ class WpPiwikTest extends WP_Piwik_TestCase {
 	public function test_update_tracking_code_stores_the_proxy_url_for_the_next_request() {
 		$this->wp_piwik->update_tracking_code( 1 );
 
-		$this->assertSame( '//stats.example.org/', get_option( 'wp-piwik_global-proxy_url' ) );
+		$this->assertSame( '//' . $this->mock_host() . '/', get_option( 'wp-piwik_global-proxy_url' ) );
 	}
 
-	public function test_update_tracking_code_asks_matomo_for_the_javascript_tag_of_the_configured_site() {
+	public function test_update_tracking_code_should_not_ask_matomo_for_the_tracking_code() {
 		$this->wp_piwik->update_tracking_code( 1 );
 
-		$urls = $this->get_requested_api_urls();
-
-		$this->assertNotEmpty( $urls );
-		$this->assertStringContainsString( 'method=SitesManager.getJavascriptTag', $urls[0] );
-		$this->assertStringContainsString( 'idSite=1', $urls[0] );
+		$this->assertSame( [], $this->get_captured_requests() );
 	}
 
-	public function test_update_tracking_code_passes_the_configured_tracking_options_to_matomo() {
+	public function test_update_tracking_code_puts_the_configured_tracking_options_into_the_tracking_code() {
 		$this->configure_plugin(
 			[
 				'track_across'              => true,
@@ -74,27 +72,139 @@ class WpPiwikTest extends WP_Piwik_TestCase {
 				'track_crossdomain_linking' => true,
 			]
 		);
+		$this->answer_with_site_urls( [ 'https://blog.example.org/', 'https://www.example.org/' ] );
+
+		$script = $this->wp_piwik->update_tracking_code( 1 );
+
+		$this->assertStringContainsString( '_paq.push(["setCookieDomain", "*.blog.example.org"]);', $script );
+		$this->assertStringContainsString( '_paq.push(["setDomains", ["*.blog.example.org/","*.www.example.org/"]]);', $script );
+		$this->assertStringContainsString( '_paq.push(["enableCrossDomainLinking"]);', $script );
+		$this->assertStringContainsString( '_paq.push(["disableCookies"]);', $script );
+	}
+
+	public function test_update_tracking_code_asks_matomo_only_for_the_urls_the_site_is_known_by() {
+		$this->configure_plugin( [ 'track_across_alias' => true ] );
+		$this->answer_with_site_urls( [ 'https://www.example.org/' ] );
 
 		$this->wp_piwik->update_tracking_code( 1 );
 
 		$urls = $this->get_requested_api_urls();
 
-		$this->assertNotEmpty( $urls );
-		$this->assertStringContainsString( 'mergeSubdomains=1', $urls[0] );
-		$this->assertStringContainsString( 'mergeAliasUrls=1', $urls[0] );
-		$this->assertStringContainsString( 'disableCookies=1', $urls[0] );
-		$this->assertStringContainsString( 'crossDomain=1', $urls[0] );
+		$this->assertCount( 1, $urls );
+		$this->assertStringContainsString( 'method=SitesManager.getSiteUrlsFromId', $urls[0] );
+		$this->assertStringContainsString( 'idSite=1', $urls[0] );
+	}
+
+	public function test_update_tracking_code_should_store_nothing_when_matomo_will_not_name_the_urls_of_the_site() {
+		$this->configure_connect_matomo_to_ask_matomo_for_the_urls_of_the_site();
+		$this->answer_with_an_api_error();
+
+		$this->assertFalse( $this->wp_piwik->update_tracking_code( 1 ) );
+
+		$this->assertEmpty( get_option( 'wp-piwik-tracking_code' ) );
+	}
+
+	public function test_update_tracking_code_should_keep_the_tracking_code_it_last_built_when_matomo_will_not_name_the_urls_of_the_site() {
+		$this->configure_connect_matomo_to_ask_matomo_for_the_urls_of_the_site();
+		$this->answer_with_site_urls( [ 'https://www.example.org/' ] );
+		$built = $this->wp_piwik->update_tracking_code( 1 );
+
+		$this->forget_what_matomo_already_answered();
+		$this->answer_with_an_api_error();
+		$this->wp_piwik->update_tracking_code( 1 );
+
+		$this->assertSame( $built, get_option( 'wp-piwik-tracking_code' ) );
+	}
+
+	public function test_update_tracking_code_should_report_that_matomo_will_not_name_the_urls_of_the_site() {
+		$this->configure_connect_matomo_to_ask_matomo_for_the_urls_of_the_site();
+		$this->answer_with_an_api_error();
+
+		$this->wp_piwik->update_tracking_code( 1 );
+
+		$notice = $this->render_notices();
+
+		$this->assertStringContainsString( 'could not ask Matomo what URLs this site is known by', $notice );
+		$this->assertStringContainsString( \WP_Piwik::NOTICE_CLASS_ERROR, $notice );
+	}
+
+	public function test_update_tracking_code_should_keep_reporting_that_matomo_will_not_name_the_urls_of_the_site() {
+		$this->configure_connect_matomo_to_ask_matomo_for_the_urls_of_the_site();
+		$this->answer_with_an_api_error();
+		$this->wp_piwik->update_tracking_code( 1 );
+
+		// the tracking code is rebuilt on every page view for as long as none is stored, so
+		// the report has to outlive the request that shows it
+		$this->render_notices();
+
+		$this->assertStringContainsString( 'could not ask Matomo what URLs this site is known by', $this->render_notices() );
+	}
+
+	public function test_update_tracking_code_should_withdraw_the_report_once_matomo_names_the_urls_of_the_site_again() {
+		$this->configure_connect_matomo_to_ask_matomo_for_the_urls_of_the_site();
+		$this->answer_with_an_api_error();
+		$this->wp_piwik->update_tracking_code( 1 );
+
+		$this->forget_what_matomo_already_answered();
+		$this->answer_with_site_urls( [ 'https://www.example.org/' ] );
+		$this->wp_piwik->update_tracking_code( 1 );
+
+		$this->assertStringNotContainsString( 'could not ask Matomo', $this->render_notices() );
+	}
+
+	public function test_update_tracking_code_should_withdraw_the_report_once_the_site_stops_generating_a_tracking_code() {
+		$this->configure_connect_matomo_to_ask_matomo_for_the_urls_of_the_site();
+		$this->answer_with_an_api_error();
+		$this->wp_piwik->update_tracking_code( 1 );
+
+		// turning tracking off is the obvious thing to do about a tracking code that cannot
+		// be built
+		$this->configure_plugin( [ 'track_mode' => 'disabled' ] );
+		$this->wp_piwik->update_tracking_code( 1 );
+
+		$this->assertStringNotContainsString( 'could not ask Matomo', $this->render_notices() );
+	}
+
+	public function test_update_tracking_code_should_withdraw_the_report_once_the_site_names_no_matomo() {
+		$this->configure_connect_matomo_to_ask_matomo_for_the_urls_of_the_site();
+		$this->answer_with_an_api_error();
+		$this->wp_piwik->update_tracking_code( 1 );
+
+		$this->configure_plugin( [ 'piwik_url' => '' ] );
+		$this->wp_piwik->update_tracking_code( 1 );
+
+		// the report tells the reader to check that Matomo is reachable, which says nothing
+		// to a site that no longer names one
+		$this->assertStringNotContainsString( 'could not ask Matomo', $this->render_notices() );
+	}
+
+	public function test_update_tracking_code_should_take_an_answer_that_names_no_url_of_the_site() {
+		$this->configure_connect_matomo_to_ask_matomo_for_the_urls_of_the_site();
+		$this->answer_with_site_urls( [] );
+
+		$script = $this->wp_piwik->update_tracking_code( 1 );
+
+		// Matomo answering that it knows the site by no URL is an answer, unlike an error
+		$this->assertStringContainsString( "_paq.push(['trackPageView']);", $script );
+		$this->assertStringNotContainsString( 'setDomains', $script );
+		$this->assertStringNotContainsString( 'setCookieDomain', $script );
+	}
+
+	public function test_update_tracking_code_should_not_take_an_answer_that_names_no_host_for_a_url_of_the_site() {
+		$this->configure_plugin( [ 'track_across_alias' => true ] );
+		$this->answer_with_site_urls( [ 'not a url', 'https://www.example.org/' ] );
+
+		$script = $this->wp_piwik->update_tracking_code( 1 );
+
+		$this->assertStringContainsString( '_paq.push(["setDomains", ["*.www.example.org/"]]);', $script );
 	}
 
 	public function test_update_tracking_code_uses_the_site_id_of_the_blog_when_none_is_given() {
 		$this->configure_plugin( [], [ 'site_id' => 4 ] );
 
-		$this->wp_piwik->update_tracking_code();
+		$script = $this->wp_piwik->update_tracking_code();
 
-		$urls = $this->get_requested_api_urls();
-
-		$this->assertNotEmpty( $urls );
-		$this->assertStringContainsString( 'idSite=4', $urls[0] );
+		$this->assertStringContainsString( "_paq.push(['setSiteId', '4']);", $script );
 	}
 
 	/**
@@ -114,13 +224,21 @@ class WpPiwikTest extends WP_Piwik_TestCase {
 		];
 	}
 
-	public function test_update_tracking_code_stores_nothing_when_matomo_returns_no_tag() {
-		$this->answer_with_tracking_code( '' );
+	public function test_update_tracking_code_stores_nothing_when_no_matomo_is_configured() {
+		$this->configure_plugin( [ 'piwik_url' => '' ] );
 
 		$this->assertFalse( $this->wp_piwik->update_tracking_code( 1 ) );
 
 		$this->assertEmpty( get_option( 'wp-piwik-tracking_code' ) );
 		$this->assertEmpty( get_option( 'wp-piwik-last_tracking_code_update' ) );
+	}
+
+	public function test_update_tracking_code_stores_nothing_when_the_blog_has_no_matomo_site() {
+		$this->configure_plugin( [], [ 'site_id' => '' ] );
+
+		$this->assertFalse( $this->wp_piwik->update_tracking_code() );
+
+		$this->assertEmpty( get_option( 'wp-piwik-tracking_code' ) );
 	}
 
 	private function configure_plugin( array $global_options = [], array $options = [] ) {
@@ -148,20 +266,47 @@ class WpPiwikTest extends WP_Piwik_TestCase {
 
 		$this->wp_piwik = new \WP_Piwik();
 
-		// request keeps its results in static properties, so make sure to clear them
-		// before running a test
+		$this->forget_what_matomo_already_answered();
+	}
+
+	private function forget_what_matomo_already_answered() {
 		( new Rest( $this->wp_piwik, \WP_Piwik::get_settings() ) )->reset();
 	}
 
-	/**
-	 * Make the endpoint answer a bulk request with the given tracking code.
-	 */
-	private function answer_with_tracking_code( $tracking_code ) {
+	private function configure_connect_matomo_to_ask_matomo_for_the_urls_of_the_site() {
+		$this->configure_plugin(
+			[
+				'track_across'       => true,
+				'track_across_alias' => true,
+			]
+		);
+	}
+
+	private function answer_with_site_urls( array $site_urls ) {
+		$this->answer_with( $site_urls );
+	}
+
+	private function answer_with_an_api_error() {
+		$this->answer_with(
+			[
+				'result'  => 'error',
+				'message' => 'An unexpected website was found in the request: website id was set to \'1\'',
+			]
+		);
+	}
+
+	private function render_notices() {
+		ob_start();
+		$this->wp_piwik->show_notices();
+		return ob_get_clean();
+	}
+
+	private function answer_with( array $answer ) {
 		$this->set_mock_response(
 			[
 				'body' => wp_json_encode(
 					[
-						[ 'value' => $tracking_code ],
+						$answer,
 						[ 'value' => '5.0.0' ],
 					]
 				),
@@ -169,18 +314,8 @@ class WpPiwikTest extends WP_Piwik_TestCase {
 		);
 	}
 
-	private function get_matomo_tracking_code() {
-		return '<!-- Matomo -->' . "\n"
-			. '<script type="text/javascript">' . "\n"
-			. 'var _paq = window._paq = window._paq || [];' . "\n"
-			. "_paq.push(['trackPageView']);\n"
-			. "(function() {\n"
-			. 'var u="//stats.example.org/";' . "\n"
-			. "_paq.push(['setTrackerUrl', u+'matomo.php']);\n"
-			. "_paq.push(['setSiteId', '1']);\n"
-			. "})();\n"
-			. '</script>' . "\n"
-			. '<noscript><p><img src="//stats.example.org/matomo.php?idsite=1" style="border:0;" alt="" /></p></noscript>';
+	private function mock_host() {
+		return rtrim( preg_replace( '~^https?://~', '', $this->mock_url() ), '/' );
 	}
 
 	private function get_requested_api_urls() {

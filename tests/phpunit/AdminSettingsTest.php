@@ -56,6 +56,16 @@ class AdminSettingsTest extends WP_Piwik_TestCase {
 		$this->assertSame( [ 'last_month' ], $this->get_selected_option_values( $html ) );
 	}
 
+	public function test_show_select_should_mark_manual_tracking_as_selected_when_the_user_may_not_choose_it_but_it_has_been_selected_previously() {
+		$settings = $this->create_settings( [ 'track_mode' => 'manually' ] );
+
+		$this->assertFalse( \WP_Piwik\Settings::can_enter_tracking_code_manually(), 'precondition: the user may not publish script' );
+
+		$html = $this->render_select( $settings, 'track_mode', $settings->get_track_mode_options(), true );
+
+		$this->assertSame( [ 'manually' ], $this->get_selected_option_values( $html ) );
+	}
+
 	private function render_select( $settings, $id, array $options, $is_global ) {
 		$admin = new AdminSettings( new \WP_Piwik_Test_Mock_Plugin(), $settings );
 		ob_start();
