@@ -23,8 +23,14 @@ trait Mock_Matomo_Endpoint {
 		$this->write_runtime_file( 'requests.jsonl', '' );
 	}
 
-	private static function is_in_wp_env_environment() {
-		return defined( 'IN_WP_ENV' ) && IN_WP_ENV;
+	/**
+	 * The endpoint needs a web server that serves this plugin over HTTP, so a test using it
+	 * only runs when the environment opts in. DDEV sets this in .ddev/config.yaml.
+	 *
+	 * @return boolean
+	 */
+	private static function is_integration_environment() {
+		return (bool) getenv( 'WP_MATOMO_INTEGRATION_TESTS' );
 	}
 
 	private function write_runtime_file( $name, $contents ) {

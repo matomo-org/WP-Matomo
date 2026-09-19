@@ -70,11 +70,28 @@ class WP_Piwik {
 	const MANUAL_TRACKING_REVIEW_SITE_LIMIT = 500;
 
 	/**
+	 * Cached in place of the site list when the network holds more sites than that
+	 *
+	 * @see get_sites_using_manual_tracking()
+	 */
+	const MANUAL_TRACKING_NETWORK_TOO_LARGE = 'too-many-sites';
+
+	/**
 	 * Query argument, and nonce action, of the manual tracking notice's dismiss link
 	 *
 	 * @see on_manual_tracking_review_notice_dismissed()
 	 */
 	const DISMISS_MANUAL_TRACKING_NOTICE_ARG = 'wp-piwik-dismiss-manual-tracking-notice';
+
+	/**
+	 * Notice shown when requesting the site URLs from Matomo fails
+	 *
+	 * @see update_tracking_code()
+	 */
+	const SITE_URLS_NOTICE = 'matomo_site_urls';
+
+	const NOTICE_CLASS_ERROR   = 'notice notice-error';
+	const NOTICE_CLASS_UPDATED = 'updated fade';
 
 	private static $revision_id = 2023092201;
 	private static $version     = '1.1.13';
@@ -262,16 +279,6 @@ class WP_Piwik {
 					'on_manual_tracking_review_notice_dismissed',
 				)
 			);
-			// both dashboards, since a network administrator may work in either one
-			foreach ( array( 'wp_dashboard_setup', 'wp_network_dashboard_setup' ) as $dashboard_hook ) {
-				add_action(
-					$dashboard_hook,
-					array(
-						$this,
-						'add_manual_tracking_review_dashboard_widget',
-					)
-				);
-			}
 			if ( $this->is_dashboard_active() ) {
 				add_action(
 					'wp_dashboard_setup',
@@ -519,6 +526,12 @@ class WP_Piwik {
 			return;
 		}
 
+		// a network wide activation has one tracking code for the whole network, which only
+		// a user who can manage sites could have entered, so there is nothing to review
+		if ( $this->is_network_mode() ) {
+			return;
+		}
+
 		// no version was stored up to 1.1.12, so an empty one is one of those releases.
 		// version_compare() already orders it below every real version.
 		if ( ! version_compare( $previous_version, self::LAST_UNRESTRICTED_MANUAL_TRACKING_VERSION, '<=' ) ) {
@@ -543,14 +556,44 @@ class WP_Piwik {
 	 *          notice content
 	 * @param boolean $stay
 	 *          set to true if the message should persist (default: false)
+	 * @param string  $notice_class
+	 *          the notice's CSS classes, see the NOTICE_CLASS_ constants
 	 */
-	private function add_notice( $type, $subject, $text, $stay = false ) {
-		$notices          = $this->get_word_press_option( 'wp-piwik-notices', array() );
-		$notices[ $type ] = array(
+	private function add_notice( $type, $subject, $text, $stay = false, $notice_class = self::NOTICE_CLASS_UPDATED ) {
+		$notices = $this->get_word_press_option( 'wp-piwik-notices', array() );
+		if ( ! is_array( $notices ) ) {
+			$notices = array();
+		}
+
+		$notice = array(
 			'subject' => $subject,
 			'text'    => $text,
 			'stay'    => $stay,
+			'class'   => $notice_class,
 		);
+
+		// notice already exists, don't need to update
+		if ( isset( $notices[ $type ] ) && $notices[ $type ] === $notice ) {
+			return;
+		}
+
+		$notices[ $type ] = $notice;
+		$this->update_word_press_option( 'wp-piwik-notices', $notices );
+	}
+
+	/**
+	 * Withdraw a notice before it has been shown
+	 *
+	 * @param string $type
+	 *          identifier the notice was defined under
+	 */
+	private function remove_notice( $type ) {
+		$notices = $this->get_word_press_option( 'wp-piwik-notices', array() );
+		if ( ! is_array( $notices ) || ! isset( $notices[ $type ] ) ) {
+			return;
+		}
+
+		unset( $notices[ $type ] );
 		$this->update_word_press_option( 'wp-piwik-notices', $notices );
 	}
 
@@ -568,7 +611,8 @@ class WP_Piwik {
 
 			foreach ( $notices as $type => $notice ) {
 				printf(
-					'<div class="updated fade"><p>%s <strong>%s:</strong> %s: <a href="%s">%s</a></p></div>',
+					'<div class="%s"><p>%s <strong>%s:</strong> %s: <a href="%s">%s</a></p></div>',
+					esc_attr( isset( $notice ['class'] ) ? $notice ['class'] : self::NOTICE_CLASS_UPDATED ),
 					esc_html( $notice ['subject'] ),
 					esc_html__( 'Important', 'wp-piwik' ),
 					esc_html( $notice ['text'] ),
@@ -786,12 +830,6 @@ class WP_Piwik {
 	 * versions did not require unfiltered_html to use manual tracking mode.
 	 */
 	public function show_manual_tracking_review_notice() {
-		// the dashboard makes the same review its own widget, which is harder to walk past
-		// than a notice. showing both would say it twice on one screen.
-		if ( $this->is_dashboard_screen() ) {
-			return;
-		}
-
 		$review = $this->get_manual_tracking_review_message();
 		if ( '' === $review ) {
 			return;
@@ -799,42 +837,10 @@ class WP_Piwik {
 
 		printf(
 			'<div class="notice notice-warning"><p><strong>%s</strong></p>%s</div>',
-			esc_html( $this->get_manual_tracking_review_title() ),
+			esc_html__( 'Connect Matomo: please review your manually entered tracking code', 'wp-piwik' ),
 			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 			$review
 		);
-	}
-
-	/**
-	 * Put the manual tracking code review on the dashboard.
-	 */
-	public function add_manual_tracking_review_dashboard_widget() {
-		$review = $this->get_manual_tracking_review_message();
-		if ( '' === $review ) {
-			return;
-		}
-
-		wp_add_dashboard_widget(
-			'wp-piwik-manual-tracking-review',
-			$this->get_manual_tracking_review_title(),
-			function () use ( $review ) {
-				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
-				echo $review;
-			},
-			null,
-			null,
-			'normal',
-			'high'
-		);
-	}
-
-	/**
-	 * Get the heading both the manual tracking review notice and its dashboard widget use
-	 *
-	 * @return string heading
-	 */
-	private function get_manual_tracking_review_title() {
-		return __( 'Connect Matomo: please review your manually entered tracking code', 'wp-piwik' );
 	}
 
 	/**
@@ -859,14 +865,15 @@ class WP_Piwik {
 			return '';
 		}
 
-		// do not look through every site in a network if the network is too large for this
-		// to be done in a single request
-		if ( wp_is_large_network() || get_blog_count() > self::MANUAL_TRACKING_REVIEW_SITE_LIMIT ) {
-			$sites = '<li>' . esc_html__( 'Your network is too large to list its sites here. Please check every site whose tracking mode is "Enter manually".', 'wp-piwik' ) . '</li>';
+		$blog_ids = $this->get_sites_using_manual_tracking();
+
+		// a network too large to look through in a single request is asked to review without
+		// a list of sites to look at
+		if ( self::MANUAL_TRACKING_NETWORK_TOO_LARGE === $blog_ids ) {
+			$sites = '<li>' . esc_html__( 'Your network is too large to list its sites here. Please check the stored tracking code of every site whose tracking mode is "Enter manually" or "Disabled".', 'wp-piwik' ) . '</li>';
 		} else {
-			$blog_ids = $this->get_sites_using_manual_tracking();
 			if ( empty( $blog_ids ) ) {
-				// no site of this network enters its tracking code by hand
+				// no site of this network holds a tracking code entered by hand
 				update_site_option( self::MANUAL_TRACKING_REVIEW_OPTION, self::MANUAL_TRACKING_REVIEW_DONE );
 				return '';
 			}
@@ -883,25 +890,12 @@ class WP_Piwik {
 
 		return sprintf(
 			'<p>%s</p><ul>%s</ul><p><a href="%s">%s</a></p>',
-			esc_html__( 'A site entering its tracking code manually prints that code to every one of its pages as it was entered. Earlier versions of Connect Matomo accepted it from a site administrator, who a network does not allow to publish HTML or JavaScript. Please check that the stored code is what you expect. Only a network administrator can change it from now on.', 'wp-piwik' ),
+			esc_html__( 'These sites hold a tracking code that was entered by hand, either printing it to every one of their pages as it was entered or holding it for the next time tracking is turned on. Earlier versions of Connect Matomo accepted it from a site administrator, who a network does not allow to publish HTML or JavaScript. Please check that the stored code is what you expect. Only a network administrator can change it from now on.', 'wp-piwik' ),
 			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped above
 			$sites,
 			esc_url( wp_nonce_url( add_query_arg( self::DISMISS_MANUAL_TRACKING_NOTICE_ARG, '1' ), self::DISMISS_MANUAL_TRACKING_NOTICE_ARG ) ),
 			esc_html__( 'I have reviewed these sites, do not show this again', 'wp-piwik' )
 		);
-	}
-
-	/**
-	 * Check whether the screen being rendered is a dashboard
-	 *
-	 * @return boolean is a dashboard shown?
-	 */
-	private function is_dashboard_screen() {
-		if ( ! function_exists( 'get_current_screen' ) ) {
-			return false;
-		}
-		$screen = get_current_screen();
-		return $screen && in_array( $screen->base, array( 'dashboard', 'dashboard-network' ), true );
 	}
 
 	/**
@@ -928,23 +922,132 @@ class WP_Piwik {
 	/**
 	 * Get the sites of the network whose tracking code is entered manually.
 	 *
-	 * @return int[] blog IDs
+	 * @return int[]|string blog IDs, or MANUAL_TRACKING_NETWORK_TOO_LARGE when the network
+	 *                      holds more sites than one request looks through
 	 */
 	private function get_sites_using_manual_tracking() {
 		$cached = get_site_transient( WP_Piwik\Settings::MANUAL_TRACKING_SITES_CACHE );
-		if ( is_array( $cached ) ) {
+		if ( is_array( $cached ) || self::MANUAL_TRACKING_NETWORK_TOO_LARGE === $cached ) {
 			return $cached;
 		}
 
+		$settings_by_blog = wp_is_large_network() ? null : self::read_tracking_settings_of_every_site();
+
+		if ( null === $settings_by_blog ) {
+			set_site_transient( WP_Piwik\Settings::MANUAL_TRACKING_SITES_CACHE, self::MANUAL_TRACKING_NETWORK_TOO_LARGE, DAY_IN_SECONDS );
+			return self::MANUAL_TRACKING_NETWORK_TOO_LARGE;
+		}
+
 		$blog_ids = array();
-		foreach ( (array) WP_Piwik\Settings::get_blog_list() as $blog ) {
-			if ( 'manually' === get_blog_option( $blog['blog_id'], 'wp-piwik_global-track_mode' ) ) {
-				$blog_ids[] = (int) $blog['blog_id'];
+		foreach ( $settings_by_blog as $blog_id => $settings ) {
+			if ( self::holds_hand_entered_tracking_code( $settings ) ) {
+				$blog_ids[] = $blog_id;
 			}
 		}
 
 		set_site_transient( WP_Piwik\Settings::MANUAL_TRACKING_SITES_CACHE, $blog_ids, DAY_IN_SECONDS );
 		return $blog_ids;
+	}
+
+	/**
+	 * Read the tracking settings the review looks at from every site of the network
+	 *
+	 * A site keeps its settings in its own options table, so there is no one table holding
+	 * them all. Asking for them through get_blog_option() would switch to each site in turn
+	 * and pull that site's whole set of autoloaded options into memory for the sake of three
+	 * rows, so the tables are read in a single statement instead.
+	 *
+	 * @return array|null blog ID => ( option name => option value ). null when there are too
+	 *                    many sites to read.
+	 */
+	private static function read_tracking_settings_of_every_site() {
+		global $wpdb;
+
+		$blog_ids = array();
+		foreach ( (array) WP_Piwik\Settings::get_blog_list() as $blog ) {
+			$blog_ids[ (int) $blog['blog_id'] ] = array();
+		}
+		if ( count( $blog_ids ) > self::MANUAL_TRACKING_REVIEW_SITE_LIMIT ) {
+			return null;
+		}
+		if ( empty( $blog_ids ) ) {
+			return array();
+		}
+
+		$option_names = array(
+			'wp-piwik_global-track_mode',
+			'wp-piwik-tracking_code',
+			'wp-piwik-noscript_code',
+		);
+		$placeholders = implode( ', ', array_fill( 0, count( $option_names ), '%s' ) );
+
+		$selects = array();
+		$values  = array();
+		foreach ( array_keys( $blog_ids ) as $blog_id ) {
+			$options_table = $wpdb->get_blog_prefix( $blog_id ) . 'options';
+			$selects[]     = "SELECT {$blog_id} AS blog_id, option_name, option_value FROM {$options_table} WHERE option_name IN ( {$placeholders} )";
+			$values        = array_merge( $values, $option_names );
+		}
+
+		$failed = true;
+
+		$suppress = $wpdb->suppress_errors();
+		try {
+			// phpcs:ignore WordPress.DB.PreparedSQL.NotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare, WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+			$rows   = $wpdb->get_results( $wpdb->prepare( implode( ' UNION ALL ', $selects ), $values ), ARRAY_A );
+			$failed = (bool) $wpdb->last_error;
+		} finally {
+			$wpdb->suppress_errors( $suppress );
+		}
+
+		if ( $failed ) {
+			// if the query fails, get the options the slow way
+			foreach ( array_keys( $blog_ids ) as $blog_id ) {
+				foreach ( $option_names as $option_name ) {
+					$blog_ids[ $blog_id ][ $option_name ] = get_blog_option( $blog_id, $option_name );
+				}
+			}
+			return $blog_ids;
+		}
+
+		foreach ( (array) $rows as $row ) {
+			$blog_id = (int) $row['blog_id'];
+			if ( isset( $blog_ids[ $blog_id ] ) ) {
+				$blog_ids[ $blog_id ][ $row['option_name'] ] = $row['option_value'];
+			}
+		}
+
+		return $blog_ids;
+	}
+
+	/**
+	 * Check whether a site of the network holds a tracking code that was not generated.
+	 *
+	 * Looking at the tracking mode alone would miss a site that stopped tracking while
+	 * keeping its code, which every version up to 1.1.12 let a site administrator do in one
+	 * save. The code is kept for the next time tracking is turned on, so it is also
+	 * worth reviewing.
+	 *
+	 * @param array $settings the site's tracking settings, see read_tracking_settings_of_every_site()
+	 * @return boolean whether the site holds a tracking code that was entered by hand
+	 */
+	private static function holds_hand_entered_tracking_code( $settings ) {
+		$track_mode = isset( $settings['wp-piwik_global-track_mode'] ) ? $settings['wp-piwik_global-track_mode'] : '';
+
+		// the remaining modes generate the code they store on the next request, so whatever
+		// they hold is Connect Matomo's own work
+		if ( 'manually' !== $track_mode && 'disabled' !== $track_mode ) {
+			return false;
+		}
+
+		foreach ( array( 'wp-piwik-tracking_code', 'wp-piwik-noscript_code' ) as $option_name ) {
+			$code = isset( $settings[ $option_name ] ) ? $settings[ $option_name ] : '';
+			if ( '' !== trim( (string) $code ) ) {
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	/**
@@ -1967,34 +2070,100 @@ class WP_Piwik {
 			$site_id = $this->get_piwik_site_id();
 		}
 		if ( 'disabled' === self::$settings->get_global_option( 'track_mode' ) || 'manually' === self::$settings->get_global_option( 'track_mode' ) ) {
+			// remove an existing SITE_URLS_NOTICE in case one is there
+			$this->remove_notice( self::SITE_URLS_NOTICE );
 			return false;
 		}
-		$id   = WP_Piwik\Request::register(
-			'SitesManager.getJavascriptTag',
-			array(
-				'mergeSubdomains' => self::$settings->get_global_option( 'track_across' ) ? 1 : 0,
-				'mergeAliasUrls'  => self::$settings->get_global_option( 'track_across_alias' ) ? 1 : 0,
-				'disableCookies'  => self::$settings->get_global_option( 'disable_cookies' ) ? 1 : 0,
-				'crossDomain'     => self::$settings->get_global_option( 'track_crossdomain_linking' ) ? 1 : 0,
-				'trackNoScript'   => 1,
-			),
-			$site_id
-		);
-		$code = $this->request( $id );
-		if ( is_array( $code ) && isset( $code['value'] ) ) {
-			$code = $code['value'];
+
+		$matomo_url = self::$settings->get_matomo_url();
+		if ( ! is_numeric( $site_id ) || empty( $matomo_url ) ) {
+			// there is nothing to point the tracker at, and a tracking code naming the wrong
+			// site is worse than none
+			self::$logger->log( 'Cannot generate tracking code: Matomo site ' . wp_json_encode( $site_id ) . ' at Matomo URL ' . wp_json_encode( $matomo_url ) );
+			$this->remove_notice( self::SITE_URLS_NOTICE );
+			return false;
 		}
-		$result = ! is_array( $code ) ? html_entity_decode( $code ) : '<!-- ' . wp_json_encode( $code ) . ' -->';
-		self::$logger->log( 'Delivered tracking code: ' . $result );
+
+		$merge_subdomains = (bool) self::$settings->get_global_option( 'track_across' );
+		$merge_alias_urls = (bool) self::$settings->get_global_option( 'track_across_alias' );
+		$cross_domain     = (bool) self::$settings->get_global_option( 'track_crossdomain_linking' );
+
+		$site_urls = array();
+		if ( $merge_subdomains || $merge_alias_urls || $cross_domain ) {
+			$site_urls = $this->get_matomo_site_urls( $site_id );
+
+			if ( null === $site_urls ) {
+				$this->inform_user_tracking_code_generation_failed_site_url_request_failure();
+				return false;
+			}
+		}
+
+		$generator = new WP_Piwik\TrackingCode\Generator();
+		$result    = $generator->generate(
+			$site_id,
+			$matomo_url,
+			array(
+				'merge_subdomains' => $merge_subdomains,
+				'merge_alias_urls' => $merge_alias_urls,
+				'cross_domain'     => $cross_domain,
+				'disable_cookies'  => (bool) self::$settings->get_global_option( 'disable_cookies' ),
+				'track_no_script'  => true,
+				'site_urls'        => $site_urls,
+			)
+		);
+		self::$logger->log( 'Generated tracking code: ' . $result );
 		$result = WP_Piwik\TrackingCode::prepare_tracking_code( $result, self::$settings, self::$logger );
 		if ( isset( $result ['script'] ) && ! empty( $result ['script'] ) ) {
 			self::$settings->set_option( 'tracking_code', $result ['script'], $blog_id );
 			self::$settings->set_option( 'noscript_code', $result ['noscript'], $blog_id );
 			self::$settings->set_global_option( 'proxy_url', $result ['proxy'] );
 			self::$settings->save();
+			$this->remove_notice( self::SITE_URLS_NOTICE );
 			return $result['script'];
 		}
 		return false;
+	}
+
+	private function inform_user_tracking_code_generation_failed_site_url_request_failure() {
+		$this->add_notice(
+			self::SITE_URLS_NOTICE,
+			__( 'Connect Matomo could not ask Matomo what URLs this site is known by, so the tracking code was not rebuilt.', 'wp-piwik' ),
+			__( 'Tracking across subdomains, alias URLs and domains is built from those URLs. The tracking code last built is still in use. Check that Matomo is reachable and that its auth token is still valid, then try again.', 'wp-piwik' ),
+			true,
+			self::NOTICE_CLASS_ERROR
+		);
+	}
+
+	/**
+	 * @param int $site_id Matomo site to ask about
+	 * @return string[]|null the site's URLs, null when Matomo did not answer with a list
+	 *                       of them at all
+	 */
+	private function get_matomo_site_urls( $site_id ) {
+		$id     = WP_Piwik\Request::register( 'SitesManager.getSiteUrlsFromId', array(), $site_id );
+		$answer = $this->request( $id );
+
+		// check for an API error
+		if ( ! is_array( $answer ) || isset( $answer['result'] ) ) {
+			self::$logger->log( 'Matomo did not name the URLs of site ' . $site_id . ': ' . wp_json_encode( $answer ) );
+			return null;
+		}
+
+		$urls = array();
+		foreach ( $answer as $url ) {
+			if ( ! is_string( $url ) ) {
+				continue;
+			}
+			$parsed = wp_parse_url( $url );
+			// a site is known by an absolute URL, so anything without a host is not one
+			if ( ! is_array( $parsed ) || empty( $parsed['host'] ) ) {
+				continue;
+			}
+			$urls[] = $url;
+		}
+
+		self::$logger->log( 'Matomo site ' . $site_id . ' is known by ' . wp_json_encode( $urls ) );
+		return $urls;
 	}
 
 	/**

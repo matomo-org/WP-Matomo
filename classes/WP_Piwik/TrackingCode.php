@@ -92,8 +92,8 @@ class TrackingCode {
 			$code  = preg_replace( '/img src="([^"]*)piwik.php/', 'img src="' . $proxy . 'matomo.php', $code );
 			$code  = preg_replace( '/img src="([^"]*)matomo.php/', 'img src="' . $proxy . 'matomo.php', $code );
 		}
-		$cdn_url     = $settings->get_global_option( 'track_cdnurl' );
-		$cdn_url_ssl = $settings->get_global_option( 'track_cdnurlssl' );
+		$cdn_url     = self::strip_what_the_html_parser_reads( $settings->get_global_option( 'track_cdnurl' ) );
+		$cdn_url_ssl = self::strip_what_the_html_parser_reads( $settings->get_global_option( 'track_cdnurlssl' ) );
 		if ( $cdn_url || $cdn_url_ssl ) {
 			$secure_url   = wp_json_encode( 'https://' . ( $cdn_url_ssl ? $cdn_url_ssl : $cdn_url ) . '/' );
 			$insecure_url = wp_json_encode( 'http://' . ( $cdn_url ? $cdn_url : $cdn_url_ssl ) . '/' );
@@ -112,7 +112,7 @@ class TrackingCode {
 		}
 
 		if ( $settings->get_global_option( 'track_datacfasync' ) ) {
-			$code = str_replace( '<script type', '<script data-cfasync="false" type', $code );
+			$code = str_replace( '<script', '<script data-cfasync="false"', $code );
 		}
 
 		if ( $settings->is_ai_bot_tracking_enabled() ) {
@@ -161,22 +161,71 @@ EOF;
 		}
 
 		if ( $settings->get_global_option( 'set_download_extensions' ) ) {
-			$code = str_replace( "_paq.push(['trackPageView']);", "_paq.push(['setDownloadExtensions', " . wp_json_encode( $settings->get_global_option( 'set_download_extensions' ) ) . "]);\n_paq.push(['trackPageView']);", $code );
+			$set_download_extensions = self::strip_what_the_html_parser_reads(
+				$settings->get_global_option( 'set_download_extensions' )
+			);
+			$code                    = str_replace(
+				"_paq.push(['trackPageView']);",
+				"_paq.push(['setDownloadExtensions', "
+					. wp_json_encode( $set_download_extensions )
+					. "]);\n_paq.push(['trackPageView']);",
+				$code
+			);
 		}
 		if ( $settings->get_global_option( 'add_download_extensions' ) ) {
-			$code = str_replace( "_paq.push(['trackPageView']);", "_paq.push(['addDownloadExtensions', " . wp_json_encode( $settings->get_global_option( 'add_download_extensions' ) ) . "]);\n_paq.push(['trackPageView']);", $code );
+			$add_download_extensions = self::strip_what_the_html_parser_reads(
+				$settings->get_global_option( 'add_download_extensions' )
+			);
+			$code                    = str_replace(
+				"_paq.push(['trackPageView']);",
+				"_paq.push(['addDownloadExtensions', "
+					. wp_json_encode( $add_download_extensions )
+					. "]);\n_paq.push(['trackPageView']);",
+				$code
+			);
 		}
 		if ( $settings->get_global_option( 'set_download_classes' ) ) {
-			$code = str_replace( "_paq.push(['trackPageView']);", "_paq.push(['setDownloadClasses', " . wp_json_encode( $settings->get_global_option( 'set_download_classes' ) ) . "]);\n_paq.push(['trackPageView']);", $code );
+			$set_download_classes = self::strip_what_the_html_parser_reads(
+				$settings->get_global_option( 'set_download_classes' )
+			);
+			$code                 = str_replace(
+				"_paq.push(['trackPageView']);",
+				"_paq.push(['setDownloadClasses', "
+					. wp_json_encode( $set_download_classes )
+					. "]);\n_paq.push(['trackPageView']);",
+				$code
+			);
 		}
 		if ( $settings->get_global_option( 'set_link_classes' ) ) {
-			$code = str_replace( "_paq.push(['trackPageView']);", "_paq.push(['setLinkClasses', " . wp_json_encode( $settings->get_global_option( 'set_link_classes' ) ) . "]);\n_paq.push(['trackPageView']);", $code );
+			$set_link_classes = self::strip_what_the_html_parser_reads( $settings->get_global_option( 'set_link_classes' ) );
+			$code             = str_replace(
+				"_paq.push(['trackPageView']);",
+				"_paq.push(['setLinkClasses', "
+					. wp_json_encode( $set_link_classes )
+					. "]);\n_paq.push(['trackPageView']);",
+				$code
+			);
 		}
 		if ( $settings->get_global_option( 'limit_cookies' ) ) {
-			$code = str_replace( "_paq.push(['trackPageView']);", "_paq.push(['setVisitorCookieTimeout', " . wp_json_encode( $settings->get_global_option( 'limit_cookies_visitor' ) ) . "]);\n_paq.push(['setSessionCookieTimeout', " . wp_json_encode( $settings->get_global_option( 'limit_cookies_session' ) ) . "]);\n_paq.push(['setReferralCookieTimeout', " . wp_json_encode( $settings->get_global_option( 'limit_cookies_referral' ) ) . "]);\n_paq.push(['trackPageView']);", $code );
+			$code = str_replace(
+				"_paq.push(['trackPageView']);",
+				"_paq.push(['setVisitorCookieTimeout', "
+					. (int) $settings->get_global_option( 'limit_cookies_visitor' )
+					. "]);\n_paq.push(['setSessionCookieTimeout', "
+					. (int) $settings->get_global_option( 'limit_cookies_session' )
+					. "]);\n_paq.push(['setReferralCookieTimeout', "
+					. (int) $settings->get_global_option( 'limit_cookies_referral' )
+					. "]);\n_paq.push(['trackPageView']);",
+				$code
+			);
 		}
-		if ( 'disabled' !== $settings->get_global_option( 'force_protocol' ) ) {
-			$code = str_replace( '"//', '"' . $settings->get_global_option( 'force_protocol' ) . '://', $code );
+		// only add the protocol if it's one of the ones the settings page offers
+		$force_protocol = $settings->get_global_option( 'force_protocol' );
+		if (
+			'disabled' !== $force_protocol
+			&& in_array( $force_protocol, array_keys( $settings->get_force_protocol_options() ), true )
+		) {
+			$code = str_replace( '"//', '"' . $force_protocol . '://', $code );
 		}
 		if ( 'all' === $settings->get_global_option( 'track_content' ) ) {
 			$code = str_replace( "_paq.push(['trackPageView']);", "_paq.push(['trackPageView']);\n_paq.push(['trackAllContentImpressions']);", $code );
@@ -213,6 +262,20 @@ EOF;
 		);
 	}
 
+	/**
+	 * Drop the angle brackets from a value written into the tracking code
+	 *
+	 * JSON encoding keeps a value inside the JavaScript string it stands in, but the HTML
+	 * parser reads the script element before JavaScript ever sees it: a '<!--' followed by
+	 * a '<script' makes the rest of the page part of the script.
+	 *
+	 * @param mixed $value value to write into the tracking code
+	 * @return string the same value, without the characters the HTML parser acts on
+	 */
+	private static function strip_what_the_html_parser_reads( $value ) {
+		return str_replace( array( '<', '>' ), '', (string) $value );
+	}
+
 	private function apply_404_changes() {
 		self::$wp_piwik->log( 'Apply 404 changes. Blog ID: ' . get_current_blog_id() . ' Site ID: ' . self::$wp_piwik->get_option( 'site_id' ) );
 		$this->tracking_code = str_replace( "_paq.push(['trackPageView']);", "_paq.push(['setDocumentTitle', '404/URL = '+String(document.location.pathname+document.location.search).replace(/\//g,'%2f') + '/From = ' + String(document.referrer).replace(/\//g,'%2f')]);\n_paq.push(['trackPageView']);", $this->tracking_code );
@@ -221,8 +284,9 @@ EOF;
 	private function apply_search_changes() {
 		global $wp_query;
 		self::$wp_piwik->log( 'Apply search tracking changes. Blog ID: ' . get_current_blog_id() . ' Site ID: ' . self::$wp_piwik->get_option( 'site_id' ) );
-		$int_result_count    = $wp_query->found_posts;
-		$this->tracking_code = str_replace( "_paq.push(['trackPageView']);", "_paq.push(['trackSiteSearch','" . get_search_query() . "', false, " . $int_result_count . "]);\n_paq.push(['trackPageView']);", $this->tracking_code );
+		$int_result_count    = (int) $wp_query->found_posts;
+		$search_query        = esc_js( get_search_query( false ) );
+		$this->tracking_code = str_replace( "_paq.push(['trackPageView']);", "_paq.push(['trackSiteSearch','" . $search_query . "', false, " . $int_result_count . "]);\n_paq.push(['trackPageView']);", $this->tracking_code );
 	}
 
 	private function apply_user_tracking() {
@@ -259,7 +323,10 @@ EOF;
 			$meta_key = get_post_meta( $post_id, 'wp-piwik_custom_cat' . $i, true );
 			$meta_val = get_post_meta( $post_id, 'wp-piwik_custom_val' . $i, true );
 			if ( ! empty( $meta_key ) && ! empty( $meta_val ) ) {
-				$custom_vars .= "_paq.push(['setCustomVariable'," . $i . ', ' . wp_json_encode( $meta_key ) . ', ' . wp_json_encode( $meta_val ) . ", 'page']);\n";
+				$custom_vars .= "_paq.push(['setCustomVariable'," . $i . ', '
+					. wp_json_encode( self::strip_what_the_html_parser_reads( $meta_key ) ) . ', '
+					. wp_json_encode( self::strip_what_the_html_parser_reads( $meta_val ) )
+					. ", 'page']);\n";
 			}
 		}
 		if ( ! empty( $custom_vars ) ) {

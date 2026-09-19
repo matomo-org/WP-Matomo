@@ -124,6 +124,25 @@ class SettingsTest extends WP_Piwik_TestCase {
 		$this->assertSame( 'https://mymatomo.matomo.cloud/', $settings->get_matomo_url() );
 	}
 
+	public function test_get_matomo_url_in_php_mode_should_use_the_url_of_a_site_that_names_one() {
+		$settings = $this->create_settings(
+			[
+				'piwik_mode' => 'php',
+				'piwik_url'  => 'https://stats.example.org/',
+			]
+		);
+
+		$this->assertSame( 'https://stats.example.org/', $settings->get_matomo_url() );
+	}
+
+	public function test_get_matomo_url_in_php_mode_should_ask_matomo_when_the_site_names_no_url() {
+		$settings = $this->create_settings( [ 'piwik_mode' => 'php' ] );
+
+		// a site connected this way names Matomo by path, so Matomo is the one that knows
+		// the URL it answers under. there is none on this server's filesystem to ask.
+		$this->assertSame( '', $settings->get_matomo_url() );
+	}
+
 	public function test_is_tracking_enabled() {
 		$settings = $this->create_settings();
 		$this->assertFalse( $settings->is_tracking_enabled() );
@@ -411,6 +430,29 @@ class SettingsTest extends WP_Piwik_TestCase {
 		$this->assertSame( '/var/www/matomo/', $settings->get_global_option( 'piwik_path' ) );
 	}
 
+	public function test_apply_changes_should_leave_a_site_that_names_no_matomo_with_an_empty_url() {
+		$settings = $this->create_settings( [ 'piwik_mode' => 'php' ] );
+
+		$settings->apply_changes(
+			[
+				'piwik_mode' => 'php',
+				'piwik_path' => '/var/www/matomo/',
+				'piwik_url'  => '',
+			]
+		);
+
+		$this->assertSame( '', $settings->get_global_option( 'piwik_url' ) );
+		$this->assertSame( '', $settings->get_matomo_url() );
+	}
+
+	public function test_apply_changes_should_slash_a_matomo_url_that_does_not_end_in_one() {
+		$settings = $this->create_settings();
+
+		$settings->apply_changes( [ 'piwik_url' => 'https://stats.example.org' ] );
+
+		$this->assertSame( 'https://stats.example.org/', $settings->get_global_option( 'piwik_url' ) );
+	}
+
 	public function test_check_network_activation_is_false_when_not_network_activated() {
 		$settings = $this->create_settings();
 
@@ -591,22 +633,54 @@ class SettingsTest extends WP_Piwik_TestCase {
 		$this->assertSame( 'Stats &amp; Insights', get_option( 'wp-piwik_global-plugin_display_name' ) );
 	}
 
-	public function test_apply_changes_should_keep_the_tracking_code_a_user_without_unfiltered_html_leaves_manual_mode() {
+	public function test_apply_changes_should_clear_the_tracking_code_when_a_user_without_unfiltered_html_leaves_manual_mode() {
 		$this->log_in_as_a_network_site_administrator();
 
 		$settings = $this->create_settings(
 			[ 'track_mode' => 'manually' ],
-			[ 'tracking_code' => self::CROSS_SITE_PAYLOAD ]
+			[
+				'tracking_code' => self::CROSS_SITE_PAYLOAD,
+				'noscript_code' => self::CROSS_SITE_PAYLOAD,
+			]
 		);
 
 		$settings->apply_changes(
 			[
 				'track_mode'    => 'default',
 				'tracking_code' => '',
+				'noscript_code' => '',
 			]
 		);
 
+		// code an earlier version accepted from this user would otherwise stay stored while
+		// the site no longer reports the mode the review notice goes looking for
+		$this->assertSame( '', $settings->get_option( 'tracking_code' ) );
+		$this->assertSame( '', $settings->get_option( 'noscript_code' ) );
+	}
+
+	public function test_apply_changes_should_keep_the_tracking_code_of_a_user_without_unfiltered_html_who_stays_in_manual_mode() {
+		$this->log_in_as_a_network_site_administrator();
+
+		$settings = $this->create_settings(
+			[ 'track_mode' => 'manually' ],
+			[
+				'tracking_code' => self::CROSS_SITE_PAYLOAD,
+				'noscript_code' => self::CROSS_SITE_PAYLOAD,
+			]
+		);
+
+		$settings->apply_changes(
+			[
+				'track_mode'    => 'manually',
+				'tracking_code' => '',
+				'noscript_code' => '',
+			]
+		);
+
+		// the fields are read only for this user, so they cannot throw away code a privileged
+		// user entered either
 		$this->assertSame( self::CROSS_SITE_PAYLOAD, $settings->get_option( 'tracking_code' ) );
+		$this->assertSame( self::CROSS_SITE_PAYLOAD, $settings->get_option( 'noscript_code' ) );
 	}
 
 	public function test_apply_changes_should_clear_the_tracking_code_when_a_user_with_unfiltered_html_leaves_manual_mode() {
@@ -614,17 +688,98 @@ class SettingsTest extends WP_Piwik_TestCase {
 
 		$settings = $this->create_settings(
 			[ 'track_mode' => 'manually' ],
-			[ 'tracking_code' => self::CROSS_SITE_PAYLOAD ]
+			[
+				'tracking_code' => self::CROSS_SITE_PAYLOAD,
+				'noscript_code' => self::CROSS_SITE_PAYLOAD,
+			]
 		);
 
 		$settings->apply_changes(
 			[
 				'track_mode'    => 'default',
 				'tracking_code' => '',
+				'noscript_code' => '',
 			]
 		);
 
+		// a generated mode writes both of them itself on the next request
 		$this->assertSame( '', $settings->get_option( 'tracking_code' ) );
+		$this->assertSame( '', $settings->get_option( 'noscript_code' ) );
+	}
+
+	public function test_apply_changes_should_clear_the_tracking_code_when_a_user_without_unfiltered_html_stops_tracking() {
+		$this->log_in_as_a_network_site_administrator();
+
+		$settings = $this->create_settings(
+			[ 'track_mode' => 'manually' ],
+			[
+				'tracking_code' => self::CROSS_SITE_PAYLOAD,
+				'noscript_code' => self::CROSS_SITE_PAYLOAD,
+			]
+		);
+
+		$settings->apply_changes(
+			[
+				'track_mode'    => 'disabled',
+				'tracking_code' => '',
+				'noscript_code' => '',
+			]
+		);
+
+		// the disabled mode holds the code for the next time tracking is turned on. leaving
+		// it there would park code an earlier version let this very user enter, out of sight
+		// of the review notice and ready for the settings form to turn it back on again.
+		$this->assertSame( '', $settings->get_option( 'tracking_code' ) );
+		$this->assertSame( '', $settings->get_option( 'noscript_code' ) );
+	}
+
+	public function test_apply_changes_should_clear_a_generated_tracking_code_when_tracking_is_stopped() {
+		$this->log_in_as_a_user_who_may_publish_script();
+
+		$settings = $this->create_settings(
+			[ 'track_mode' => 'default' ],
+			[
+				'tracking_code' => '<!-- Matomo -->',
+				'noscript_code' => '<noscript>generated</noscript>',
+			]
+		);
+
+		$settings->apply_changes(
+			[
+				'track_mode'    => 'disabled',
+				'tracking_code' => '<!-- Matomo -->',
+				'noscript_code' => '<noscript>generated</noscript>',
+			]
+		);
+
+		// Connect Matomo wrote this itself and writes a new one whenever tracking is turned
+		// back on, so the disabled mode has nothing to hold it for
+		$this->assertSame( '', $settings->get_option( 'tracking_code' ) );
+		$this->assertSame( '', $settings->get_option( 'noscript_code' ) );
+	}
+
+	public function test_apply_changes_should_keep_the_tracking_code_of_a_user_with_unfiltered_html_who_stops_tracking() {
+		$this->log_in_as_a_user_who_may_publish_script();
+
+		$settings = $this->create_settings(
+			[ 'track_mode' => 'manually' ],
+			[
+				'tracking_code' => self::CROSS_SITE_PAYLOAD,
+				'noscript_code' => self::CROSS_SITE_PAYLOAD,
+			]
+		);
+
+		$settings->apply_changes(
+			[
+				'track_mode'    => 'disabled',
+				'tracking_code' => self::CROSS_SITE_PAYLOAD,
+				'noscript_code' => self::CROSS_SITE_PAYLOAD,
+			]
+		);
+
+		// a user who may publish script is allowed to configure the code and come back to it
+		$this->assertSame( self::CROSS_SITE_PAYLOAD, $settings->get_option( 'tracking_code' ) );
+		$this->assertSame( self::CROSS_SITE_PAYLOAD, $settings->get_option( 'noscript_code' ) );
 	}
 
 	public function test_apply_changes_should_reject_a_forced_protocol_the_settings_page_does_not_offer() {
@@ -646,6 +801,48 @@ class SettingsTest extends WP_Piwik_TestCase {
 		$settings->apply_changes( [ 'force_protocol' => 'https' ] );
 
 		$this->assertSame( 'https', $settings->get_global_option( 'force_protocol' ) );
+	}
+
+	/**
+	 * @dataProvider get_cdn_url_settings
+	 */
+	public function test_apply_changes_should_strip_what_a_url_cannot_hold_from_a_cdn_url( $key ) {
+		$this->log_in_as_a_user_who_may_publish_script();
+
+		$settings = $this->create_settings();
+
+		$settings->apply_changes( [ $key => 'cdn.example.org/<!--<script>' ] );
+
+		$this->assertSame( 'cdn.example.org/!--script', $settings->get_global_option( $key ) );
+	}
+
+	public function get_cdn_url_settings() {
+		return [
+			'plain CDN URL' => [ 'track_cdnurl' ],
+			'SSL CDN URL'   => [ 'track_cdnurlssl' ],
+		];
+	}
+
+	/**
+	 * @dataProvider get_tracking_code_list_settings
+	 */
+	public function test_apply_changes_should_strip_angle_brackets_from_a_list_the_tracking_code_carries( $key ) {
+		$this->log_in_as_a_user_who_may_publish_script();
+
+		$settings = $this->create_settings();
+
+		$settings->apply_changes( [ $key => 'zip|<!--<script>|tar' ] );
+
+		$this->assertSame( 'zip|!--script|tar', $settings->get_global_option( $key ) );
+	}
+
+	public function get_tracking_code_list_settings() {
+		return [
+			'download extensions replaced' => [ 'set_download_extensions' ],
+			'download extensions added'    => [ 'add_download_extensions' ],
+			'download classes'             => [ 'set_download_classes' ],
+			'link classes'                 => [ 'set_link_classes' ],
+		];
 	}
 
 	public function test_get_force_protocol_options_should_offer_the_protocols_the_tracking_code_understands() {

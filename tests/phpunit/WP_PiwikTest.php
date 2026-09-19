@@ -403,6 +403,49 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 		$this->assertStringContainsString( get_blog_option( $blog_id, 'blogname' ), $notice );
 	}
 
+	public function test_show_manual_tracking_review_notice_should_name_a_site_that_stopped_tracking_while_holding_its_tracking_code() {
+		$this->skip_unless_multisite();
+		$blog_id = $this->create_a_site( 'disabled', SettingsTest::CROSS_SITE_PAYLOAD );
+		$this->log_in_as_a_network_administrator();
+		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
+
+		// every version up to 1.1.12 let a site administrator park a code in the disabled
+		// mode in one save, out of reach of a review that only looked at the tracking mode
+		$this->assertStringContainsString( get_blog_option( $blog_id, 'blogname' ), $this->render_manual_tracking_review_notice() );
+	}
+
+	/**
+	 * @dataProvider get_tracking_codes_that_are_no_tracking_code
+	 */
+	public function test_show_manual_tracking_review_notice_should_not_name_a_site_that_holds_no_tracking_code( $tracking_code ) {
+		$this->skip_unless_multisite();
+		$blog_id = $this->create_a_site( 'disabled', $tracking_code );
+		$this->log_in_as_a_network_administrator();
+		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
+
+		$this->assertStringNotContainsString( get_blog_option( $blog_id, 'blogname' ), $this->render_manual_tracking_review_notice() );
+	}
+
+	public function get_tracking_codes_that_are_no_tracking_code() {
+		return array(
+			'nothing stored'                       => array( '' ),
+			// the settings form lays its textareas out indented, so an empty code comes back
+			// from it as the indentation, which the disabled mode then stores
+			'the indentation of the settings form' => array( "\t\t\t\t\t\n\t\t\t\t" ),
+		);
+	}
+
+	public function test_show_manual_tracking_review_notice_should_not_name_a_site_whose_tracking_code_connect_matomo_generated() {
+		$this->skip_unless_multisite();
+		$blog_id = $this->create_a_site( 'default', SettingsTest::CROSS_SITE_PAYLOAD );
+		$this->log_in_as_a_network_administrator();
+		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
+
+		// a generated mode overwrites what it stores on the next request, so nothing a user
+		// entered survives there to be reviewed
+		$this->assertStringNotContainsString( get_blog_option( $blog_id, 'blogname' ), $this->render_manual_tracking_review_notice() );
+	}
+
 	public function test_show_manual_tracking_review_notice_should_not_show_when_no_site_enters_its_tracking_code_manually() {
 		$this->skip_unless_multisite();
 		$this->log_in_as_a_network_administrator();
@@ -423,45 +466,83 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 		$this->assertSame( \WP_Piwik::MANUAL_TRACKING_REVIEW_DONE, get_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION ) );
 	}
 
-	public function test_show_manual_tracking_review_notice_should_not_repeat_the_dashboard_widget_on_a_dashboard() {
-		$this->skip_unless_multisite();
-		$this->create_a_site_using_manual_tracking();
-		$this->log_in_as_a_network_administrator();
-		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
-
-		set_current_screen( 'dashboard' );
-
-		$this->assertSame( '', $this->render_manual_tracking_review_notice() );
-	}
-
-	public function test_add_manual_tracking_review_dashboard_widget_should_name_a_site_entering_its_tracking_code_manually() {
+	public function test_show_manual_tracking_review_notice_should_show_on_the_dashboard_of_a_site_the_plugin_is_active_on() {
 		$this->skip_unless_multisite();
 		$blog_id = $this->create_a_site_using_manual_tracking();
 		$this->log_in_as_a_network_administrator();
 		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
 
-		$widget = $this->render_manual_tracking_review_dashboard_widget();
+		// the dashboard is where a notice is most likely to be read, and under the per site
+		// activation this review is about the network's own dashboard never loads the plugin
+		set_current_screen( 'dashboard' );
 
-		$this->assertStringContainsString( get_blog_option( $blog_id, 'blogname' ), $widget );
-		$this->assertStringContainsString( \WP_Piwik::DISMISS_MANUAL_TRACKING_NOTICE_ARG, $widget );
+		$this->assertStringContainsString( get_blog_option( $blog_id, 'blogname' ), $this->render_manual_tracking_review_notice() );
 	}
 
-	public function test_add_manual_tracking_review_dashboard_widget_should_not_register_a_widget_once_dismissed() {
+	public function test_construct_should_ask_for_the_manual_tracking_review_on_every_kind_of_admin_screen() {
+		set_current_screen( 'dashboard' );
+
+		$plugin = $this->reload_the_plugin();
+
+		$this->assertNotFalse(
+			has_action( 'all_admin_notices', array( $plugin, 'show_manual_tracking_review_notice' ) )
+		);
+	}
+
+	public function test_show_manual_tracking_review_notice_should_offer_to_record_the_review_as_made() {
 		$this->skip_unless_multisite();
 		$this->create_a_site_using_manual_tracking();
 		$this->log_in_as_a_network_administrator();
-		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_DONE );
+		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
 
-		$this->assertSame( '', $this->render_manual_tracking_review_dashboard_widget() );
+		$this->assertStringContainsString( \WP_Piwik::DISMISS_MANUAL_TRACKING_NOTICE_ARG, $this->render_manual_tracking_review_notice() );
 	}
 
-	public function test_add_manual_tracking_review_dashboard_widget_should_not_register_a_widget_for_a_site_administrator() {
+	public function test_on_manual_tracking_review_notice_dismissed_should_record_the_review_as_made() {
 		$this->skip_unless_multisite();
-		$this->create_a_site_using_manual_tracking();
+		$this->log_in_as_a_network_administrator();
+		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
+
+		$this->request_a_manual_tracking_review_dismissal( wp_create_nonce( \WP_Piwik::DISMISS_MANUAL_TRACKING_NOTICE_ARG ) );
+
+		$this->assertSame( \WP_Piwik::MANUAL_TRACKING_REVIEW_DONE, get_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION ) );
+	}
+
+	public function test_on_manual_tracking_review_notice_dismissed_should_not_record_the_review_for_a_site_administrator() {
+		$this->skip_unless_multisite();
 		$this->log_in_as_a_site_administrator_who_can_activate_plugins();
 		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
 
-		$this->assertSame( '', $this->render_manual_tracking_review_dashboard_widget() );
+		// the review is the network's to make, and the administrator of a site is who may
+		// have entered the code it is about
+		$this->request_a_manual_tracking_review_dismissal( wp_create_nonce( \WP_Piwik::DISMISS_MANUAL_TRACKING_NOTICE_ARG ) );
+
+		$this->assertSame( \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING, get_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION ) );
+	}
+
+	public function test_on_manual_tracking_review_notice_dismissed_should_not_record_the_review_without_a_valid_nonce() {
+		$this->skip_unless_multisite();
+		$this->log_in_as_a_network_administrator();
+		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
+
+		try {
+			$this->request_a_manual_tracking_review_dismissal( 'not-the-nonce' );
+			$this->fail( 'the dismissal was accepted without a valid nonce' );
+		} catch ( \WPDieException $e ) {
+			$this->assertSame( \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING, get_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION ) );
+		}
+	}
+
+	public function test_on_manual_tracking_review_notice_dismissed_should_leave_a_request_that_does_not_ask_for_it() {
+		$this->skip_unless_multisite();
+		$this->log_in_as_a_network_administrator();
+		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
+
+		// every admin request runs this, so one without the query argument must pass
+		// through it without checking a nonce it was never given
+		$GLOBALS['wp-piwik']->on_manual_tracking_review_notice_dismissed();
+
+		$this->assertSame( \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING, get_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION ) );
 	}
 
 	public function test_show_manual_tracking_review_notice_should_not_show_to_a_site_administrator() {
@@ -506,7 +587,7 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 		$this->log_in_as_a_network_administrator();
 		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
 
-		$this->pretend_the_network_has_sites( \WP_Piwik::MANUAL_TRACKING_REVIEW_SITE_LIMIT + 1 );
+		$this->pretend_the_network_is_too_large_to_walk();
 
 		$notice = $this->render_manual_tracking_review_notice();
 
@@ -515,13 +596,13 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 		$this->assertStringNotContainsString( get_blog_option( $blog_id, 'blogname' ), $notice );
 	}
 
-	public function test_show_manual_tracking_review_notice_should_name_the_sites_of_a_network_it_can_list() {
+	public function test_show_manual_tracking_review_notice_should_name_the_sites_of_a_network_whose_recorded_site_count_is_not_its_own() {
 		$this->skip_unless_multisite();
 		$blog_id = $this->create_a_site_using_manual_tracking();
 		$this->log_in_as_a_network_administrator();
 		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
 
-		$this->pretend_the_network_has_sites( \WP_Piwik::MANUAL_TRACKING_REVIEW_SITE_LIMIT );
+		$this->pretend_the_network_recorded_a_site_count( \WP_Piwik::MANUAL_TRACKING_REVIEW_SITE_LIMIT + 1 );
 
 		$this->assertStringContainsString( get_blog_option( $blog_id, 'blogname' ), $this->render_manual_tracking_review_notice() );
 	}
@@ -612,6 +693,18 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 		$this->assertFalse( get_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION ) );
 	}
 
+	public function test_construct_should_not_ask_for_a_manual_tracking_review_while_the_plugin_is_network_activated() {
+		$this->network_activate_the_plugin();
+
+		// the revision of the release under test with no version history, which is the shape
+		// of an install whose last version was 1.1.12 or older
+		update_site_option( 'wp-piwik_global-revision', 2023092201 );
+
+		$this->reload_the_plugin();
+
+		$this->assertFalse( get_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION ) );
+	}
+
 	public function test_construct_should_not_ask_for_a_manual_tracking_review_that_has_already_been_made() {
 		$this->skip_unless_multisite();
 		$this->simulate_an_install_running_version( \WP_Piwik::LAST_UNRESTRICTED_MANUAL_TRACKING_VERSION );
@@ -652,45 +745,39 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 	}
 
 	/**
-	 * Register the dashboard widgets the plugin adds and render the review one
-	 *
-	 * @return string the widget's markup, empty when it was not registered
+	 * @param string $nonce nonce the request carries
 	 */
-	private function render_manual_tracking_review_dashboard_widget() {
-		// the dashboard functions are only loaded by the dashboard itself, which is also
-		// where the hook this stands in for fires
-		require_once ABSPATH . 'wp-admin/includes/dashboard.php';
-		set_current_screen( 'dashboard' );
+	private function request_a_manual_tracking_review_dismissal( $nonce ) {
+		$_GET[ \WP_Piwik::DISMISS_MANUAL_TRACKING_NOTICE_ARG ]     = '1';
+		$_REQUEST[ \WP_Piwik::DISMISS_MANUAL_TRACKING_NOTICE_ARG ] = '1';
+		$_REQUEST['_wpnonce']                                      = $nonce;
 
-		$meta_boxes_backup = isset( $GLOBALS['wp_meta_boxes'] ) ? $GLOBALS['wp_meta_boxes'] : array();
-		// an earlier test may have left this dashboard's boxes behind, and they would be
-		// indistinguishable from the one registered below
-		// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
-		$GLOBALS['wp_meta_boxes'] = array();
-
-		$GLOBALS['wp-piwik']->add_manual_tracking_review_dashboard_widget();
-
-		$screen = get_current_screen();
-		$widget = isset( $GLOBALS['wp_meta_boxes'][ $screen->id ]['normal']['high']['wp-piwik-manual-tracking-review'] )
-			? $GLOBALS['wp_meta_boxes'][ $screen->id ]['normal']['high']['wp-piwik-manual-tracking-review']
-			: null;
-
-		// phpcs:ignore WordPress.WP.GlobalVariablesOverride.Prohibited
-		$GLOBALS['wp_meta_boxes'] = $meta_boxes_backup;
-
-		if ( ! $widget ) {
-			return '';
+		// blocking the redirect keeps the handler from exiting the test run
+		add_filter( 'wp_redirect', '__return_false' );
+		try {
+			$GLOBALS['wp-piwik']->on_manual_tracking_review_notice_dismissed();
+		} finally {
+			unset(
+				$_GET[ \WP_Piwik::DISMISS_MANUAL_TRACKING_NOTICE_ARG ],
+				$_REQUEST[ \WP_Piwik::DISMISS_MANUAL_TRACKING_NOTICE_ARG ],
+				$_REQUEST['_wpnonce']
+			);
 		}
-
-		ob_start();
-		call_user_func( $widget['callback'] );
-		return ob_get_clean();
 	}
 
 	private function create_a_site_using_manual_tracking() {
+		return $this->create_a_site( 'manually', SettingsTest::CROSS_SITE_PAYLOAD );
+	}
+
+	/**
+	 * @param string $track_mode    tracking mode to configure the site with
+	 * @param string $tracking_code tracking code to store for the site
+	 * @return int the new site's blog ID
+	 */
+	private function create_a_site( $track_mode, $tracking_code ) {
 		$blog_id = self::factory()->blog->create();
-		update_blog_option( $blog_id, 'wp-piwik_global-track_mode', 'manually' );
-		update_blog_option( $blog_id, 'wp-piwik-tracking_code', SettingsTest::CROSS_SITE_PAYLOAD );
+		update_blog_option( $blog_id, 'wp-piwik_global-track_mode', $track_mode );
+		update_blog_option( $blog_id, 'wp-piwik-tracking_code', $tracking_code );
 
 		return $blog_id;
 	}
@@ -706,12 +793,24 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 
 	/**
 	 * Boot the plugin again, the way the next request to WordPress does.
+	 *
+	 * @return \WP_Piwik the instance that just booted
 	 */
 	private function reload_the_plugin() {
-		self::$booted_plugins[] = new \WP_Piwik();
+		$plugin                 = new \WP_Piwik();
+		self::$booted_plugins[] = $plugin;
+
+		return $plugin;
 	}
 
-	private function pretend_the_network_has_sites( $count ) {
+	private function pretend_the_network_is_too_large_to_walk() {
+		add_filter( 'wp_is_large_network', '__return_true' );
+	}
+
+	/**
+	 * @param int $count sites the network says it has, whatever it holds
+	 */
+	private function pretend_the_network_recorded_a_site_count( $count ) {
 		add_filter(
 			'site_option_blog_count',
 			function () use ( $count ) {

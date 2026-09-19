@@ -324,7 +324,10 @@ class Settings extends \WP_Piwik\Admin {
 				esc_html__( 'Enter manually', 'wp-piwik' ),
 				esc_html__( 'Enter your own tracking code manually. You can choose one of the prior options, pre-configure your tracking code and switch to manually editing at last.', 'wp-piwik' )
 					. ( self::$wp_piwik->is_network_mode() ? ' ' . esc_html__( 'Use the placeholder {ID} to add the Matomo site ID.', 'wp-piwik' ) : '' )
-					. ( $can_enter_code_manually ? '' : ' ' . esc_html__( 'Entering the tracking code manually publishes HTML and JavaScript to every page of this site, which requires the "unfiltered_html" capability. A WordPress network reserves that capability for its network administrators, so this option is not available to you.', 'wp-piwik' ) )
+					. ( $can_enter_code_manually ? '' : ' ' . esc_html__( 'Entering the tracking code manually publishes HTML and JavaScript to every page of this site, which requires the "unfiltered_html" capability, so this option is not available to you.', 'wp-piwik' )
+						// only a network reserves the capability by role. on a single site it is
+						// DISALLOW_UNFILTERED_HTML that withholds it, and there is no network to point at.
+						. ( is_multisite() ? ' ' . esc_html__( 'A WordPress network reserves that capability for its network administrators.', 'wp-piwik' ) : '' ) )
 			);
 
 			// the tracking code is printed to every page of the site unescaped, so a user

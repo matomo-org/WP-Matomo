@@ -21,14 +21,6 @@ class RestIntegrationTest extends WP_Piwik_TestCase {
 		$this->set_mock_response( [ 'echo_bulk' => true ] );
 	}
 
-	/**
-	 * The test needs a web server that serves this plugin over HTTP, so it only
-	 * runs when the environment opts in. DDEV sets this in .ddev/config.yaml.
-	 */
-	private static function is_integration_environment() {
-		return (bool) getenv( 'WP_MATOMO_INTEGRATION_TESTS' );
-	}
-
 	private function write_runtime_file( $name, $contents ) {
 		file_put_contents( $this->runtime . '/' . $name, $contents );
 		chmod( $this->runtime . '/' . $name, 0666 );
