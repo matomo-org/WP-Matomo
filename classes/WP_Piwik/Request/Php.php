@@ -94,7 +94,6 @@ class Php extends \WP_Piwik\Request {
 			require_once PIWIK_INCLUDE_PATH . '/core/API/Request.php';
 		}
 		if ( class_exists( '\Piwik\Application\Environment' ) && ! self::$piwik_environment ) {
-			// Piwik 2.14.* compatibility fix
 			self::$piwik_environment = new \Piwik\Application\Environment( null );
 			self::$piwik_environment->init();
 		}

@@ -843,11 +843,6 @@ class WP_Piwik {
 		);
 	}
 
-	/**
-	 * Build the body of the manual tracking code review
-	 *
-	 * @return string escaped markup, empty when there is nothing left to review
-	 */
 	private function get_manual_tracking_review_message() {
 		// only the network administrator can review another site's tracking code.
 		if ( ! is_multisite() || ! current_user_can( 'manage_network' ) ) {

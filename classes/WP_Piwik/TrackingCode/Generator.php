@@ -151,7 +151,8 @@ class Generator {
 	}
 
 	/**
-	 * Build the tracker calls naming the domains the site is reachable under
+	 * Build the tracker calls that name the domains that can be used to reach
+	 * this site
 	 *
 	 * @param array $options tracking code options
 	 * @return string lines of JavaScript, empty when Matomo named no usable URL
@@ -230,7 +231,7 @@ class Generator {
 	 */
 	public static function strip_what_a_url_cannot_hold( $url ) {
 		// the unreserved and reserved characters of RFC 3986, plus the percent sign of an
-		// escape sequence, less the apostrophe
+		// escape sequence, minus the apostrophe
 		return preg_replace( '/[^A-Za-z0-9\-._~:\/?#\[\]@!$&()*+,;=%]/', '', (string) $url );
 	}
 

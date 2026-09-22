@@ -706,11 +706,6 @@ class Settings {
 	/**
 	 * Escape the plugin display name.
 	 *
-	 * The name is shown in places that do not escape it themselves, the admin menu among
-	 * them, so it is stored escaped. Escaping it here rather than on every save keeps a
-	 * name holding an ampersand or a quote from gaining another layer of escaping each
-	 * time any setting changes.
-	 *
 	 * @param mixed $value new display name
 	 * @return string display name
 	 * @phpstan-ignore method.unused
@@ -723,18 +718,14 @@ class Settings {
 	}
 
 	/**
-	 * Get the tracking mode the tracking code callbacks branch on
-	 *
-	 * Only a key the configuration set carries gets a callback of its own, so a set without
-	 * a tracking mode reaches the tracking code callbacks without check_track_mode() having
-	 * corrected one. Falling back to the stored mode keeps them from treating such a set as
-	 * a mode change and dropping the code a privileged user entered.
-	 *
 	 * @param array $in configuration set
 	 * @return string tracking mode
 	 */
 	private function get_submitted_track_mode( $in ) {
-		return isset( $in['track_mode'] ) ? $in['track_mode'] : $this->get_global_option( 'track_mode' );
+		return isset( $in['track_mode'] )
+			? $in['track_mode']
+			// fall back to the stored tracking code if nothing is in the submitted form
+			: $this->get_global_option( 'track_mode' );
 	}
 
 	/**

@@ -429,8 +429,6 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 	public function get_tracking_codes_that_are_no_tracking_code() {
 		return array(
 			'nothing stored'                       => array( '' ),
-			// the settings form lays its textareas out indented, so an empty code comes back
-			// from it as the indentation, which the disabled mode then stores
 			'the indentation of the settings form' => array( "\t\t\t\t\t\n\t\t\t\t" ),
 		);
 	}
@@ -461,8 +459,6 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 
 		$this->render_manual_tracking_review_notice();
 
-		// a site a network administrator switches to manual mode later is their own doing,
-		// so it must not be reported back to them as code an earlier version let through
 		$this->assertSame( \WP_Piwik::MANUAL_TRACKING_REVIEW_DONE, get_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION ) );
 	}
 

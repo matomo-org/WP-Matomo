@@ -145,6 +145,8 @@ class WpPiwikTest extends WP_Piwik_TestCase {
 		$this->answer_with_an_api_error();
 		$this->wp_piwik->update_tracking_code( 1 );
 
+		$this->assertStringContainsString( 'could not ask Matomo', $this->render_notices() );
+
 		$this->forget_what_matomo_already_answered();
 		$this->answer_with_site_urls( [ 'https://www.example.org/' ] );
 		$this->wp_piwik->update_tracking_code( 1 );
@@ -156,6 +158,8 @@ class WpPiwikTest extends WP_Piwik_TestCase {
 		$this->configure_connect_matomo_to_ask_matomo_for_the_urls_of_the_site();
 		$this->answer_with_an_api_error();
 		$this->wp_piwik->update_tracking_code( 1 );
+
+		$this->assertStringContainsString( 'could not ask Matomo', $this->render_notices() );
 
 		// turning tracking off is the obvious thing to do about a tracking code that cannot
 		// be built
@@ -169,6 +173,8 @@ class WpPiwikTest extends WP_Piwik_TestCase {
 		$this->configure_connect_matomo_to_ask_matomo_for_the_urls_of_the_site();
 		$this->answer_with_an_api_error();
 		$this->wp_piwik->update_tracking_code( 1 );
+
+		$this->assertStringContainsString( 'could not ask Matomo', $this->render_notices() );
 
 		$this->configure_plugin( [ 'piwik_url' => '' ] );
 		$this->wp_piwik->update_tracking_code( 1 );
