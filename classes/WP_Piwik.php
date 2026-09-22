@@ -455,9 +455,7 @@ class WP_Piwik {
 		if ( ! $is_update ) {
 			$this->add_notice( 'install', sprintf( __( '%1$s %2$s installed.', 'wp-piwik' ), self::$settings->get_not_empty_global_option( 'plugin_display_name' ), self::$version ), __( 'Next you should connect to Matomo', 'wp-piwik' ) );
 
-			if ( is_multisite() && ! $this->is_network_mode() ) {
-				update_option( WP_Piwik\Settings::SITE_CREATED_VERSION_OPTION, self::$version, false );
-			}
+			update_option( WP_Piwik\Settings::SITE_CREATED_VERSION_OPTION, self::$version, false );
 		}
 		self::$settings->set_global_option( 'revision', self::$revision_id );
 		self::$settings->set_global_option( 'last_settings_update', time() );

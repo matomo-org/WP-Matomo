@@ -733,7 +733,16 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_construct_should_record_the_creation_version_of_a_fresh_install() {
-		$this->skip_unless_multisite();
+		$plugin = $this->reload_the_plugin();
+
+		$this->assertSame(
+			$plugin->get_plugin_version(),
+			get_option( \WP_Piwik\Settings::SITE_CREATED_VERSION_OPTION )
+		);
+	}
+
+	public function test_construct_should_record_the_creation_version_of_a_fresh_install_while_the_plugin_is_network_activated() {
+		$this->network_activate_the_plugin();
 
 		$plugin = $this->reload_the_plugin();
 
@@ -744,7 +753,6 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_construct_should_not_record_the_creation_version_of_an_updated_install() {
-		$this->skip_unless_multisite();
 		$this->simulate_an_install_running_version( \WP_Piwik::LAST_UNRESTRICTED_MANUAL_TRACKING_VERSION );
 
 		$this->reload_the_plugin();
@@ -763,12 +771,15 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 		);
 	}
 
-	public function test_on_site_created_should_not_record_the_creation_version_while_the_plugin_is_network_activated() {
+	public function test_on_site_created_should_record_the_creation_version_while_the_plugin_is_network_activated() {
 		$this->network_activate_the_plugin();
 
 		$blog_id = self::factory()->blog->create();
 
-		$this->assertFalse( get_blog_option( $blog_id, \WP_Piwik\Settings::SITE_CREATED_VERSION_OPTION ) );
+		$this->assertSame(
+			$GLOBALS['wp-piwik']->get_plugin_version(),
+			get_blog_option( $blog_id, \WP_Piwik\Settings::SITE_CREATED_VERSION_OPTION )
+		);
 	}
 
 	private function render_javascript_code() {
