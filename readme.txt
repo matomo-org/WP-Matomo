@@ -161,6 +161,7 @@ Add WP-Matomo to your /wp-content/plugins folder and enable it as [Network Plugi
 * Security: the "CDN URL", "CDN URL (SSL)" and "Force Matomo to use a specific protocol" settings are now JSON encoded and validated before being written into the generated tracking code.
 * Security: when site search tracking is enabled, the search term is now escaped for the JavaScript string it is written into.
 * Bug fix: a site connected through the deprecated "Self-hosted (PHP API)" method no longer stores "/" as its Matomo URL when its settings are saved.
+* Bug fix: in the "Use proxy script" tracking mode the noscript, correctly request the tracking image through the proxy.
 * Diagnostics: If your network was running an earlier version and has sites whose tracking code is entered manually, a notice asks you to review that code once. Tracking code stored by a site administrator before this release keeps being used until you change it, so please check that it is what you expect.
 * Diagnostics: The versions a site has run are recorded in a new hidden "version_history" setting.
 

@@ -51,6 +51,19 @@ class TrackingCodeTest extends WP_Piwik_TestCase {
 		$this->assertStringNotContainsString( 'matomo.js', $result['script'] );
 	}
 
+	public function test_prepare_tracking_code_should_send_the_noscript_image_through_the_proxy() {
+		$expected_proxy = str_replace(
+			[ 'https://', 'http://' ],
+			'//',
+			plugins_url( 'wp-piwik' )
+		) . '/proxy/';
+
+		$result = $this->prepare( [ 'track_mode' => 'proxy' ] );
+
+		$this->assertStringContainsString( 'src="' . $expected_proxy . 'matomo.php?idsite=1', $result['noscript'] );
+		$this->assertStringNotContainsString( 'stats.example.org', $result['noscript'] );
+	}
+
 	public function test_prepare_tracking_code_uses_cdn_url_when_configured() {
 		$result = $this->prepare( [ 'track_cdnurl' => 'cdn.example.org' ] );
 

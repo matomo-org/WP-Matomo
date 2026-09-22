@@ -89,8 +89,11 @@ class TrackingCode {
 				plugins_url( 'wp-piwik' ) . '/proxy'
 			) . '/';
 			$code  = preg_replace( '/var u="([^"]*)";/', 'var u="' . $proxy . '"', $code );
-			$code  = preg_replace( '/img src="([^"]*)piwik.php/', 'img src="' . $proxy . 'matomo.php', $code );
-			$code  = preg_replace( '/img src="([^"]*)matomo.php/', 'img src="' . $proxy . 'matomo.php', $code );
+			$code  = preg_replace(
+				'/(<img\s[^>]*?src=")[^"]*(?:piwik|matomo)\.php/',
+				'${1}' . $proxy . 'matomo.php',
+				$code
+			);
 		}
 		$cdn_url     = self::strip_what_the_html_parser_reads( $settings->get_global_option( 'track_cdnurl' ) );
 		$cdn_url_ssl = self::strip_what_the_html_parser_reads( $settings->get_global_option( 'track_cdnurlssl' ) );
