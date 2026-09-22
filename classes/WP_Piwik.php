@@ -347,6 +347,17 @@ class WP_Piwik {
 				);
 			}
 		}
+		if ( is_multisite() ) {
+			// after the site is initialized, which WordPress itself hooks at priority 10
+			add_action(
+				function_exists( 'wp_initialize_site' ) ? 'wp_initialize_site' : 'wpmu_new_blog',
+				array(
+					$this,
+					'on_site_created',
+				),
+				100
+			);
+		}
 	}
 
 	/**
@@ -443,9 +454,27 @@ class WP_Piwik {
 		self::$logger->log( 'Running Connect Matomo installation' );
 		if ( ! $is_update ) {
 			$this->add_notice( 'install', sprintf( __( '%1$s %2$s installed.', 'wp-piwik' ), self::$settings->get_not_empty_global_option( 'plugin_display_name' ), self::$version ), __( 'Next you should connect to Matomo', 'wp-piwik' ) );
+
+			if ( is_multisite() && ! $this->is_network_mode() ) {
+				update_option( WP_Piwik\Settings::SITE_CREATED_VERSION_OPTION, self::$version, false );
+			}
 		}
 		self::$settings->set_global_option( 'revision', self::$revision_id );
 		self::$settings->set_global_option( 'last_settings_update', time() );
+	}
+
+	/**
+	 * Record the version of this plugin a site was created at
+	 *
+	 * @param WP_Site|int $new_site
+	 *          the site that was created, its ID before WordPress 5.1
+	 */
+	public function on_site_created( $new_site ) {
+		$blog_id = $new_site instanceof WP_Site ? (int) $new_site->id : (int) $new_site;
+
+		switch_to_blog( $blog_id );
+		update_option( WP_Piwik\Settings::SITE_CREATED_VERSION_OPTION, self::$version, false );
+		restore_current_blog();
 	}
 
 	/**
@@ -935,7 +964,8 @@ class WP_Piwik {
 
 		$blog_ids = array();
 		foreach ( $settings_by_blog as $blog_id => $settings ) {
-			if ( self::holds_hand_entered_tracking_code( $settings ) ) {
+			if ( self::holds_hand_entered_tracking_code( $settings )
+				&& ! self::was_created_after_the_unfiltered_html_capability_requirement( $settings ) ) {
 				$blog_ids[] = $blog_id;
 			}
 		}
@@ -949,8 +979,8 @@ class WP_Piwik {
 	 *
 	 * A site keeps its settings in its own options table, so there is no one table holding
 	 * them all. Asking for them through get_blog_option() would switch to each site in turn
-	 * and pull that site's whole set of autoloaded options into memory for the sake of three
-	 * rows, so the tables are read in a single statement instead.
+	 * and pull that site's whole set of autoloaded options into memory for the sake of a
+	 * handful of rows, so the tables are read in a single statement instead.
 	 *
 	 * @return array|null blog ID => ( option name => option value ). null when there are too
 	 *                    many sites to read.
@@ -973,6 +1003,7 @@ class WP_Piwik {
 			'wp-piwik_global-track_mode',
 			'wp-piwik-tracking_code',
 			'wp-piwik-noscript_code',
+			WP_Piwik\Settings::SITE_CREATED_VERSION_OPTION,
 		);
 		$placeholders = implode( ', ', array_fill( 0, count( $option_names ), '%s' ) );
 
@@ -1043,6 +1074,18 @@ class WP_Piwik {
 		}
 
 		return false;
+	}
+
+	/**
+	 * @param array $option_values see read_tracking_settings_of_every_site()
+	 * @return boolean
+	 */
+	private static function was_created_after_the_unfiltered_html_capability_requirement( $option_values ) {
+		$created_version = isset( $option_values[ WP_Piwik\Settings::SITE_CREATED_VERSION_OPTION ] )
+			? $option_values[ WP_Piwik\Settings::SITE_CREATED_VERSION_OPTION ]
+			: '';
+
+		return '' !== trim( (string) $created_version );
 	}
 
 	/**

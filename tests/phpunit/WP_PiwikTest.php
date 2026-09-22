@@ -444,6 +444,16 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 		$this->assertStringNotContainsString( get_blog_option( $blog_id, 'blogname' ), $this->render_manual_tracking_review_notice() );
 	}
 
+	public function test_show_manual_tracking_review_notice_should_not_name_a_site_created_after_manual_tracking_required_unfiltered_html() {
+		$this->skip_unless_multisite();
+		$blog_id = $this->create_a_site_using_manual_tracking();
+		$this->record_the_creation_version_of( $blog_id );
+		$this->log_in_as_a_network_administrator();
+		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
+
+		$this->assertSame( '', $this->render_manual_tracking_review_notice() );
+	}
+
 	public function test_show_manual_tracking_review_notice_should_not_show_when_no_site_enters_its_tracking_code_manually() {
 		$this->skip_unless_multisite();
 		$this->log_in_as_a_network_administrator();
@@ -454,6 +464,17 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 
 	public function test_show_manual_tracking_review_notice_should_record_the_review_as_done_when_no_site_enters_its_tracking_code_manually() {
 		$this->skip_unless_multisite();
+		$this->log_in_as_a_network_administrator();
+		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
+
+		$this->render_manual_tracking_review_notice();
+
+		$this->assertSame( \WP_Piwik::MANUAL_TRACKING_REVIEW_DONE, get_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION ) );
+	}
+
+	public function test_show_manual_tracking_review_notice_should_record_the_review_as_done_when_every_site_holding_tracking_code_is_younger_than_the_requirement() {
+		$this->skip_unless_multisite();
+		$this->record_the_creation_version_of( $this->create_a_site_using_manual_tracking() );
 		$this->log_in_as_a_network_administrator();
 		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
 
@@ -711,6 +732,45 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 		$this->assertSame( \WP_Piwik::MANUAL_TRACKING_REVIEW_DONE, get_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION ) );
 	}
 
+	public function test_construct_should_record_the_creation_version_of_a_fresh_install() {
+		$this->skip_unless_multisite();
+
+		$plugin = $this->reload_the_plugin();
+
+		$this->assertSame(
+			$plugin->get_plugin_version(),
+			get_option( \WP_Piwik\Settings::SITE_CREATED_VERSION_OPTION )
+		);
+	}
+
+	public function test_construct_should_not_record_the_creation_version_of_an_updated_install() {
+		$this->skip_unless_multisite();
+		$this->simulate_an_install_running_version( \WP_Piwik::LAST_UNRESTRICTED_MANUAL_TRACKING_VERSION );
+
+		$this->reload_the_plugin();
+
+		$this->assertFalse( get_option( \WP_Piwik\Settings::SITE_CREATED_VERSION_OPTION ) );
+	}
+
+	public function test_on_site_created_should_record_the_version_a_site_of_the_network_was_created_at() {
+		$this->skip_unless_multisite();
+
+		$blog_id = self::factory()->blog->create();
+
+		$this->assertSame(
+			$GLOBALS['wp-piwik']->get_plugin_version(),
+			get_blog_option( $blog_id, \WP_Piwik\Settings::SITE_CREATED_VERSION_OPTION )
+		);
+	}
+
+	public function test_on_site_created_should_not_record_the_creation_version_while_the_plugin_is_network_activated() {
+		$this->network_activate_the_plugin();
+
+		$blog_id = self::factory()->blog->create();
+
+		$this->assertFalse( get_blog_option( $blog_id, \WP_Piwik\Settings::SITE_CREATED_VERSION_OPTION ) );
+	}
+
 	private function render_javascript_code() {
 		ob_start();
 		$GLOBALS['wp-piwik']->add_javascript_code();
@@ -775,7 +835,19 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 		update_blog_option( $blog_id, 'wp-piwik_global-track_mode', $track_mode );
 		update_blog_option( $blog_id, 'wp-piwik-tracking_code', $tracking_code );
 
+		// remove the automatically recorded option value so we can test the recording
+		// behavior
+		delete_blog_option( $blog_id, \WP_Piwik\Settings::SITE_CREATED_VERSION_OPTION );
+
 		return $blog_id;
+	}
+
+	private function record_the_creation_version_of( $blog_id ) {
+		update_blog_option(
+			$blog_id,
+			\WP_Piwik\Settings::SITE_CREATED_VERSION_OPTION,
+			$GLOBALS['wp-piwik']->get_plugin_version()
+		);
 	}
 
 	private function simulate_an_install_running_version( $version ) {
@@ -821,12 +893,6 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 		wp_set_current_user( $user_id );
 
 		$this->assertTrue( current_user_can( 'manage_network' ), 'precondition: the user administrates the network' );
-	}
-
-	private function skip_unless_multisite() {
-		if ( ! is_multisite() ) {
-			$this->markTestSkipped( 'Network mode requires a multisite installation.' );
-		}
 	}
 
 	private function network_activate_the_plugin() {

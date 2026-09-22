@@ -104,4 +104,10 @@ abstract class WP_Piwik_TestCase extends \WP_UnitTestCase {
 		}
 		return new \WP_Piwik\Settings( new \WP_Piwik_Test_Mock_Plugin() );
 	}
+
+	protected function skip_unless_multisite() {
+		if ( ! is_multisite() ) {
+			$this->markTestSkipped( 'Network mode requires a multisite installation.' );
+		}
+	}
 }

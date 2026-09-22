@@ -43,6 +43,16 @@ class Settings {
 	const MANUAL_TRACKING_SITES_CACHE = 'wp-piwik-manual_tracking_sites';
 
 	/**
+	 * Per site option naming the version of Connect Matomo that was running when this site
+	 * could first hold a tracking code: the version the site was created at, or the one it
+	 * installed the plugin at.
+	 *
+	 * Every version it can name required unfiltered_html to enter a tracking code by hand,
+	 * so a site carrying it has nothing for the manual tracking review to look at.
+	 */
+	const SITE_CREATED_VERSION_OPTION = 'wp-piwik-site_created_version';
+
+	/**
 	 * @var \WP_Piwik variables and default settings container
 	 */
 	private static $wp_piwik;

@@ -84,6 +84,7 @@ function wp_matomo_uninstall() {
 		'tracking_code',
 		'last_tracking_code_update',
 		'dashboard_revision',
+		'site_created_version',
 	);
 
 	if ( function_exists( 'is_multisite' ) && is_multisite() ) {
