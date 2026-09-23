@@ -33,7 +33,7 @@ class TrackerHosts {
 	 * @return boolean
 	 */
 	public function is_enforced() {
-		return is_multisite() && ! current_user_can( 'manage_network' );
+		return $this->applies() && ! current_user_can( 'manage_network' );
 	}
 
 	/**
@@ -42,7 +42,30 @@ class TrackerHosts {
 	 * @return boolean
 	 */
 	public function can_edit_allow_list() {
-		return is_multisite() && current_user_can( 'manage_network' );
+		return $this->applies() && current_user_can( 'manage_network' );
+	}
+
+	/**
+	 * Whether the network allowlist applies to the current install type.
+	 *
+	 * Only a network where the plugin is activated site by site does: there, the
+	 * administrator of a single site configures their own tracking. A network wide
+	 * activation keeps one configuration for the whole network, which only a network
+	 * administrator can reach. And outside a network there is nobody above the
+	 * administrator to name the hosts they may use.
+	 *
+	 * @return boolean
+	 */
+	private function applies() {
+		if ( ! is_multisite() ) {
+			return false;
+		}
+
+		if ( ! function_exists( 'is_plugin_active_for_network' ) ) {
+			require_once ABSPATH . 'wp-admin/includes/plugin.php';
+		}
+
+		return ! is_plugin_active_for_network( 'wp-piwik/wp-piwik.php' );
 	}
 
 	/**
@@ -104,19 +127,48 @@ class TrackerHosts {
 			$entries = $this->get_default_allow_list();
 		}
 
-		// a network that runs a Matomo per site can restore the old behaviour from code
 		// phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores, WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 		$filtered = apply_filters( 'wp-piwik_allowed_tracker_hosts', $entries );
-		return $filtered === $entries ? $entries : $this->parse( $filtered );
+		if ( $filtered === $entries ) {
+			return $entries;
+		}
+
+		$parsed = $this->parse( $filtered );
+		if ( empty( $parsed ) ) {
+			// filter returned nothing usable, so we revert to the default (otherwise the network
+			// would not be able to load the JS tracker from anywhere)
+			_doing_it_wrong(
+				__METHOD__,
+				sprintf(
+					/* translators: %s: name of a WordPress filter */
+					esc_html__( 'The %s filter has to answer with a list of host names, each optionally preceded by a "*." wildcard. Nothing it answered with is a valid host, so the existing stored/default list is used instead.', 'wp-piwik' ),
+					'<code>wp-piwik_allowed_tracker_hosts</code>'
+				),
+				'1.1.13'
+			);
+			return $entries;
+		}
+
+		return $parsed;
 	}
 
+	/**
+	 * @return array<int, string> allow list entries, empty when none were ever stored
+	 */
 	public function get_stored_allow_list() {
 		if ( ! is_multisite() ) {
 			return array();
 		}
 
 		$entries = get_site_option( self::OPTION, array() );
-		return is_array( $entries ) ? array_values( $entries ) : array();
+		if ( ! is_array( $entries ) ) {
+			return array();
+		}
+
+		// only allow string entries
+		$entries = array_filter( $entries, 'is_string' );
+
+		return array_values( $entries );
 	}
 
 	public function get_default_allow_list() {

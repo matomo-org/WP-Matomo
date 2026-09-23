@@ -171,6 +171,22 @@ class TrackerHostsTest extends WP_Piwik_TestCase {
 		$this->assertSame( [ '*.matomo.cloud', '*.innocraft.cloud' ], $this->tracker_hosts->get_allow_list() );
 	}
 
+	public function test_get_stored_allow_list_should_keep_entries_that_are_host_names_only() {
+		$this->skip_unless_multisite();
+
+		update_site_option( TrackerHosts::OPTION, [ 'stats.example.org', 12, [ 'nested' ] ] );
+
+		$this->assertSame( [ 'stats.example.org' ], $this->tracker_hosts->get_stored_allow_list() );
+	}
+
+	public function test_allows_should_answer_a_stored_list_holding_something_that_is_not_a_host_name() {
+		$this->skip_unless_multisite();
+		update_site_option( TrackerHosts::OPTION, [ [ 'nested' ], 'stats.example.org' ] );
+
+		$this->assertTrue( $this->tracker_hosts->allows( 'stats.example.org' ) );
+		$this->assertFalse( $this->tracker_hosts->allows( 'evil.example.org' ) );
+	}
+
 	public function test_get_allow_list_should_apply_the_filter_a_network_can_shape_it_with() {
 		add_filter(
 			'wp-piwik_allowed_tracker_hosts',
@@ -191,6 +207,34 @@ class TrackerHostsTest extends WP_Piwik_TestCase {
 		);
 
 		$this->assertSame( [ 'filtered.example.org' ], $this->tracker_hosts->get_allow_list() );
+	}
+
+	public function test_get_allow_list_should_keep_the_list_it_had_when_the_filter_names_no_host() {
+		$this->skip_unless_multisite();
+		$this->store_allow_list( [ 'stats.example.org' ] );
+		$this->setExpectedIncorrectUsage( 'WP_Piwik\TrackerHosts::get_allow_list' );
+
+		add_filter(
+			'wp-piwik_allowed_tracker_hosts',
+			function () {
+				return [ '*' ];
+			}
+		);
+
+		$this->assertSame( [ 'stats.example.org' ], $this->tracker_hosts->get_allow_list() );
+	}
+
+	public function test_get_allow_list_should_keep_the_default_when_the_filter_names_no_host() {
+		$this->setExpectedIncorrectUsage( 'WP_Piwik\TrackerHosts::get_allow_list' );
+
+		add_filter(
+			'wp-piwik_allowed_tracker_hosts',
+			function () {
+				return 'https://nope.example.org/';
+			}
+		);
+
+		$this->assertSame( [ '*.matomo.cloud', '*.innocraft.cloud' ], $this->tracker_hosts->get_allow_list() );
 	}
 
 	public function test_update_allow_list_should_store_a_list_of_entries_for_a_network_administrator() {
@@ -231,6 +275,20 @@ class TrackerHostsTest extends WP_Piwik_TestCase {
 		$this->assertFalse( $this->tracker_hosts->can_edit_allow_list() );
 	}
 
+	public function test_is_enforced_should_be_false_when_the_plugin_is_activated_for_the_whole_network() {
+		$this->network_activate_the_plugin();
+		$this->log_in_as_a_network_site_administrator();
+
+		$this->assertFalse( $this->tracker_hosts->is_enforced() );
+	}
+
+	public function test_can_edit_allow_list_should_be_false_when_the_plugin_is_activated_for_the_whole_network() {
+		$this->network_activate_the_plugin();
+		$this->log_in_as_a_network_administrator();
+
+		$this->assertFalse( $this->tracker_hosts->can_edit_allow_list() );
+	}
+
 	public function test_is_allowed_for_current_user_should_allow_any_host_for_a_network_administrator() {
 		$this->log_in_as_a_network_administrator();
 		$this->store_allow_list( [ 'matomo.example.org' ] );
@@ -244,6 +302,12 @@ class TrackerHostsTest extends WP_Piwik_TestCase {
 
 		$this->assertFalse( $this->tracker_hosts->is_allowed_for_current_user( 'https://evil.example.org/' ) );
 		$this->assertTrue( $this->tracker_hosts->is_allowed_for_current_user( 'https://matomo.example.org/matomo/' ) );
+	}
+
+	private function network_activate_the_plugin() {
+		$this->skip_unless_multisite();
+
+		update_site_option( 'active_sitewide_plugins', [ 'wp-piwik/wp-piwik.php' => time() ] );
 	}
 
 	private function store_allow_list( $entries ) {

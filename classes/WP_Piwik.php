@@ -924,7 +924,7 @@ class WP_Piwik {
 	/**
 	 * Explain each thing the review found, followed by the sites it found it on
 	 *
-	 * @param array $sites_by_reason review reason => blog IDs, see get_sites_needing_review()
+	 * @param array $sites_by_reason review reason => named sites, see get_sites_needing_review()
 	 * @return string markup, empty when there is nothing to review
 	 */
 	private function get_manual_tracking_review_findings( $sites_by_reason ) {
@@ -951,20 +951,27 @@ class WP_Piwik {
 	}
 
 	/**
-	 * @param int[] $blog_ids sites to name
+	 * @param array $sites sites to name, see describe_site_for_review()
 	 * @return string list items linking to each site's settings screen
 	 */
-	private function get_review_site_list( $blog_ids ) {
-		$sites = '';
-		foreach ( $blog_ids as $blog_id ) {
-			$sites .= sprintf(
+	private function get_review_site_list( $sites ) {
+		$list = '';
+		foreach ( $sites as $site ) {
+			$list .= sprintf(
 				'<li><a href="%s">%s</a></li>',
-				esc_url( get_admin_url( $blog_id, 'options-general.php?page=wp-matomo-settings' ) ),
-				esc_html( get_blog_option( $blog_id, 'blogname', (string) $blog_id ) )
+				esc_url( $site['url'] ),
+				esc_html( $site['name'] )
 			);
 		}
 
-		return $sites;
+		return $list;
+	}
+
+	private static function describe_site_for_review( $blog_id ) {
+		return array(
+			'name' => (string) get_blog_option( $blog_id, 'blogname', (string) $blog_id ),
+			'url'  => (string) get_admin_url( $blog_id, 'options-general.php?page=wp-matomo-settings' ),
+		);
 	}
 
 	/**
@@ -991,8 +998,9 @@ class WP_Piwik {
 	/**
 	 * Get the sites of the network the review has something to say about, by reason.
 	 *
-	 * @return array|string REVIEW_REASON_* => blog IDs, or MANUAL_TRACKING_NETWORK_TOO_LARGE
-	 *                      when the network holds more sites than one request looks through
+	 * @return array|string REVIEW_REASON_* => named sites, see describe_site_for_review(),
+	 *                      or MANUAL_TRACKING_NETWORK_TOO_LARGE when the network holds more
+	 *                      sites than one request looks through
 	 */
 	private function get_sites_needing_review() {
 		$cached = get_site_transient( WP_Piwik\Settings::MANUAL_TRACKING_SITES_CACHE );
@@ -1000,10 +1008,7 @@ class WP_Piwik {
 			return $cached;
 		}
 
-		if (
-			is_array( $cached )
-			&& isset( $cached[ self::REVIEW_REASON_MANUAL_CODE ], $cached[ self::REVIEW_REASON_TRACKER_HOST ] )
-		) {
+		if ( self::holds_named_sites( $cached ) ) {
 			return $cached;
 		}
 
@@ -1025,16 +1030,51 @@ class WP_Piwik {
 				continue; // site is newer than new requirements so it doesn't need a review
 			}
 
-			if ( self::holds_manually_entered_tracking_code( $settings ) ) {
-				$sites_by_reason[ self::REVIEW_REASON_MANUAL_CODE ][] = $blog_id;
+			$holds_manual_code = self::holds_manually_entered_tracking_code( $settings );
+			$loads_from_a_host = self::loads_its_tracker_from_an_unknown_host( $settings, $allow_list );
+			if ( ! $holds_manual_code && ! $loads_from_a_host ) {
+				continue; // nothing to name this site for, so it is not read any further
 			}
-			if ( self::loads_its_tracker_from_an_unknown_host( $settings, $allow_list ) ) {
-				$sites_by_reason[ self::REVIEW_REASON_TRACKER_HOST ][] = $blog_id;
+
+			$site = self::describe_site_for_review( $blog_id );
+			if ( $holds_manual_code ) {
+				$sites_by_reason[ self::REVIEW_REASON_MANUAL_CODE ][] = $site;
+			}
+			if ( $loads_from_a_host ) {
+				$sites_by_reason[ self::REVIEW_REASON_TRACKER_HOST ][] = $site;
 			}
 		}
 
 		set_site_transient( WP_Piwik\Settings::MANUAL_TRACKING_SITES_CACHE, $sites_by_reason, DAY_IN_SECONDS );
 		return $sites_by_reason;
+	}
+
+	/**
+	 * Check whether the site list cache value has the correct structure.
+	 *
+	 * @param mixed $cached what the cache holds
+	 * @return boolean whether it is a list of named sites per review reason
+	 */
+	private static function holds_named_sites( $cached ) {
+		if (
+			! is_array( $cached )
+			|| ! isset( $cached[ self::REVIEW_REASON_MANUAL_CODE ], $cached[ self::REVIEW_REASON_TRACKER_HOST ] )
+		) {
+			return false;
+		}
+
+		foreach ( $cached as $sites ) {
+			if ( ! is_array( $sites ) ) {
+				return false;
+			}
+			foreach ( $sites as $site ) {
+				if ( ! is_array( $site ) || ! isset( $site['name'], $site['url'] ) ) {
+					return false;
+				}
+			}
+		}
+
+		return true;
 	}
 
 	/**
@@ -1068,7 +1108,6 @@ class WP_Piwik {
 			'wp-piwik-noscript_code',
 			WP_Piwik\Settings::SITE_CREATED_VERSION_OPTION,
 			// the settings that decide which server serves the JS tracker to visitors
-			'wp-piwik_global-piwik_mode',
 			'wp-piwik_global-piwik_url',
 			'wp-piwik_global-piwik_user',
 			'wp-piwik_global-matomo_user',
@@ -1159,8 +1198,19 @@ class WP_Piwik {
 	private static function loads_its_tracker_from_an_unknown_host( $settings, $allow_list ) {
 		$tracker_hosts = self::$settings->get_tracker_hosts();
 
-		foreach ( self::get_tracker_hosts_of_site( $settings ) as $host ) {
-			if ( ! $tracker_hosts->allows( $host, $allow_list ) ) {
+		foreach ( self::get_tracker_values_of_site( $settings ) as $value ) {
+			// before checking, sanitize the value as it is sanitized before outputting in JS
+			$value = \WP_Piwik\TrackingCode\Generator::strip_what_a_url_cannot_hold( $value );
+
+			// a value the browser reads as a path uses the current site's host. the
+			// deprecated PHP API connection method stored '/' as the Matomo URL, so it is
+			// possible that a site of this network holds one.
+			if ( '' === $value || ( '/' === $value[0] && '//' !== substr( $value, 0, 2 ) ) ) {
+				continue;
+			}
+
+			$host = $tracker_hosts->host_from_url( $value );
+			if ( '' === $host || ! $tracker_hosts->allows( $host, $allow_list ) ) {
 				return true;
 			}
 		}
@@ -1169,40 +1219,35 @@ class WP_Piwik {
 	}
 
 	/**
-	 * Get the hosts a site's settings name as the source of its tracker
+	 * Get the values a site's settings name as the source of the Matomo JavaScript tracker.
 	 *
 	 * @param array $settings the site's tracking settings, see read_tracking_settings_of_every_site()
-	 * @return array<int, string> host names, empty when the site names none
+	 * @return array<int, string> URLs and host names, empty when the site names none
 	 */
-	private static function get_tracker_hosts_of_site( $settings ) {
-		$piwik_mode = self::get_site_setting( $settings, 'wp-piwik_global-piwik_mode' );
-		if ( 'cloud' === $piwik_mode ) {
-			$matomo = self::get_site_setting( $settings, 'wp-piwik_global-piwik_user' ) . '.innocraft.cloud';
-		} elseif ( 'cloud-matomo' === $piwik_mode ) {
-			$matomo = self::get_site_setting( $settings, 'wp-piwik_global-matomo_user' ) . '.matomo.cloud';
-		} else {
-			// every other connection method names the Matomo by URL, or by a file path that
-			// names no host at all
-			$matomo = self::get_site_setting( $settings, 'wp-piwik_global-piwik_url' );
-		}
-
+	private static function get_tracker_values_of_site( $settings ) {
 		$values = array(
-			$matomo,
+			// every connection method but the two clouds names its Matomo by URL, or by a
+			// file path that names no host at all
+			self::get_site_setting( $settings, 'wp-piwik_global-piwik_url' ),
 			self::get_site_setting( $settings, 'wp-piwik_global-track_cdnurl' ),
 			self::get_site_setting( $settings, 'wp-piwik_global-track_cdnurlssl' ),
 		);
 
-		$tracker_hosts = self::$settings->get_tracker_hosts();
-
-		$hosts = array();
-		foreach ( $values as $value ) {
-			$host = $tracker_hosts->host_from_url( $value );
-			if ( '' !== $host ) {
-				$hosts[] = $host;
+		$clouds = array(
+			'wp-piwik_global-piwik_user'  => '.innocraft.cloud',
+			'wp-piwik_global-matomo_user' => '.matomo.cloud',
+		);
+		foreach ( $clouds as $option_name => $domain ) {
+			$subdomain = self::get_site_setting( $settings, $option_name );
+			if ( '' !== trim( $subdomain ) ) {
+				$values[] = $subdomain . $domain;
 			}
 		}
 
-		return array_values( array_unique( $hosts ) );
+		$values = array_filter( $values, 'strlen' );
+		$values = array_unique( $values );
+		$values = array_values( $values );
+		return $values;
 	}
 
 	/**

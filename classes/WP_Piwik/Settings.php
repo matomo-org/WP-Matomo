@@ -194,6 +194,12 @@ class Settings {
 	private $rejected_tracker_hosts = array();
 
 	/**
+	 * @var array<int, string> settings that the last configuration save attempt could not
+	 *                         save, because the value they used was not usable.
+	 */
+	private $rejected_settings = array();
+
+	/**
 	 * @var TrackerHosts
 	 */
 	private $tracker_hosts;
@@ -429,6 +435,7 @@ class Settings {
 	 */
 	private function check_settings( $in ) {
 		$this->rejected_tracker_hosts = array();
+		$this->rejected_settings      = array();
 		foreach ( $this->check_settings as $key => $value ) {
 			if ( isset( $in [ $key ] ) ) {
 				$in [ $key ] = call_user_func_array(
@@ -491,9 +498,14 @@ class Settings {
 			return $value; // nothing is changing, so there is nothing to check
 		}
 
+		if ( ! preg_match( '/^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$/', $value ) ) {
+			// the subdomain looks incorrect or malicious, so reject it
+			$this->rejected_settings[] = $key;
+			return $stored;
+		}
+
 		$domain = 'piwik_user' === $key ? '.innocraft.cloud' : '.matomo.cloud';
-		if ( ! preg_match( '/^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$/', $value )
-			|| ! $this->may_current_user_track_via( $value . $domain ) ) {
+		if ( ! $this->may_current_user_track_via( $value . $domain ) ) {
 			return $stored; // keep the cloud the network allows
 		}
 
@@ -524,12 +536,40 @@ class Settings {
 	}
 
 
-	public function check_piwik_mode( $value ) {
+	public function check_piwik_mode( $value, $in = array() ) {
+		$stored = (string) $this->get_global_option( 'piwik_mode' );
+
 		$options = $this->get_matomo_mode_options();
 		if ( ! in_array( $value, array_keys( $options ), true ) ) {
-			return $this->get_global_option( 'piwik_mode' );
+			return $stored;
 		}
+
+		if ( $value === $stored ) {
+			return $value; // nothing is changing, so there is nothing to check
+		}
+
+		$matomo = $this->get_matomo_url_of_mode( $value, $in );
+		if ( '' !== trim( $matomo ) && ! $this->may_current_user_track_via( $matomo ) ) {
+			return $stored; // no URL, or URL is not allowed: keep the existing value
+		}
+
 		return $value;
+	}
+
+	private function get_matomo_url_of_mode( $piwik_mode, $in ) {
+		if ( 'cloud' === $piwik_mode ) {
+			$subdomain = $this->get_submitted_option( $in, 'piwik_user' );
+			return '' === trim( $subdomain ) ? '' : $subdomain . '.innocraft.cloud';
+		}
+
+		if ( 'cloud-matomo' === $piwik_mode ) {
+			$subdomain = $this->get_submitted_option( $in, 'matomo_user' );
+			return '' === trim( $subdomain ) ? '' : $subdomain . '.matomo.cloud';
+		}
+
+		// every other connection method names the Matomo by URL, or by a file path that
+		// names no host at all
+		return $this->get_submitted_option( $in, 'piwik_url' );
 	}
 
 	/**
@@ -660,6 +700,15 @@ class Settings {
 	 */
 	public function get_rejected_tracker_hosts() {
 		return array_values( array_unique( $this->rejected_tracker_hosts ) );
+	}
+
+	/**
+	 * Get the settings the last configuration save attempt did not have a usable value for.
+	 *
+	 * @return array<int, string> setting names, empty when every value was saveable
+	 */
+	public function get_rejected_settings() {
+		return array_values( array_unique( $this->rejected_settings ) );
 	}
 
 	/**
@@ -838,10 +887,11 @@ class Settings {
 	 * @return string tracking mode
 	 */
 	private function get_submitted_track_mode( $in ) {
-		return isset( $in['track_mode'] )
-			? $in['track_mode']
-			// fall back to the stored tracking code if nothing is in the submitted form
-			: $this->get_global_option( 'track_mode' );
+		return $this->get_submitted_option( $in, 'track_mode' );
+	}
+
+	private function get_submitted_option( $in, $key ) {
+		return (string) ( isset( $in[ $key ] ) ? $in[ $key ] : $this->get_global_option( $key ) );
 	}
 
 	/**

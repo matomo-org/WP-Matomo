@@ -29,6 +29,8 @@ class Settings extends \WP_Piwik\Admin {
 		} elseif ( self::$wp_piwik->is_config_submitted() ) {
 			$this->show_box( 'updated', 'yes', esc_html__( 'Changes saved.', 'wp-piwik' ) );
 			$this->show_rejected_tracker_hosts();
+			$this->show_rejected_settings();
+
 			self::$wp_piwik->reset_request();
 			if ( 'php' === self::$settings->get_global_option( 'piwik_mode' ) ) {
 				self::$wp_piwik->define_piwik_constants();
@@ -925,6 +927,35 @@ class Settings extends \WP_Piwik\Admin {
 				'<code>' . implode( '</code>, <code>', array_map( 'esc_html', self::$settings->get_tracker_hosts()->get_allow_list() ) ) . '</code>'
 			)
 		);
+	}
+
+	/**
+	 * Tell the user which settings the configuration they just saved did not have a
+	 * usable value.
+	 */
+	private function show_rejected_settings() {
+		$labels = array(
+			'piwik_user'  => __( 'Innocraft subdomain', 'wp-piwik' ),
+			'matomo_user' => __( 'Matomo subdomain', 'wp-piwik' ),
+		);
+
+		foreach ( self::$settings->get_rejected_settings() as $key ) {
+			if ( ! isset( $labels[ $key ] ) ) {
+				continue;
+			}
+
+			$this->show_box(
+				'error',
+				'no',
+				sprintf(
+					/* translators: 1: name of a setting of this page, 2: an example subdomain, 3: the URL that subdomain belongs to */
+					esc_html__( '"%1$s" has to be the single name your Matomo is reachable under, e.g. %2$s of %3$s, so it was left as it was.', 'wp-piwik' ),
+					esc_html( $labels[ $key ] ),
+					'<code>acme</code>',
+					'<code>https://acme.' . ( 'piwik_user' === $key ? 'innocraft' : 'matomo' ) . '.cloud/</code>'
+				)
+			);
+		}
 	}
 
 	/**
