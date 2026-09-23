@@ -5,6 +5,7 @@ namespace WP_Piwik\Tests;
 use WP_Piwik\AjaxTracker;
 use WP_Piwik\Logger\Dummy;
 use WP_Piwik\TrackingCode;
+use WP_Piwik\TrackingCode\Generator;
 
 class TrackingCodeTest extends WP_Piwik_TestCase {
 
@@ -15,7 +16,7 @@ class TrackingCodeTest extends WP_Piwik_TestCase {
 
 		$this->assertStringContainsString( self::TRACK_PAGEVIEW, $result['script'] );
 		$this->assertStringNotContainsString( '<noscript>', $result['script'] );
-		$this->assertStringContainsString( '<noscript><p><img src="//stats.example.org/matomo.php?idsite=1"', $result['noscript'] );
+		$this->assertStringContainsString( 'src="//stats.example.org/matomo.php?idsite=1', $result['noscript'] );
 	}
 
 	public function test_prepare_tracking_code_extracts_the_proxy_url() {
@@ -24,10 +25,9 @@ class TrackingCodeTest extends WP_Piwik_TestCase {
 		$this->assertSame( '//stats.example.org/', $result['proxy'] );
 	}
 
-	public function test_prepare_tracking_code_removes_type_attribute_when_configured() {
-		$result = $this->prepare( [ 'remove_type_attribute' => true ] );
-
-		$this->assertStringNotContainsString( ' type="text/javascript"', $result['script'] );
+	public function test_prepare_tracking_code_should_leave_the_script_element_without_a_type_attribute() {
+		$this->assertStringNotContainsString( ' type=', $this->prepare()['script'] );
+		$this->assertStringNotContainsString( ' type=', $this->prepare( [ 'remove_type_attribute' => true ] )['script'] );
 	}
 
 	public function test_prepare_tracking_code_rewrites_urls_in_js_mode() {
@@ -51,17 +51,60 @@ class TrackingCodeTest extends WP_Piwik_TestCase {
 		$this->assertStringNotContainsString( 'matomo.js', $result['script'] );
 	}
 
+	public function test_prepare_tracking_code_should_send_the_noscript_image_through_the_proxy() {
+		$expected_proxy = str_replace(
+			[ 'https://', 'http://' ],
+			'//',
+			plugins_url( 'wp-piwik' )
+		) . '/proxy/';
+
+		$result = $this->prepare( [ 'track_mode' => 'proxy' ] );
+
+		$this->assertStringContainsString( 'src="' . $expected_proxy . 'matomo.php?idsite=1', $result['noscript'] );
+		$this->assertStringNotContainsString( 'stats.example.org', $result['noscript'] );
+	}
+
 	public function test_prepare_tracking_code_uses_cdn_url_when_configured() {
 		$result = $this->prepare( [ 'track_cdnurl' => 'cdn.example.org' ] );
 
-		$this->assertStringContainsString( "'https://cdn.example.org/' : 'http://cdn.example.org/'", $result['script'] );
+		$this->assertStringContainsString( '"https:\/\/cdn.example.org\/" : "http:\/\/cdn.example.org\/"', $result['script'] );
 		$this->assertStringContainsString( 'g.src=ucdn+', $result['script'] );
+	}
+
+	public function test_prepare_tracking_code_should_not_let_a_cdn_url_end_the_script_element() {
+		$result = $this->prepare( [ 'track_cdnurl' => '</script><script>alert(1)</script>' ] );
+
+		$this->assertStringContainsString( '"https:\/\/\/scriptscriptalert(1)\/script\/"', $result['script'] );
+		$this->assertSame( 1, substr_count( $result['script'], '</script>' ), 'the tracking code has one script element' );
+	}
+
+	public function test_prepare_tracking_code_should_not_let_a_cdn_url_end_the_string_it_is_put_in() {
+		$result = $this->prepare( [ 'track_cdnurlssl' => 'cdn.example.org/"+alert(1)+"' ] );
+
+		$this->assertStringNotContainsString( '"+alert(1)+"', $result['script'] );
+		$this->assertStringContainsString( '\"+alert(1)+\"', $result['script'] );
+	}
+
+	public function test_prepare_tracking_code_should_not_let_a_cdn_url_start_a_script_element() {
+		// a '<!--' followed by a '<script' makes the rest of the page part of the script
+		// element, which JSON encoding does nothing about
+		$result = $this->prepare( [ 'track_cdnurl' => 'cdn.example.org/<!--<script>' ] );
+
+		$this->assertStringContainsString( '"https:\/\/cdn.example.org\/!--script\/"', $result['script'] );
+		$this->assertSame( 1, substr_count( $result['script'], '<script' ), 'the tracking code opens one script element' );
+	}
+
+	public function test_prepare_tracking_code_should_not_let_a_download_class_start_a_script_element() {
+		$result = $this->prepare( [ 'set_download_classes' => 'download|<!--<script>' ] );
+
+		$this->assertStringContainsString( "_paq.push(['setDownloadClasses', \"download|!--script\"]);", $result['script'] );
 	}
 
 	public function test_prepare_tracking_code_adds_cfasync_attribute_when_configured() {
 		$result = $this->prepare( [ 'track_datacfasync' => true ] );
 
-		$this->assertStringContainsString( '<script data-cfasync="false" type', $result['script'] );
+		$this->assertStringContainsString( '<script data-cfasync="false">', $result['script'] );
+		$this->assertStringNotContainsString( '</script data-cfasync', $result['script'] );
 	}
 
 	public function test_prepare_tracking_code_limits_cookie_lifetimes_when_configured() {
@@ -76,6 +119,13 @@ class TrackingCodeTest extends WP_Piwik_TestCase {
 		$result = $this->prepare( [ 'force_protocol' => 'https' ] );
 
 		$this->assertStringContainsString( 'var u="https://stats.example.org/";', $result['script'] );
+	}
+
+	public function test_prepare_tracking_code_should_not_let_a_forced_protocol_end_the_script_element() {
+		$result = $this->prepare( [ 'force_protocol' => '</script><script>alert(1)</script><x a="' ] );
+
+		$this->assertStringContainsString( 'var u="//stats.example.org/";', $result['script'] );
+		$this->assertSame( 1, substr_count( $result['script'], '</script>' ), 'the tracking code has one script element' );
 	}
 
 	public function test_prepare_tracking_code_adds_content_tracking_when_configured() {
@@ -205,6 +255,35 @@ class TrackingCodeTest extends WP_Piwik_TestCase {
 		);
 	}
 
+	public function test_get_tracking_code_should_not_let_a_search_term_end_the_string_it_is_put_in() {
+		$this->go_to( '/?s=' . rawurlencode( "matomo');alert(1);//" ) );
+
+		$tracking_code            = $this->create_tracking_code();
+		$tracking_code->is_search = true;
+
+		$result = $tracking_code->get_tracking_code();
+
+		$this->assertStringContainsString(
+			"_paq.push(['trackSiteSearch','matomo\\');alert(1);//', false, " . $GLOBALS['wp_query']->found_posts . ']);',
+			$result
+		);
+	}
+
+	public function test_get_tracking_code_should_not_let_a_search_term_start_a_script_element() {
+		$this->go_to( '/?s=' . rawurlencode( '<!--<script>' ) );
+
+		$tracking_code            = $this->create_tracking_code();
+		$tracking_code->is_search = true;
+
+		$result = $tracking_code->get_tracking_code();
+
+		$this->assertStringContainsString(
+			"_paq.push(['trackSiteSearch','&lt;!--&lt;script&gt;', false, " . $GLOBALS['wp_query']->found_posts . ']);',
+			$result
+		);
+		$this->assertSame( 1, substr_count( $result, '</script>' ), 'the tracking code has one script element' );
+	}
+
 	public function test_get_tracking_code_applies_user_id_tracking() {
 		$user_id = self::factory()->user->create( [ 'user_email' => 'user@example.org' ] );
 		wp_set_current_user( $user_id );
@@ -245,6 +324,20 @@ class TrackingCodeTest extends WP_Piwik_TestCase {
 		$this->assertStringContainsString( "_paq.push(['setCustomVariable',1, \"category\", \"news\", 'page']);", $result );
 	}
 
+	public function test_get_tracking_code_should_not_let_a_custom_variable_start_a_script_element() {
+		$post_id = self::factory()->post->create();
+		update_post_meta( $post_id, 'wp-piwik_custom_cat1', '<!--<script>' );
+		update_post_meta( $post_id, 'wp-piwik_custom_val1', 'news</script>' );
+
+		$this->go_to( get_permalink( $post_id ) );
+		$this->assertTrue( is_single() );
+
+		$result = $this->create_tracking_code()->get_tracking_code();
+
+		$this->assertStringContainsString( "_paq.push(['setCustomVariable',1, \"!--script\", \"news\/script\", 'page']);", $result );
+		$this->assertSame( 1, substr_count( $result, '</script>' ), 'the tracking code has one script element' );
+	}
+
 	public function test_get_tracking_code_applies_the_tracking_code_filter() {
 		add_filter(
 			'wp-piwik_tracking_code',
@@ -259,20 +352,8 @@ class TrackingCodeTest extends WP_Piwik_TestCase {
 	}
 
 	private function get_sample_code() {
-		return '<!-- Matomo -->' . "\n"
-			. '<script type="text/javascript">' . "\n"
-			. 'var _paq = window._paq = window._paq || [];' . "\n"
-			. "_paq.push(['trackPageView']);\n"
-			. "_paq.push(['enableLinkTracking']);\n"
-			. "(function() {\n"
-			. 'var u="//stats.example.org/";' . "\n"
-			. "_paq.push(['setTrackerUrl', u+'matomo.php']);\n"
-			. "_paq.push(['setSiteId', '1']);\n"
-			. "var d=document, g=d.createElement('script'), s=d.getElementsByTagName('script')[0];\n"
-			. "g.async=true; g.src=u+'matomo.js'; s.parentNode.insertBefore(g,s);\n"
-			. "})();\n"
-			. '</script>' . "\n"
-			. '<noscript><p><img src="//stats.example.org/matomo.php?idsite=1" style="border:0;" alt="" /></p></noscript>';
+		$generator = new Generator();
+		return $generator->generate( 1, 'stats.example.org', array( 'track_no_script' => true ) );
 	}
 
 	private function prepare( $global_options = array() ) {

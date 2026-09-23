@@ -54,6 +54,12 @@ abstract class WP_Piwik_TestCase extends \WP_UnitTestCase {
 	private function delete_plugin_options() {
 		global $wpdb;
 
+		if ( is_multisite() ) {
+			// network wide state lives in sitemeta, which the query below does not reach
+			delete_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION );
+			delete_site_transient( \WP_Piwik\Settings::MANUAL_TRACKING_SITES_CACHE );
+		}
+
 		// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- test cleanup, rolled back with the test transaction
 		$option_names = $wpdb->get_col(
 			"SELECT option_name FROM {$wpdb->options}
@@ -97,5 +103,11 @@ abstract class WP_Piwik_TestCase extends \WP_UnitTestCase {
 			update_option( 'wp-piwik-' . $key, $value );
 		}
 		return new \WP_Piwik\Settings( new \WP_Piwik_Test_Mock_Plugin() );
+	}
+
+	protected function skip_unless_multisite() {
+		if ( ! is_multisite() ) {
+			$this->markTestSkipped( 'Network mode requires a multisite installation.' );
+		}
 	}
 }

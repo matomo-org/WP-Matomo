@@ -304,6 +304,7 @@ class Settings extends \WP_Piwik\Admin {
 			$is_not_tracking               = 'disabled' === self::$settings->get_global_option( 'track_mode' );
 			$is_not_generated_tracking     = $is_not_tracking || 'manually' === self::$settings->get_global_option( 'track_mode' );
 			$full_generated_tracking_group = 'wp-piwik-track-option wp-piwik-track-option-default wp-piwik-track-option-js wp-piwik-track-option-proxy';
+			$can_enter_code_manually       = \WP_Piwik\Settings::can_enter_tracking_code_manually();
 
 			$description = sprintf(
 				'%s<br /><strong>%s:</strong> %s<br /><strong>%s:</strong> %s<br /><strong>%s:</strong> %s<br /><strong>%s:</strong> %s<br /><strong>%s:</strong> %s',
@@ -323,19 +324,23 @@ class Settings extends \WP_Piwik\Admin {
 				esc_html__( 'Enter manually', 'wp-piwik' ),
 				esc_html__( 'Enter your own tracking code manually. You can choose one of the prior options, pre-configure your tracking code and switch to manually editing at last.', 'wp-piwik' )
 					. ( self::$wp_piwik->is_network_mode() ? ' ' . esc_html__( 'Use the placeholder {ID} to add the Matomo site ID.', 'wp-piwik' ) : '' )
+					. ( $can_enter_code_manually ? '' : ' ' . esc_html__( 'Entering the tracking code manually publishes HTML and JavaScript to every page of this site, which requires the "unfiltered_html" capability, so this option is not available to you.', 'wp-piwik' )
+						. ( is_multisite() ? ' ' . esc_html__( 'A WordPress network reserves that capability for its network administrators.', 'wp-piwik' ) : '' ) )
 			);
+
+			$is_code_readonly = ! $can_enter_code_manually || 'manually' !== self::$settings->get_global_option( 'track_mode' );
+
+			$track_mode_on_change = 'jQuery(\'tr.wp-piwik-track-option\').addClass(\'hidden\'); jQuery(\'tr.wp-piwik-track-option-\' + jQuery(\'#track_mode\').val()).removeClass(\'hidden\');';
+			if ( $can_enter_code_manually ) {
+				$track_mode_on_change .= ' jQuery(\'#tracking_code, #noscript_code\').prop(\'readonly\', jQuery(\'#track_mode\').val() != \'manually\');';
+			}
+
 			$this->show_select(
 				'track_mode',
 				__( 'Add tracking code', 'wp-piwik' ),
-				array(
-					'disabled' => __( 'Disabled', 'wp-piwik' ),
-					'default'  => __( 'Default tracking', 'wp-piwik' ),
-					'js'       => __( 'Use js/index.php', 'wp-piwik' ),
-					'proxy'    => __( 'Use proxy script', 'wp-piwik' ),
-					'manually' => __( 'Enter manually', 'wp-piwik' ),
-				),
+				self::$settings->get_track_mode_options(),
 				$description,
-				'jQuery(\'tr.wp-piwik-track-option\').addClass(\'hidden\'); jQuery(\'tr.wp-piwik-track-option-\' + jQuery(\'#track_mode\').val()).removeClass(\'hidden\'); jQuery(\'#tracking_code, #noscript_code\').prop(\'readonly\', jQuery(\'#track_mode\').val() != \'manually\');'
+				$track_mode_on_change
 			);
 
 			$this->show_textarea(
@@ -347,7 +352,7 @@ class Settings extends \WP_Piwik\Admin {
 				'wp-piwik-track-option wp-piwik-track-option-default wp-piwik-track-option-js wp-piwik-track-option-proxy wp-piwik-track-option-manually',
 				true,
 				'',
-				'manually' !== self::$settings->get_global_option( 'track_mode' ),
+				$is_code_readonly,
 				false
 			);
 
@@ -373,7 +378,7 @@ class Settings extends \WP_Piwik\Admin {
 				'wp-piwik-track-option wp-piwik-track-option-default wp-piwik-track-option-js wp-piwik-track-option-manually',
 				true,
 				'',
-				'manually' !== self::$settings->get_global_option( 'track_mode' ),
+				$is_code_readonly,
 				false
 			);
 
@@ -693,11 +698,7 @@ class Settings extends \WP_Piwik\Admin {
 		$this->show_select(
 			'force_protocol',
 			__( 'Force Matomo to use a specific protocol', 'wp-piwik' ),
-			array(
-				'disabled' => __( 'Disabled (default)', 'wp-piwik' ),
-				'http'     => __( 'http', 'wp-piwik' ),
-				'https'    => __( 'https (SSL)', 'wp-piwik' ),
-			),
+			self::$settings->get_force_protocol_options(),
 			__( 'Choose if you want to explicitly force Matomo to use HTTP or HTTPS. Does not work with a CDN URL.', 'wp-piwik' )
 		);
 

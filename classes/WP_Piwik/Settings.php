@@ -36,6 +36,23 @@ class Settings {
 	const COOKIE_ALLOWLIST_MAX_LENGTH       = 4096;
 
 	/**
+	 * Network transient holding the blog IDs whose tracking code is entered manually.
+	 *
+	 * @see \WP_Piwik::show_manual_tracking_review_notice()
+	 */
+	const MANUAL_TRACKING_SITES_CACHE = 'wp-piwik-manual_tracking_sites';
+
+	/**
+	 * Per site option naming the version of Connect Matomo that was running when this site
+	 * could first hold a tracking code: the version the site was created at, or the one it
+	 * installed the plugin at.
+	 *
+	 * Every version it can name required unfiltered_html to enter a tracking code by hand,
+	 * so a site carrying it has nothing for the manual tracking review to look at.
+	 */
+	const SITE_CREATED_VERSION_OPTION = 'wp-piwik-site_created_version';
+
+	/**
 	 * @var \WP_Piwik variables and default settings container
 	 */
 	private static $wp_piwik;
@@ -47,13 +64,24 @@ class Settings {
 	 * @var array Define callback functions for changed settings
 	 */
 	private $check_settings = array(
-		'piwik_url'        => 'check_piwik_url',
-		'piwik_token'      => 'check_piwik_token',
-		'site_id'          => 'request_piwik_site_id',
-		'tracking_code'    => 'prepare_tracking_code',
-		'noscript_code'    => 'prepare_nocscript_code',
-		'cookie_allowlist' => 'check_cookie_allowlist',
-		'piwik_mode'       => 'check_piwik_mode',
+		// the tracking code callbacks below branch on the track mode, so it has to be
+		// checked first
+		'track_mode'              => 'check_track_mode',
+		'piwik_url'               => 'check_piwik_url',
+		'piwik_token'             => 'check_piwik_token',
+		'site_id'                 => 'request_piwik_site_id',
+		'tracking_code'           => 'prepare_tracking_code',
+		'noscript_code'           => 'prepare_nocscript_code',
+		'cookie_allowlist'        => 'check_cookie_allowlist',
+		'piwik_mode'              => 'check_piwik_mode',
+		'force_protocol'          => 'check_force_protocol',
+		'plugin_display_name'     => 'prepare_plugin_display_name',
+		'track_cdnurl'            => 'check_cdn_url',
+		'track_cdnurlssl'         => 'check_cdn_url',
+		'set_download_extensions' => 'check_tracking_code_list',
+		'add_download_extensions' => 'check_tracking_code_list',
+		'set_download_classes'    => 'check_tracking_code_list',
+		'set_link_classes'        => 'check_tracking_code_list',
 	);
 
 	/**
@@ -62,6 +90,9 @@ class Settings {
 	private $global_settings = array(
 		// Plugin settings
 		'revision'                    => 0,
+		// every version that ran, oldest first. empty for an install whose last version
+		// was 1.1.12 or older, none of which recorded one.
+		'version_history'             => array(),
 		'last_settings_update'        => 0,
 		// User settings: Piwik configuration
 		'piwik_mode'                  => 'http',
@@ -187,7 +218,6 @@ class Settings {
 			return;
 		}
 		self::$wp_piwik->log( 'Save settings' );
-		$this->global_settings['plugin_display_name'] = htmlspecialchars( $this->global_settings['plugin_display_name'], ENT_QUOTES, 'utf-8' );
 		foreach ( $this->global_settings as $key => $value ) {
 			if ( $this->check_network_activation() ) {
 				update_site_option( 'wp-piwik_global-' . $key, $value );
@@ -354,6 +384,9 @@ class Settings {
 		if ( ! self::$wp_piwik->is_valid_options_post() ) {
 			die( 'Invalid config changes.' );
 		}
+		// make sure the version history does not change
+		$version_history = $this->get_global_option( 'version_history' );
+
 		$in = $this->check_settings( $in );
 		self::$wp_piwik->log( 'Apply changed settings:' );
 		foreach ( self::$default_settings ['globalSettings'] as $key => $val ) {
@@ -362,8 +395,13 @@ class Settings {
 		foreach ( self::$default_settings ['settings'] as $key => $val ) {
 			$this->set_option( $key, isset( $in [ $key ] ) ? $in [ $key ] : $val );
 		}
+		$this->set_global_option( 'version_history', $version_history );
 		$this->set_global_option( 'last_settings_update', (string) time() );
 		$this->save();
+
+		if ( is_multisite() ) {
+			delete_site_transient( self::MANUAL_TRACKING_SITES_CACHE );
+		}
 	}
 
 	/**
@@ -399,6 +437,10 @@ class Settings {
 	 * @phpstan-ignore method.unused
 	 */
 	private function check_piwik_url( $value ) {
+		$value = (string) $value;
+		if ( '' === trim( $value ) ) {
+			return ''; // no URL, don't add a slash
+		}
 		return substr( $value, - 1, 1 ) !== '/' ? $value . '/' : $value;
 	}
 
@@ -432,6 +474,100 @@ class Settings {
 			return $this->get_global_option( 'piwik_mode' );
 		}
 		return $value;
+	}
+
+	/**
+	 * @return boolean
+	 */
+	public static function can_enter_tracking_code_manually() {
+		return current_user_can( 'unfiltered_html' );
+	}
+
+	/**
+	 * Get the tracking code modes the settings page offers
+	 *
+	 * @return array mode key => descriptive mode name
+	 */
+	public function get_track_mode_options() {
+		$options = array(
+			'disabled' => __( 'Disabled', 'wp-piwik' ),
+			'default'  => __( 'Default tracking', 'wp-piwik' ),
+			'js'       => __( 'Use js/index.php', 'wp-piwik' ),
+			'proxy'    => __( 'Use proxy script', 'wp-piwik' ),
+		);
+		// entering the tracking code by hand publishes unfiltered HTML to every page of
+		// the site, which WordPress only allows some users to do
+		if ( self::can_enter_tracking_code_manually() || 'manually' === $this->get_global_option( 'track_mode' ) ) {
+			$options['manually'] = __( 'Enter manually', 'wp-piwik' );
+		}
+		return $options;
+	}
+
+	/**
+	 * Reject a tracking mode the settings page does not offer the current user
+	 *
+	 * @param mixed $value new tracking mode
+	 * @return string tracking mode
+	 */
+	public function check_track_mode( $value ) {
+		if ( ! is_string( $value ) || ! array_key_exists( $value, $this->get_track_mode_options() ) ) {
+			return $this->get_global_option( 'track_mode' );
+		}
+		return $value;
+	}
+
+	/**
+	 * Get the protocols the settings page offers to force the tracker onto
+	 *
+	 * @return array protocol key => descriptive protocol name
+	 */
+	public function get_force_protocol_options() {
+		return array(
+			'disabled' => __( 'Disabled (default)', 'wp-piwik' ),
+			'http'     => __( 'http', 'wp-piwik' ),
+			'https'    => __( 'https (SSL)', 'wp-piwik' ),
+		);
+	}
+
+	/**
+	 * Reject a protocol the settings page does not offer.
+	 *
+	 * @param mixed $value new protocol
+	 * @return string protocol
+	 */
+	public function check_force_protocol( $value ) {
+		if ( ! is_string( $value ) || ! array_key_exists( $value, $this->get_force_protocol_options() ) ) {
+			return $this->get_global_option( 'force_protocol' );
+		}
+		return $value;
+	}
+
+	/**
+	 * Drop from a CDN URL every character a URL cannot hold.
+	 *
+	 * @param mixed $value new CDN URL
+	 * @return string CDN URL
+	 * @phpstan-ignore method.unused
+	 */
+	private function check_cdn_url( $value ) {
+		if ( ! is_string( $value ) ) {
+			return '';
+		}
+		return \WP_Piwik\TrackingCode\Generator::strip_what_a_url_cannot_hold( $value );
+	}
+
+	/**
+	 * Drop the angle brackets from a list the tracking code carries.
+	 *
+	 * @param mixed $value new list
+	 * @return string list
+	 * @phpstan-ignore method.unused
+	 */
+	private function check_tracking_code_list( $value ) {
+		if ( ! is_string( $value ) ) {
+			return '';
+		}
+		return str_replace( array( '<', '>' ), '', $value );
 	}
 
 	public function get_matomo_mode_options() {
@@ -513,15 +649,20 @@ class Settings {
 	 * @phpstan-ignore method.unused
 	 */
 	private function prepare_tracking_code( $value, $in ) {
-		if ( 'manually' === $in['track_mode'] || 'disabled' === $in['track_mode'] ) {
-			$value = stripslashes( $value );
-			if ( $this->check_network_activation() ) {
-				update_site_option( 'wp-piwik-manually', $value );
-			}
-			return $value;
+		$track_mode = $this->get_submitted_track_mode( $in );
+		if ( ! $this->is_stored_code_worth_keeping( $track_mode ) ) {
+			return '';
 		}
 
-		return '';
+		if ( ! self::can_enter_tracking_code_manually() ) {
+			return $this->get_option( 'tracking_code' ); // keep the old tracking code
+		}
+
+		$value = stripslashes( $value );
+		if ( $this->check_network_activation() ) {
+			update_site_option( 'wp-piwik-manually', $value );
+		}
+		return $value;
 	}
 
 	/**
@@ -535,10 +676,66 @@ class Settings {
 	 * @phpstan-ignore method.unused
 	 */
 	private function prepare_nocscript_code( $value, $in ) {
-		if ( 'manually' === $in['track_mode'] ) {
-			return stripslashes( $value );
+		$track_mode = $this->get_submitted_track_mode( $in );
+		if ( ! $this->is_stored_code_worth_keeping( $track_mode ) ) {
+			return '';
 		}
-		return $this->get_option( 'noscript_code' );
+
+		if ( ! self::can_enter_tracking_code_manually() ) {
+			return $this->get_option( 'noscript_code' ); // keep the old tracking code
+		}
+
+		return stripslashes( $value );
+	}
+
+	/**
+	 * Whether the code a site has stored outlives being saved in the given tracking mode
+	 *
+	 * @param string $track_mode tracking mode being saved
+	 * @return boolean
+	 */
+	private function is_stored_code_worth_keeping( $track_mode ) {
+		if ( 'manually' === $track_mode ) {
+			return true; // switching to manually, keep the code
+		}
+
+		if ( 'disabled' !== $track_mode ) {
+			return false; // switching to a generated code mode, stored code is unneeded
+		}
+
+		// the mode the site is leaving is what says where its stored code came from. this
+		// runs before apply_changes() writes, so it is still the stored one.
+		$previous_track_mode = $this->get_global_option( 'track_mode' );
+
+		// switching to disabled. keep the code only if the user is authorized to use manual
+		// tracking code, and we are switching from a non-generated tracking mode.
+		return self::can_enter_tracking_code_manually()
+			&& in_array( $previous_track_mode, array( 'manually', 'disabled' ), true );
+	}
+
+	/**
+	 * Escape the plugin display name.
+	 *
+	 * @param mixed $value new display name
+	 * @return string display name
+	 * @phpstan-ignore method.unused
+	 */
+	private function prepare_plugin_display_name( $value ) {
+		if ( ! is_string( $value ) ) {
+			return $this->get_global_option( 'plugin_display_name' );
+		}
+		return htmlspecialchars( $value, ENT_QUOTES, 'utf-8' );
+	}
+
+	/**
+	 * @param array $in configuration set
+	 * @return string tracking mode
+	 */
+	private function get_submitted_track_mode( $in ) {
+		return isset( $in['track_mode'] )
+			? $in['track_mode']
+			// fall back to the stored tracking code if nothing is in the submitted form
+			: $this->get_global_option( 'track_mode' );
 	}
 
 	/**
@@ -568,15 +765,28 @@ class Settings {
 	}
 
 	public function get_matomo_url() {
-		if ( 'http' === $this->get_global_option( 'piwik_mode' ) ) {
-			return $this->get_global_option( 'piwik_url' );
-		}
-
 		if ( 'cloud' === $this->get_global_option( 'piwik_mode' ) ) {
 			return 'https://' . $this->get_global_option( 'piwik_user' ) . '.innocraft.cloud/';
 		}
 
-		return 'https://' . $this->get_global_option( 'matomo_user' ) . '.matomo.cloud/';
+		if ( 'cloud-matomo' === $this->get_global_option( 'piwik_mode' ) ) {
+			return 'https://' . $this->get_global_option( 'matomo_user' ) . '.matomo.cloud/';
+		}
+
+		// every other mode is a Matomo the site names itself ...
+		$matomo_url = (string) $this->get_global_option( 'piwik_url' );
+		if ( '' !== $matomo_url ) {
+			return $matomo_url;
+		}
+
+		// ... except the deprecated PHP API, which runs Matomo off this server's own filesystem
+		// and names it by path. a site connected that way was never asked for a URL, so
+		// Matomo is the one to ask.
+		if ( 'php' === $this->get_global_option( 'piwik_mode' ) ) {
+			return Request\Php::get_matomo_url();
+		}
+
+		return $matomo_url;
 	}
 
 	public function is_tracking_enabled() {

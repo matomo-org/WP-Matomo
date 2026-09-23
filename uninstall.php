@@ -20,6 +20,7 @@ function wp_matomo_uninstall() {
 
 	$global_settings = array(
 		'revision',
+		'version_history',
 		'last_settings_update',
 		'piwik_mode',
 		'piwik_url',
@@ -83,6 +84,7 @@ function wp_matomo_uninstall() {
 		'tracking_code',
 		'last_tracking_code_update',
 		'dashboard_revision',
+		'site_created_version',
 	);
 
 	if ( function_exists( 'is_multisite' ) && is_multisite() ) {
@@ -106,6 +108,8 @@ function wp_matomo_uninstall() {
 		delete_site_option( 'wp-piwik-manually' );
 		delete_site_option( 'wp-piwik-notices' );
 		delete_site_option( 'wp-piwik-deprecated_shortcodes' );
+		delete_site_option( 'wp-piwik-manual_tracking_review' );
+		delete_site_transient( 'wp-piwik-manual_tracking_sites' );
 	}
 
 	foreach ( $settings as $key ) {
@@ -119,6 +123,9 @@ function wp_matomo_uninstall() {
 	delete_option( 'wp-piwik-manually' );
 	delete_option( 'wp-piwik-notices' );
 	delete_option( 'wp-piwik-deprecated_shortcodes' );
+	delete_option( 'wp-piwik-manual_tracking_review' );
+	// the sweep below only matches the 'wp-piwik_' prefix, so this one is named here
+	delete_transient( 'wp-piwik-manual_tracking_sites' );
 
 	$wpdb->query( "DELETE FROM $wpdb->postmeta WHERE meta_key LIKE 'wp-piwik-%'" );
 	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE '_transient_wp-piwik_%'" );

@@ -16,6 +16,11 @@ class Php extends \WP_Piwik\Request {
 	 */
 	private static $piwik_environment = false;
 
+	/**
+	 * @var string|null the URL Matomo answers under, null while it has not been asked
+	 */
+	private static $matomo_url = null;
+
 	protected function request( $id ) {
 		$count = 0;
 		$url   = self::$settings->get_global_option( 'piwik_url' );
@@ -45,20 +50,7 @@ class Php extends \WP_Piwik\Request {
 				'message' => __( 'Could not resolve', 'wp-piwik' ) . ' &quot;' . htmlentities( self::$settings->get_global_option( 'piwik_path' ) ) . '&quot;: ' . __( 'realpath() returns false', 'wp-piwik' ) . '.',
 			);
 		}
-		if ( file_exists( PIWIK_INCLUDE_PATH . '/index.php' ) ) {
-			require_once PIWIK_INCLUDE_PATH . '/index.php';
-		}
-		if ( file_exists( PIWIK_INCLUDE_PATH . '/core/API/Request.php' ) ) {
-			require_once PIWIK_INCLUDE_PATH . '/core/API/Request.php';
-		}
-		if ( class_exists( '\Piwik\Application\Environment' ) && ! self::$piwik_environment ) {
-			// Piwik 2.14.* compatibility fix
-			self::$piwik_environment = new \Piwik\Application\Environment( null );
-			self::$piwik_environment->init();
-		}
-		if ( class_exists( 'Piwik\FrontController' ) ) {
-			\Piwik\FrontController::getInstance()->init();
-		} else {
+		if ( ! self::load_matomo() ) {
 			return array(
 				'result'  => 'error',
 				'message' => __( 'Class Piwik\FrontController does not exists.', 'wp-piwik' ),
@@ -87,6 +79,45 @@ class Php extends \WP_Piwik\Request {
 	}
 
 	/**
+	 * Load Matomo into this process
+	 *
+	 * @return boolean whether Matomo is loaded and ready to answer
+	 */
+	private static function load_matomo() {
+		if ( ! defined( 'PIWIK_INCLUDE_PATH' ) || false === PIWIK_INCLUDE_PATH ) {
+			return false;
+		}
+		if ( file_exists( PIWIK_INCLUDE_PATH . '/index.php' ) ) {
+			require_once PIWIK_INCLUDE_PATH . '/index.php';
+		}
+		if ( file_exists( PIWIK_INCLUDE_PATH . '/core/API/Request.php' ) ) {
+			require_once PIWIK_INCLUDE_PATH . '/core/API/Request.php';
+		}
+		if ( class_exists( '\Piwik\Application\Environment' ) && ! self::$piwik_environment ) {
+			self::$piwik_environment = new \Piwik\Application\Environment( null );
+			self::$piwik_environment->init();
+		}
+		if ( ! class_exists( 'Piwik\FrontController' ) ) {
+			return false;
+		}
+		\Piwik\FrontController::getInstance()->init();
+		return true;
+	}
+
+	public static function get_matomo_url() {
+		if ( null !== self::$matomo_url ) {
+			return self::$matomo_url;
+		}
+
+		self::$matomo_url = '';
+		if ( self::load_matomo() && class_exists( '\Piwik\SettingsPiwik' ) ) {
+			self::$matomo_url = (string) \Piwik\SettingsPiwik::getPiwikUrl();
+		}
+
+		return self::$matomo_url;
+	}
+
+	/**
 	 * Render the parameters of a request for debug output, with the auth token masked.
 	 *
 	 * @param array $params request parameters, including the auth token.
@@ -100,6 +131,7 @@ class Php extends \WP_Piwik\Request {
 	}
 
 	public function reset() {
+		self::$matomo_url = null;
 		if (
 			class_exists( '\Piwik\Application\Environment' )
 			&& self::$piwik_environment instanceof \Piwik\Application\Environment

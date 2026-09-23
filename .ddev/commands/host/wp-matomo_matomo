@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+
+## Description: Start the Matomo instance the tracking code fidelity test compares against
+## Usage: wp-matomo:matomo [up|down] [--image=<docker image>]
+## Example: "ddev wp-matomo:matomo up" or "ddev wp-matomo:matomo down"
+## ExecRaw: true
+
+set -eu -o pipefail
+
+# matomo:apache on purpose. the point of the comparison is to notice when a Matomo
+# release changes the tracking code, which pinning a version would hide.
+IMAGE="matomo:apache"
+ACTION="up"
+
+for arg in "$@"; do
+	case "$arg" in
+		up|down)   ACTION="$arg" ;;
+		--image=*) IMAGE="${arg#*=}" ;;
+		-h|--help) sed -n '3,5p' "$0"; exit 0 ;;
+		*) echo "Unknown option: $arg" >&2; exit 1 ;;
+	esac
+done
+
+CONTAINER="${DDEV_SITENAME}-fidelity-matomo"
+ALIAS="matomo"
+DATABASE="matomo"
+
+NETWORK="ddev-${DDEV_SITENAME}_default"
+if ! docker network inspect "$NETWORK" >/dev/null 2>&1; then
+	NETWORK="ddev_default"
+fi
+
+if [ "$ACTION" = "down" ]; then
+	docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+	ddev mysql -uroot -proot -e "DROP DATABASE IF EXISTS ${DATABASE};" >/dev/null 2>&1 || true
+	# without this the test would keep comparing against a Matomo that is gone
+	ddev exec "rm -f /tmp/wp-matomo-live-matomo.json" >/dev/null 2>&1 || true
+	echo "Stopped ${CONTAINER} and dropped its ${DATABASE} database."
+	exit 0
+fi
+
+if ! docker network inspect "$NETWORK" >/dev/null 2>&1; then
+	echo "Neither ddev-${DDEV_SITENAME}_default nor ddev_default exists, so there is nothing" >&2
+	echo "for Matomo to join. Start the project first: ddev start" >&2
+	exit 1
+fi
+
+docker rm -f "$CONTAINER" >/dev/null 2>&1 || true
+
+# drop the database if it's there
+ddev mysql -uroot -proot -e "DROP DATABASE IF EXISTS ${DATABASE};" >/dev/null 2>&1 || true
+ddev exec "rm -f /tmp/wp-matomo-live-matomo.json" >/dev/null 2>&1 || true
+
+echo "==> Starting ${IMAGE} as '${ALIAS}' on ${NETWORK}"
+docker run --detach --name "$CONTAINER" \
+	--network "$NETWORK" --network-alias "$ALIAS" \
+	"$IMAGE" >/dev/null
+
+ddev exec "MATOMO_URL=http://${ALIAS}/ MATOMO_DB_NAME=${DATABASE} bash /mnt/ddev_config/scripts/wp-matomo-install-matomo.sh"
