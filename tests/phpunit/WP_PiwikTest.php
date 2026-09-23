@@ -399,7 +399,7 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 
 		$notice = $this->render_manual_tracking_review_notice();
 
-		$this->assertStringContainsString( 'please review your manually entered tracking code', $notice );
+		$this->assertStringContainsString( 'please review how these sites are tracking', $notice );
 		$this->assertStringContainsString( get_blog_option( $blog_id, 'blogname' ), $notice );
 	}
 
@@ -452,6 +452,97 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
 
 		$this->assertSame( '', $this->render_manual_tracking_review_notice() );
+	}
+
+	public function test_show_manual_tracking_review_notice_should_name_a_site_loading_its_tracker_from_a_host_the_network_does_not_allow() {
+		$this->skip_unless_multisite();
+		$blog_id = $this->create_a_site_tracking_from( 'https://evil.example.org/matomo/' );
+		$this->log_in_as_a_network_administrator();
+		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
+
+		$notice = $this->render_manual_tracking_review_notice();
+
+		$this->assertStringContainsString( 'load their tracker from a server this network does not allow', $notice );
+		$this->assertStringContainsString( get_blog_option( $blog_id, 'blogname' ), $notice );
+	}
+
+	public function test_show_manual_tracking_review_notice_should_not_name_a_site_loading_its_tracker_from_a_host_the_network_allows() {
+		$this->skip_unless_multisite();
+		$blog_id = $this->create_a_site_tracking_from( 'https://matomo.example.org/matomo/' );
+		update_site_option( \WP_Piwik\TrackerHosts::OPTION, [ 'matomo.example.org' ] );
+		$this->log_in_as_a_network_administrator();
+		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
+
+		$this->assertStringNotContainsString( get_blog_option( $blog_id, 'blogname' ), $this->render_manual_tracking_review_notice() );
+	}
+
+	public function test_show_manual_tracking_review_notice_should_name_a_site_loading_its_tracker_from_a_cdn_the_network_does_not_allow() {
+		$this->skip_unless_multisite();
+		$blog_id = $this->create_a_site_tracking_from( '' );
+		update_blog_option( $blog_id, 'wp-piwik_global-track_cdnurl', 'cdn.evil.example.org' );
+		$this->log_in_as_a_network_administrator();
+		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
+
+		$this->assertStringContainsString( get_blog_option( $blog_id, 'blogname' ), $this->render_manual_tracking_review_notice() );
+	}
+
+	public function test_show_manual_tracking_review_notice_should_not_name_a_site_that_names_no_tracker_host() {
+		$this->skip_unless_multisite();
+		$blog_id = $this->create_a_site_tracking_from( '' );
+		$this->log_in_as_a_network_administrator();
+		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
+
+		$this->assertSame( '', $this->render_manual_tracking_review_notice() );
+	}
+
+	public function test_show_manual_tracking_review_notice_should_not_name_a_site_hosted_on_a_matomo_cloud() {
+		$this->skip_unless_multisite();
+		$blog_id = $this->create_a_site_tracking_from( '' );
+		update_blog_option( $blog_id, 'wp-piwik_global-piwik_mode', 'cloud-matomo' );
+		update_blog_option( $blog_id, 'wp-piwik_global-matomo_user', 'acme' );
+		$this->log_in_as_a_network_administrator();
+		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
+
+		$this->assertSame( '', $this->render_manual_tracking_review_notice() );
+	}
+
+	public function test_show_manual_tracking_review_notice_should_name_a_site_whose_cloud_subdomain_names_a_server_of_its_own() {
+		$this->skip_unless_multisite();
+		$blog_id = $this->create_a_site_tracking_from( '' );
+		update_blog_option( $blog_id, 'wp-piwik_global-piwik_mode', 'cloud-matomo' );
+
+		// an earlier version pasted the subdomain straight into the tracker URL, so a value
+		// carrying a path named a server outside the cloud it belongs to
+		update_blog_option( $blog_id, 'wp-piwik_global-matomo_user', 'evil.example.org/' );
+		$this->log_in_as_a_network_administrator();
+		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
+
+		$this->assertStringContainsString( get_blog_option( $blog_id, 'blogname' ), $this->render_manual_tracking_review_notice() );
+	}
+
+	public function test_show_manual_tracking_review_notice_should_not_name_a_site_created_after_the_network_named_its_allowed_tracker_hosts() {
+		$this->skip_unless_multisite();
+		$blog_id = $this->create_a_site_tracking_from( 'https://evil.example.org/matomo/' );
+		$this->record_the_creation_version_of( $blog_id );
+		$this->log_in_as_a_network_administrator();
+		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
+
+		$this->assertSame( '', $this->render_manual_tracking_review_notice() );
+	}
+
+	public function test_show_manual_tracking_review_notice_should_explain_each_thing_it_found() {
+		$this->skip_unless_multisite();
+		$manual_site  = $this->create_a_site_using_manual_tracking();
+		$tracker_site = $this->create_a_site_tracking_from( 'https://evil.example.org/matomo/' );
+		$this->log_in_as_a_network_administrator();
+		update_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION, \WP_Piwik::MANUAL_TRACKING_REVIEW_PENDING );
+
+		$notice = $this->render_manual_tracking_review_notice();
+
+		$this->assertStringContainsString( 'hold a tracking code that was entered by hand', $notice );
+		$this->assertStringContainsString( 'load their tracker from a server this network does not allow', $notice );
+		$this->assertStringContainsString( get_blog_option( $manual_site, 'blogname' ), $notice );
+		$this->assertStringContainsString( get_blog_option( $tracker_site, 'blogname' ), $notice );
 	}
 
 	public function test_show_manual_tracking_review_notice_should_not_show_when_no_site_enters_its_tracking_code_manually() {
@@ -609,7 +700,7 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 		$notice = $this->render_manual_tracking_review_notice();
 
 		// the review is still asked for, it just does not iterate through every blog
-		$this->assertStringContainsString( 'please review your manually entered tracking code', $notice );
+		$this->assertStringContainsString( 'please review how these sites are tracking', $notice );
 		$this->assertStringNotContainsString( get_blog_option( $blog_id, 'blogname' ), $notice );
 	}
 
@@ -849,6 +940,19 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 		// remove the automatically recorded option value so we can test the recording
 		// behavior
 		delete_blog_option( $blog_id, \WP_Piwik\Settings::SITE_CREATED_VERSION_OPTION );
+
+		return $blog_id;
+	}
+
+	/**
+	 * @param string $matomo_url Matomo URL to configure the site with
+	 * @return int the new site's blog ID
+	 */
+	private function create_a_site_tracking_from( $matomo_url ) {
+		// a generated tracking mode, so the site is only worth reviewing for where it
+		// loads its tracker from
+		$blog_id = $this->create_a_site( 'default', '' );
+		update_blog_option( $blog_id, 'wp-piwik_global-piwik_url', $matomo_url );
 
 		return $blog_id;
 	}

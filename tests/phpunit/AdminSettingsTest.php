@@ -66,6 +66,45 @@ class AdminSettingsTest extends WP_Piwik_TestCase {
 		$this->assertSame( [ 'manually' ], $this->get_selected_option_values( $html ) );
 	}
 
+	public function test_show_allowed_tracker_hosts_should_offer_the_stored_list_to_a_network_administrator() {
+		$this->skip_unless_multisite();
+		$this->log_in_as_a_network_administrator();
+		update_site_option( \WP_Piwik\TrackerHosts::OPTION, [ 'matomo.example.org' ] );
+
+		$html = $this->render_allowed_tracker_hosts();
+
+		$this->assertStringContainsString( 'name="wp-piwik[allowed_tracker_hosts]"', $html );
+		$this->assertStringContainsString( 'matomo.example.org', $html );
+	}
+
+	public function test_show_allowed_tracker_hosts_should_name_the_default_list_when_none_is_stored() {
+		$this->skip_unless_multisite();
+		$this->log_in_as_a_network_administrator();
+
+		$html = $this->render_allowed_tracker_hosts();
+
+		$this->assertStringContainsString( '*.matomo.cloud', $html );
+	}
+
+	public function test_show_allowed_tracker_hosts_should_show_nothing_to_a_user_who_cannot_manage_the_network() {
+		$this->assertSame( '', $this->render_allowed_tracker_hosts() );
+	}
+
+	private function render_allowed_tracker_hosts() {
+		$admin = new AdminSettings( new \WP_Piwik_Test_Mock_Plugin(), $this->create_settings() );
+		ob_start();
+		$admin->show_allowed_tracker_hosts();
+		return ob_get_clean();
+	}
+
+	private function log_in_as_a_network_administrator() {
+		$user_id = self::factory()->user->create( [ 'role' => 'administrator' ] );
+		if ( is_multisite() ) {
+			grant_super_admin( $user_id );
+		}
+		wp_set_current_user( $user_id );
+	}
+
 	private function render_select( $settings, $id, array $options, $is_global ) {
 		$admin = new AdminSettings( new \WP_Piwik_Test_Mock_Plugin(), $settings );
 		ob_start();

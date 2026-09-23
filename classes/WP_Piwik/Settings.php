@@ -68,6 +68,8 @@ class Settings {
 		// checked first
 		'track_mode'              => 'check_track_mode',
 		'piwik_url'               => 'check_piwik_url',
+		'piwik_user'              => 'check_cloud_subdomain',
+		'matomo_user'             => 'check_cloud_subdomain',
 		'piwik_token'             => 'check_piwik_token',
 		'site_id'                 => 'request_piwik_site_id',
 		'tracking_code'           => 'prepare_tracking_code',
@@ -186,13 +188,25 @@ class Settings {
 	private $settings_changed = false;
 
 	/**
+	 * @var array<int, string> tracker hosts the last applied configuration set named but
+	 *                         was not allowed to use.
+	 */
+	private $rejected_tracker_hosts = array();
+
+	/**
+	 * @var TrackerHosts
+	 */
+	private $tracker_hosts;
+
+	/**
 	 * Constructor class to prepare settings manager
 	 *
 	 * @param \WP_Piwik $wp_piwik
 	 *          active WP-Piwik instance
 	 */
 	public function __construct( $wp_piwik ) {
-		self::$wp_piwik = $wp_piwik;
+		self::$wp_piwik      = $wp_piwik;
+		$this->tracker_hosts = new TrackerHosts();
 		self::$wp_piwik->log( 'Store default settings' );
 		self::$default_settings = array(
 			'globalSettings' => $this->global_settings,
@@ -407,10 +421,14 @@ class Settings {
 	/**
 	 * Apply callback function on new settings
 	 *
+	 * Every callback is handed the value, the whole configuration set and the key it was
+	 * registered under, so one callback can serve several keys.
+	 *
 	 * @param array $in new configuration set
 	 * @return array configuration set after callback functions were applied
 	 */
 	private function check_settings( $in ) {
+		$this->rejected_tracker_hosts = array();
 		foreach ( $this->check_settings as $key => $value ) {
 			if ( isset( $in [ $key ] ) ) {
 				$in [ $key ] = call_user_func_array(
@@ -421,6 +439,7 @@ class Settings {
 					array(
 						$in [ $key ],
 						$in,
+						$key,
 					)
 				);
 			}
@@ -441,7 +460,44 @@ class Settings {
 		if ( '' === trim( $value ) ) {
 			return ''; // no URL, don't add a slash
 		}
-		return substr( $value, - 1, 1 ) !== '/' ? $value . '/' : $value;
+
+		$value = substr( $value, - 1, 1 ) !== '/' ? $value . '/' : $value;
+
+		$stored = (string) $this->get_global_option( 'piwik_url' );
+		if ( $value !== $stored && ! $this->may_current_user_track_via( $value ) ) {
+			return $stored; // keep the Matomo the network allows
+		}
+
+		return $value;
+	}
+
+	/**
+	 * Check the subdomain of a cloud hosted Matomo
+	 *
+	 * @param mixed  $value new subdomain
+	 * @param array  $in configuration set
+	 * @param string $key setting the subdomain belongs to
+	 * @return string subdomain
+	 * @phpstan-ignore method.unused
+	 */
+	private function check_cloud_subdomain( $value, $in, $key ) {
+		$value = is_string( $value ) ? strtolower( trim( $value ) ) : '';
+		if ( '' === $value ) {
+			return '';
+		}
+
+		$stored = (string) $this->get_global_option( $key );
+		if ( $value === $stored ) {
+			return $value; // nothing is changing, so there is nothing to check
+		}
+
+		$domain = 'piwik_user' === $key ? '.innocraft.cloud' : '.matomo.cloud';
+		if ( ! preg_match( '/^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$/', $value )
+			|| ! $this->may_current_user_track_via( $value . $domain ) ) {
+			return $stored; // keep the cloud the network allows
+		}
+
+		return $value;
 	}
 
 	/**
@@ -543,17 +599,67 @@ class Settings {
 	}
 
 	/**
-	 * Drop from a CDN URL every character a URL cannot hold.
+	 * Drop from a CDN URL every character a URL cannot hold, and every host the network
+	 * does not allow the current user to serve the tracker from.
 	 *
-	 * @param mixed $value new CDN URL
+	 * @param mixed  $value new CDN URL
+	 * @param array  $in configuration set
+	 * @param string $key setting the CDN URL belongs to
 	 * @return string CDN URL
 	 * @phpstan-ignore method.unused
 	 */
-	private function check_cdn_url( $value ) {
+	private function check_cdn_url( $value, $in, $key ) {
 		if ( ! is_string( $value ) ) {
 			return '';
 		}
-		return \WP_Piwik\TrackingCode\Generator::strip_what_a_url_cannot_hold( $value );
+
+		$value = \WP_Piwik\TrackingCode\Generator::strip_what_a_url_cannot_hold( $value );
+		if ( '' === trim( $value ) ) {
+			return '';
+		}
+
+		$stored = (string) $this->get_global_option( $key );
+		if ( $value !== $stored && ! $this->may_current_user_track_via( $value ) ) {
+			return $stored; // keep the CDN the network allows
+		}
+
+		return $value;
+	}
+
+	/**
+	 * @param string $url tracker URL, CDN URL or bare host
+	 * @return boolean
+	 */
+	private function may_current_user_track_via( $url ) {
+		if ( $this->tracker_hosts->is_allowed_for_current_user( $url ) ) {
+			return true;
+		}
+
+		$host = $this->tracker_hosts->host_from_url( $url );
+		if ( '' === $host ) {
+			$host = (string) $url;
+		}
+		$this->rejected_tracker_hosts[] = $host;
+
+		return false;
+	}
+
+	/**
+	 * Get the hosts a site of this network may load its tracker from
+	 *
+	 * @return TrackerHosts
+	 */
+	public function get_tracker_hosts() {
+		return $this->tracker_hosts;
+	}
+
+	/**
+	 * Get the tracker hosts the last applied configuration set was not allowed to name
+	 *
+	 * @return array<int, string> host names, empty when nothing was rejected
+	 */
+	public function get_rejected_tracker_hosts() {
+		return array_values( array_unique( $this->rejected_tracker_hosts ) );
 	}
 
 	/**

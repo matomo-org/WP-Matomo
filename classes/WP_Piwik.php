@@ -77,6 +77,16 @@ class WP_Piwik {
 	const MANUAL_TRACKING_NETWORK_TOO_LARGE = 'too-many-sites';
 
 	/**
+	 * Why the review names a site: it holds a tracking code that was entered by hand, or
+	 * it loads its tracker from a server the network does not allow. Both are things
+	 * every version up to 1.1.12 let a site administrator do.
+	 *
+	 * @see get_sites_needing_review()
+	 */
+	const REVIEW_REASON_MANUAL_CODE  = 'manual-code';
+	const REVIEW_REASON_TRACKER_HOST = 'tracker-host';
+
+	/**
 	 * Query argument, and nonce action, of the manual tracking notice's dismiss link
 	 *
 	 * @see on_manual_tracking_review_notice_dismissed()
@@ -864,7 +874,7 @@ class WP_Piwik {
 
 		printf(
 			'<div class="notice notice-warning"><p><strong>%s</strong></p>%s</div>',
-			esc_html__( 'Connect Matomo: please review your manually entered tracking code', 'wp-piwik' ),
+			esc_html__( 'Connect Matomo: please review how these sites are tracking', 'wp-piwik' ),
 			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 			$review
 		);
@@ -887,37 +897,74 @@ class WP_Piwik {
 			return '';
 		}
 
-		$blog_ids = $this->get_sites_using_manual_tracking();
+		$sites_by_reason = $this->get_sites_needing_review();
 
 		// a network too large to look through in a single request is asked to review without
 		// a list of sites to look at
-		if ( self::MANUAL_TRACKING_NETWORK_TOO_LARGE === $blog_ids ) {
-			$sites = '<li>' . esc_html__( 'Your network is too large to list its sites here. Please check the stored tracking code of every site whose tracking mode is "Enter manually" or "Disabled".', 'wp-piwik' ) . '</li>';
+		if ( self::MANUAL_TRACKING_NETWORK_TOO_LARGE === $sites_by_reason ) {
+			$findings = '<p>' . esc_html__( 'Your network is too large to list its sites here. Please check the stored tracking code of every site whose tracking mode is "Enter manually" or "Disabled", and check the Matomo URL and the CDN URLs of every site for a server you do not expect.', 'wp-piwik' ) . '</p>';
 		} else {
-			if ( empty( $blog_ids ) ) {
-				// no site of this network holds a tracking code entered by hand
+			$findings = $this->get_manual_tracking_review_findings( $sites_by_reason );
+			if ( '' === $findings ) {
+				// no site of this network has anything left to review
 				update_site_option( self::MANUAL_TRACKING_REVIEW_OPTION, self::MANUAL_TRACKING_REVIEW_DONE );
 				return '';
-			}
-
-			$sites = '';
-			foreach ( $blog_ids as $blog_id ) {
-				$sites .= sprintf(
-					'<li><a href="%s">%s</a></li>',
-					esc_url( get_admin_url( $blog_id, 'options-general.php?page=wp-matomo-settings' ) ),
-					esc_html( get_blog_option( $blog_id, 'blogname', (string) $blog_id ) )
-				);
 			}
 		}
 
 		return sprintf(
-			'<p>%s</p><ul>%s</ul><p><a href="%s">%s</a></p>',
-			esc_html__( 'These sites hold a tracking code that was entered by hand, either printing it to every one of their pages as it was entered or holding it for the next time tracking is turned on. Earlier versions of Connect Matomo accepted it from a site administrator, who a network does not allow to publish HTML or JavaScript. Please check that the stored code is what you expect. Only a network administrator can change it from now on.', 'wp-piwik' ),
+			'%s<p><a href="%s">%s</a></p>',
 			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped above
-			$sites,
+			$findings,
 			esc_url( wp_nonce_url( add_query_arg( self::DISMISS_MANUAL_TRACKING_NOTICE_ARG, '1' ), self::DISMISS_MANUAL_TRACKING_NOTICE_ARG ) ),
 			esc_html__( 'I have reviewed these sites, do not show this again', 'wp-piwik' )
 		);
+	}
+
+	/**
+	 * Explain each thing the review found, followed by the sites it found it on
+	 *
+	 * @param array $sites_by_reason review reason => blog IDs, see get_sites_needing_review()
+	 * @return string markup, empty when there is nothing to review
+	 */
+	private function get_manual_tracking_review_findings( $sites_by_reason ) {
+		$explanations = array(
+			self::REVIEW_REASON_MANUAL_CODE  => __( 'These sites hold a tracking code that was entered by hand, either printing it to every one of their pages as it was entered or holding it for the next time tracking is turned on. Earlier versions of Connect Matomo accepted it from a site administrator, who a network does not allow to publish HTML or JavaScript. Please check that the stored code is what you expect. Only a network administrator can change it from now on.', 'wp-piwik' ),
+			self::REVIEW_REASON_TRACKER_HOST => __( 'These sites load their tracker from a server this network does not allow. The tracker is JavaScript that runs on every one of a site\'s pages, and earlier versions of Connect Matomo let a site administrator point their site at any server. Please check that the Matomo URL and the CDN URLs of each site name a server you expect. From now on a site administrator can only pick a host from the "Allowed tracker hosts" list under Expert Settings.', 'wp-piwik' ),
+		);
+
+		$findings = '';
+		foreach ( $explanations as $reason => $explanation ) {
+			if ( empty( $sites_by_reason[ $reason ] ) ) {
+				continue;
+			}
+
+			$findings .= sprintf(
+				'<p>%s</p><ul>%s</ul>',
+				esc_html( $explanation ),
+				// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- escaped below
+				$this->get_review_site_list( $sites_by_reason[ $reason ] )
+			);
+		}
+
+		return $findings;
+	}
+
+	/**
+	 * @param int[] $blog_ids sites to name
+	 * @return string list items linking to each site's settings screen
+	 */
+	private function get_review_site_list( $blog_ids ) {
+		$sites = '';
+		foreach ( $blog_ids as $blog_id ) {
+			$sites .= sprintf(
+				'<li><a href="%s">%s</a></li>',
+				esc_url( get_admin_url( $blog_id, 'options-general.php?page=wp-matomo-settings' ) ),
+				esc_html( get_blog_option( $blog_id, 'blogname', (string) $blog_id ) )
+			);
+		}
+
+		return $sites;
 	}
 
 	/**
@@ -942,14 +989,21 @@ class WP_Piwik {
 	}
 
 	/**
-	 * Get the sites of the network whose tracking code is entered manually.
+	 * Get the sites of the network the review has something to say about, by reason.
 	 *
-	 * @return int[]|string blog IDs, or MANUAL_TRACKING_NETWORK_TOO_LARGE when the network
-	 *                      holds more sites than one request looks through
+	 * @return array|string REVIEW_REASON_* => blog IDs, or MANUAL_TRACKING_NETWORK_TOO_LARGE
+	 *                      when the network holds more sites than one request looks through
 	 */
-	private function get_sites_using_manual_tracking() {
+	private function get_sites_needing_review() {
 		$cached = get_site_transient( WP_Piwik\Settings::MANUAL_TRACKING_SITES_CACHE );
-		if ( is_array( $cached ) || self::MANUAL_TRACKING_NETWORK_TOO_LARGE === $cached ) {
+		if ( self::MANUAL_TRACKING_NETWORK_TOO_LARGE === $cached ) {
+			return $cached;
+		}
+
+		if (
+			is_array( $cached )
+			&& isset( $cached[ self::REVIEW_REASON_MANUAL_CODE ], $cached[ self::REVIEW_REASON_TRACKER_HOST ] )
+		) {
 			return $cached;
 		}
 
@@ -960,16 +1014,27 @@ class WP_Piwik {
 			return self::MANUAL_TRACKING_NETWORK_TOO_LARGE;
 		}
 
-		$blog_ids = array();
+		$allow_list = self::$settings->get_tracker_hosts()->get_allow_list();
+
+		$sites_by_reason = array(
+			self::REVIEW_REASON_MANUAL_CODE  => array(),
+			self::REVIEW_REASON_TRACKER_HOST => array(),
+		);
 		foreach ( $settings_by_blog as $blog_id => $settings ) {
-			if ( self::holds_hand_entered_tracking_code( $settings )
-				&& ! self::was_created_after_the_unfiltered_html_capability_requirement( $settings ) ) {
-				$blog_ids[] = $blog_id;
+			if ( self::was_created_after_the_unfiltered_html_capability_requirement( $settings ) ) {
+				continue; // site is newer than new requirements so it doesn't need a review
+			}
+
+			if ( self::holds_manually_entered_tracking_code( $settings ) ) {
+				$sites_by_reason[ self::REVIEW_REASON_MANUAL_CODE ][] = $blog_id;
+			}
+			if ( self::loads_its_tracker_from_an_unknown_host( $settings, $allow_list ) ) {
+				$sites_by_reason[ self::REVIEW_REASON_TRACKER_HOST ][] = $blog_id;
 			}
 		}
 
-		set_site_transient( WP_Piwik\Settings::MANUAL_TRACKING_SITES_CACHE, $blog_ids, DAY_IN_SECONDS );
-		return $blog_ids;
+		set_site_transient( WP_Piwik\Settings::MANUAL_TRACKING_SITES_CACHE, $sites_by_reason, DAY_IN_SECONDS );
+		return $sites_by_reason;
 	}
 
 	/**
@@ -1002,6 +1067,13 @@ class WP_Piwik {
 			'wp-piwik-tracking_code',
 			'wp-piwik-noscript_code',
 			WP_Piwik\Settings::SITE_CREATED_VERSION_OPTION,
+			// the settings that decide which server serves the JS tracker to visitors
+			'wp-piwik_global-piwik_mode',
+			'wp-piwik_global-piwik_url',
+			'wp-piwik_global-piwik_user',
+			'wp-piwik_global-matomo_user',
+			'wp-piwik_global-track_cdnurl',
+			'wp-piwik_global-track_cdnurlssl',
 		);
 		$placeholders = implode( ', ', array_fill( 0, count( $option_names ), '%s' ) );
 
@@ -1055,8 +1127,8 @@ class WP_Piwik {
 	 * @param array $settings the site's tracking settings, see read_tracking_settings_of_every_site()
 	 * @return boolean whether the site holds a tracking code that was entered by hand
 	 */
-	private static function holds_hand_entered_tracking_code( $settings ) {
-		$track_mode = isset( $settings['wp-piwik_global-track_mode'] ) ? $settings['wp-piwik_global-track_mode'] : '';
+	private static function holds_manually_entered_tracking_code( $settings ) {
+		$track_mode = self::get_site_setting( $settings, 'wp-piwik_global-track_mode' );
 
 		// the remaining modes generate the code they store on the next request, so whatever
 		// they hold is Connect Matomo's own work
@@ -1065,8 +1137,7 @@ class WP_Piwik {
 		}
 
 		foreach ( array( 'wp-piwik-tracking_code', 'wp-piwik-noscript_code' ) as $option_name ) {
-			$code = isset( $settings[ $option_name ] ) ? $settings[ $option_name ] : '';
-			if ( '' !== trim( (string) $code ) ) {
+			if ( '' !== trim( self::get_site_setting( $settings, $option_name ) ) ) {
 				return true;
 			}
 		}
@@ -1075,15 +1146,75 @@ class WP_Piwik {
 	}
 
 	/**
+	 * Check whether a site of the network loads its tracker from a server the network
+	 * does not allow.
+	 *
+	 * A site that is not tracking is looked at as well: it keeps the server it named for
+	 * the next time tracking is turned on, the same way it keeps its tracking code.
+	 *
+	 * @param array $settings the site's tracking settings, see read_tracking_settings_of_every_site()
+	 * @param array $allow_list the hosts this network allows, see TrackerHosts::get_allow_list()
+	 * @return boolean
+	 */
+	private static function loads_its_tracker_from_an_unknown_host( $settings, $allow_list ) {
+		$tracker_hosts = self::$settings->get_tracker_hosts();
+
+		foreach ( self::get_tracker_hosts_of_site( $settings ) as $host ) {
+			if ( ! $tracker_hosts->allows( $host, $allow_list ) ) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Get the hosts a site's settings name as the source of its tracker
+	 *
+	 * @param array $settings the site's tracking settings, see read_tracking_settings_of_every_site()
+	 * @return array<int, string> host names, empty when the site names none
+	 */
+	private static function get_tracker_hosts_of_site( $settings ) {
+		$piwik_mode = self::get_site_setting( $settings, 'wp-piwik_global-piwik_mode' );
+		if ( 'cloud' === $piwik_mode ) {
+			$matomo = self::get_site_setting( $settings, 'wp-piwik_global-piwik_user' ) . '.innocraft.cloud';
+		} elseif ( 'cloud-matomo' === $piwik_mode ) {
+			$matomo = self::get_site_setting( $settings, 'wp-piwik_global-matomo_user' ) . '.matomo.cloud';
+		} else {
+			// every other connection method names the Matomo by URL, or by a file path that
+			// names no host at all
+			$matomo = self::get_site_setting( $settings, 'wp-piwik_global-piwik_url' );
+		}
+
+		$values = array(
+			$matomo,
+			self::get_site_setting( $settings, 'wp-piwik_global-track_cdnurl' ),
+			self::get_site_setting( $settings, 'wp-piwik_global-track_cdnurlssl' ),
+		);
+
+		$tracker_hosts = self::$settings->get_tracker_hosts();
+
+		$hosts = array();
+		foreach ( $values as $value ) {
+			$host = $tracker_hosts->host_from_url( $value );
+			if ( '' !== $host ) {
+				$hosts[] = $host;
+			}
+		}
+
+		return array_values( array_unique( $hosts ) );
+	}
+
+	/**
 	 * @param array $option_values see read_tracking_settings_of_every_site()
 	 * @return boolean
 	 */
 	private static function was_created_after_the_unfiltered_html_capability_requirement( $option_values ) {
-		$created_version = isset( $option_values[ WP_Piwik\Settings::SITE_CREATED_VERSION_OPTION ] )
-			? $option_values[ WP_Piwik\Settings::SITE_CREATED_VERSION_OPTION ]
-			: '';
+		return '' !== trim( self::get_site_setting( $option_values, WP_Piwik\Settings::SITE_CREATED_VERSION_OPTION ) );
+	}
 
-		return '' !== trim( (string) $created_version );
+	private static function get_site_setting( $option_values, $option_name ) {
+		return isset( $option_values[ $option_name ] ) ? (string) $option_values[ $option_name ] : '';
 	}
 
 	/**
@@ -1551,9 +1682,21 @@ class WP_Piwik {
 		// TODO: shouldn't have to disable these
 		// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotValidated
 		// phpcs:disable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+
+		// the allow list is a network wide option rather than one of the settings below,
+		// and it decides which tracker hosts those settings may name, so it is written
+		// first
+		if ( isset( $_POST['wp-piwik'][ \WP_Piwik\TrackerHosts::FORM_FIELD ] ) ) {
+			self::$settings->get_tracker_hosts()->update_allow_list( wp_unslash( $_POST['wp-piwik'][ \WP_Piwik\TrackerHosts::FORM_FIELD ] ) );
+		}
+
 		self::$settings->apply_changes( wp_unslash( $_POST['wp-piwik'] ) );
 		self::$settings->set_global_option( 'revision', self::$revision_id );
 		self::$settings->set_global_option( 'last_settings_update', time() );
+
+		// phpcs:enable WordPress.Security.ValidatedSanitizedInput.InputNotValidated
+		// phpcs:enable WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+
 		return true;
 	}
 
