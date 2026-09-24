@@ -29,6 +29,8 @@ class Settings extends \WP_Piwik\Admin {
 		} elseif ( self::$wp_piwik->is_config_submitted() ) {
 			$this->show_box( 'updated', 'yes', esc_html__( 'Changes saved.', 'wp-piwik' ) );
 			$this->show_rejected_tracker_hosts();
+			$this->show_removed_tracker_hosts();
+			$this->show_rejected_tracker_host_entries();
 			$this->show_rejected_settings();
 
 			self::$wp_piwik->reset_request();
@@ -843,10 +845,20 @@ class Settings extends \WP_Piwik\Admin {
 			$group_name,
 			$hide_description,
 			function () use ( $id, $on_change, $rows, $is_readonly, $is_global ) {
+				$option_value = $is_global ? self::$settings->get_global_option( $id ) : self::$settings->get_option( $id );
 				?>
-				<textarea cols="80" rows="<?php echo esc_attr( $rows ); ?>" id="<?php echo esc_attr( $id ); ?>" name="wp-piwik[<?php echo esc_attr( $id ); ?>]" onchange="<?php echo esc_attr( $on_change ); ?>" <?php echo ( $is_readonly ? ' readonly="readonly"' : '' ); ?>>
-					<?php echo esc_html( $is_global ? self::$settings->get_global_option( $id ) : self::$settings->get_option( $id ) ); ?>
-				</textarea>
+				<textarea
+					cols="80"
+					rows="<?php echo esc_attr( $rows ); ?>"
+					id="<?php echo esc_attr( $id ); ?>"
+					name="wp-piwik[<?php echo esc_attr( $id ); ?>]"
+					onchange="<?php echo esc_attr( $on_change ); ?>"
+					<?php echo ( $is_readonly ? ' readonly="readonly"' : '' ); ?>
+					>
+					<?php
+						echo esc_textarea( (string) ( $option_value ) );
+					?>
+					</textarea>
 				<?php
 			}
 		);
@@ -864,7 +876,7 @@ class Settings extends \WP_Piwik\Admin {
 
 		$stored = implode( "\n", $tracker_hosts->get_stored_allow_list() );
 
-		$description = esc_html__( 'The Matomo URL, the cloud subdomain and the CDN URLs name the server that serves the tracker to every visitor of a site, so an administrator of a single site of this network may only pick a host named here. One host per line. A leading *. stands for any subdomain, e.g. *.matomo.cloud. Leave this empty to use the default below. Note: this restriction does not apply to you (a network administrator may name any host).', 'wp-piwik' );
+		$description = esc_html__( 'The Matomo URL, the cloud subdomain and the CDN URLs name the server that serves the tracker to every visitor of a site, so an administrator of a single site of this network may only pick a host named here. One host per line; an entry written as a URL is read for the host it names. A leading *. stands for any subdomain, e.g. *.matomo.cloud. Leaving this empty does not forbid every host: the two Matomo clouds apply instead, so if the sites of this network use a Matomo you run yourself, name its host here. Note: this restriction does not apply to you (a network administrator may name any host).', 'wp-piwik' );
 		if ( '' === $stored ) {
 			$description .= '<br />' . sprintf(
 				/* translators: %s: comma separated list of host names */
@@ -882,10 +894,10 @@ class Settings extends \WP_Piwik\Admin {
 			false,
 			function () use ( $stored ) {
 				?>
+				<?php // the value starts where the element does: anything between the two is part of it, and a host the network administrator reads back indented is one they did not type. ?>
 				<textarea cols="80" rows="4" id="<?php echo esc_attr( \WP_Piwik\TrackerHosts::FORM_FIELD ); ?>"
-					name="wp-piwik[<?php echo esc_attr( \WP_Piwik\TrackerHosts::FORM_FIELD ); ?>]">
-					<?php echo esc_textarea( $stored ); ?>
-				</textarea>
+					name="wp-piwik[<?php echo esc_attr( \WP_Piwik\TrackerHosts::FORM_FIELD ); ?>]"
+					><?php echo esc_textarea( $stored ); ?></textarea>
 				<?php
 			}
 		);
@@ -911,7 +923,7 @@ class Settings extends \WP_Piwik\Admin {
 	 * Tell the user which tracker hosts the configuration they just saved was not
 	 * allowed to name
 	 */
-	private function show_rejected_tracker_hosts() {
+	public function show_rejected_tracker_hosts() {
 		$rejected = self::$settings->get_rejected_tracker_hosts();
 		if ( empty( $rejected ) ) {
 			return;
@@ -930,16 +942,100 @@ class Settings extends \WP_Piwik\Admin {
 	}
 
 	/**
+	 * Tell the user which disallowed tracker hosts were removed after they saved
+	 * a configuration that disabled tracking.
+	 */
+	public function show_removed_tracker_hosts() {
+		$removed = self::$settings->get_removed_tracker_hosts();
+		if ( empty( $removed ) ) {
+			return;
+		}
+
+		$this->show_box(
+			'error',
+			'no',
+			sprintf(
+				/* translators: 1: comma separated list of host names the Matomo URL named, 2: comma separated list of host names the network allows */
+				esc_html__( 'Tracking was disabled, and the Matomo URL naming %1$s was removed, because this site is not allowed to load its tracker from it. A network administrator decides which servers a site may use, and this network allows: %2$s.', 'wp-piwik' ),
+				'<code>' . implode( '</code>, <code>', array_map( 'esc_html', $removed ) ) . '</code>',
+				'<code>' . implode( '</code>, <code>', array_map( 'esc_html', self::$settings->get_tracker_hosts()->get_allow_list() ) ) . '</code>'
+			)
+		);
+	}
+
+	public function show_rejected_tracker_host_entries() {
+		$tracker_hosts = self::$settings->get_tracker_hosts();
+
+		$rejected = $tracker_hosts->get_rejected_entries();
+		if ( empty( $rejected ) ) {
+			return;
+		}
+
+		$message = sprintf(
+			/* translators: 1: comma separated list of entries as they were written, 2: the most entries the list holds */
+			esc_html__( '"Allowed tracker hosts" only holds host names, at most %2$d of them, so %1$s could not be saved. Every other entry was stored.', 'wp-piwik' ),
+			'<code>' . implode( '</code>, <code>', array_map( 'esc_html', $rejected ) ) . '</code>',
+			\WP_Piwik\TrackerHosts::MAX_ENTRIES
+		);
+
+		$stored = $tracker_hosts->get_stored_allow_list();
+		if ( empty( $stored ) ) {
+			$message .= ' ' . sprintf(
+				/* translators: %s: comma separated list of host names */
+				esc_html__( 'Nothing is stored now, so the sites of this network may use the default hosts again: %s.', 'wp-piwik' ),
+				'<code>' . implode( '</code>, <code>', array_map( 'esc_html', $tracker_hosts->get_allow_list() ) ) . '</code>'
+			);
+		}
+
+		$this->show_box( 'error', 'no', $message );
+	}
+
+	/**
 	 * Tell the user which settings the configuration they just saved did not have a
 	 * usable value.
 	 */
-	private function show_rejected_settings() {
+	public function show_rejected_settings() {
 		$labels = array(
 			'piwik_user'  => __( 'Innocraft subdomain', 'wp-piwik' ),
 			'matomo_user' => __( 'Matomo subdomain', 'wp-piwik' ),
 		);
 
+		$url_labels = array(
+			'piwik_url'       => __( 'Matomo URL', 'wp-piwik' ),
+			'track_cdnurl'    => __( 'CDN URL', 'wp-piwik' ),
+			'track_cdnurlssl' => __( 'CDN URL (SSL)', 'wp-piwik' ),
+		);
+
 		foreach ( self::$settings->get_rejected_settings() as $key ) {
+			if ( isset( $url_labels[ $key ] ) && function_exists( 'idn_to_ascii' ) ) {
+				// the intl extension is there, so it was the host itself that could not be converted
+				$this->show_box(
+					'error',
+					'no',
+					sprintf(
+						/* translators: %s: name of a setting of this page */
+						esc_html__( '"%s" names a host outside ASCII that could not be converted to its ASCII form, so it was left as it was. Please check the host for a typo, such as two dots in a row.', 'wp-piwik' ),
+						esc_html( $url_labels[ $key ] )
+					)
+				);
+				continue;
+			}
+
+			if ( isset( $url_labels[ $key ] ) ) {
+				$this->show_box(
+					'error',
+					'no',
+					sprintf(
+						/* translators: 1: name of a setting of this page, 2: an example host name outside ASCII, 3: the same host name in its ASCII form */
+						esc_html__( '"%1$s" names a host outside ASCII, which this server cannot write the way a browser does because the PHP intl extension is missing, so it was left as it was. Please enter the host in its ASCII form instead, e.g. %3$s for %2$s.', 'wp-piwik' ),
+						esc_html( $url_labels[ $key ] ),
+						'<code>bücher.example</code>',
+						'<code>xn--bcher-kva.example</code>'
+					)
+				);
+				continue;
+			}
+
 			if ( ! isset( $labels[ $key ] ) ) {
 				continue;
 			}

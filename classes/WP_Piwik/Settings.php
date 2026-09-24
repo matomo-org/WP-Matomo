@@ -194,6 +194,13 @@ class Settings {
 	private $rejected_tracker_hosts = array();
 
 	/**
+	 * @var array<int, string> tracker hosts the last applied configuration set removed,
+	 *                         because the site was not allowed to use them and turned the
+	 *                         connection to Matomo off.
+	 */
+	private $removed_tracker_hosts = array();
+
+	/**
 	 * @var array<int, string> settings that the last configuration save attempt could not
 	 *                         save, because the value they used was not usable.
 	 */
@@ -407,7 +414,21 @@ class Settings {
 		// make sure the version history does not change
 		$version_history = $this->get_global_option( 'version_history' );
 
+		// ensure a value for piwik_mode is set so that the check_settings() call below
+		// will validate any associated Matomo URLs properly
+		if ( ! isset( $in['piwik_mode'] ) ) {
+			$in['piwik_mode'] = self::$default_settings['globalSettings']['piwik_mode'];
+		}
+
 		$in = $this->check_settings( $in );
+
+		// the connection was turned off while it named a Matomo URL the network does not
+		// allow. we remove the URL explicitly so it can't be turned on accidentally afterwards.
+		// note: check_piwik_url() keeps a URL that is not changing, so it must be dropped here.
+		if ( ! empty( $this->removed_tracker_hosts ) ) {
+			$in['piwik_url'] = '';
+		}
+
 		self::$wp_piwik->log( 'Apply changed settings:' );
 		foreach ( self::$default_settings ['globalSettings'] as $key => $val ) {
 			$this->set_global_option( $key, isset( $in [ $key ] ) ? $in [ $key ] : $val );
@@ -435,6 +456,7 @@ class Settings {
 	 */
 	private function check_settings( $in ) {
 		$this->rejected_tracker_hosts = array();
+		$this->removed_tracker_hosts  = array();
 		$this->rejected_settings      = array();
 		foreach ( $this->check_settings as $key => $value ) {
 			if ( isset( $in [ $key ] ) ) {
@@ -463,15 +485,30 @@ class Settings {
 	 * @phpstan-ignore method.unused
 	 */
 	private function check_piwik_url( $value ) {
-		$value = (string) $value;
-		if ( '' === trim( $value ) ) {
+		// the URL is stored the way the tracking code writes it out, since the proxy script, the
+		// opt-out iframe and the REST client read the stored value rather than the tracking code
+		$value = \WP_Piwik\TrackingCode\Generator::encode_what_a_url_cannot_hold( $value );
+		if ( null === $value ) {
+			// dropping what the host cannot be encoded to would name another server, so
+			// we must reject it instead.
+			$this->rejected_settings[] = 'piwik_url';
+			return (string) $this->get_global_option( 'piwik_url' );
+		}
+
+		$value = \WP_Piwik\TrackingCode\Generator::strip_what_a_url_cannot_hold( $value );
+		if ( '' === $value ) {
 			return ''; // no URL, don't add a slash
 		}
 
 		$value = substr( $value, - 1, 1 ) !== '/' ? $value . '/' : $value;
 
+		// an earlier version stored the URL as it was typed, so it is read the way the new
+		// one is before the two are compared
 		$stored = (string) $this->get_global_option( 'piwik_url' );
-		if ( $value !== $stored && ! $this->may_current_user_track_via( $value ) ) {
+		if (
+			\WP_Piwik\TrackingCode\Generator::normalize_url( $stored ) !== $value
+			&& ! $this->may_current_user_track_via_matomo( $value )
+		) {
 			return $stored; // keep the Matomo the network allows
 		}
 
@@ -494,7 +531,7 @@ class Settings {
 		}
 
 		$stored = (string) $this->get_global_option( $key );
-		if ( $value === $stored ) {
+		if ( strtolower( trim( $stored ) ) === $value ) {
 			return $value; // nothing is changing, so there is nothing to check
 		}
 
@@ -505,7 +542,7 @@ class Settings {
 		}
 
 		$domain = 'piwik_user' === $key ? '.innocraft.cloud' : '.matomo.cloud';
-		if ( ! $this->may_current_user_track_via( $value . $domain ) ) {
+		if ( ! $this->may_current_user_track_via( 'https://' . $value . $domain . '/' ) ) {
 			return $stored; // keep the cloud the network allows
 		}
 
@@ -541,30 +578,54 @@ class Settings {
 
 		$options = $this->get_matomo_mode_options();
 		if ( ! in_array( $value, array_keys( $options ), true ) ) {
-			return $stored;
+			return $stored; // invalid mode
 		}
 
 		if ( $value === $stored ) {
-			return $value; // nothing is changing, so there is nothing to check
+			return $value; // the mode is not changing, so there is nothing to check
 		}
 
 		$matomo = $this->get_matomo_url_of_mode( $value, $in );
-		if ( '' !== trim( $matomo ) && ! $this->may_current_user_track_via( $matomo ) ) {
-			return $stored; // no URL, or URL is not allowed: keep the existing value
+		if ( '' === trim( $matomo ) ) {
+			return $value; // the method names no Matomo, so the tracker moves nowhere
+		}
+
+		if ( trim( $matomo ) === trim( $this->get_matomo_url_of_mode( $stored, $in ) ) ) {
+			// the target matomo is not changing. in this case we do not check if the
+			// current user can use this target, because it was already saved, and the
+			// current user is not trying to change it.
+			return $value;
+		}
+
+		// turning the connection off is never refused. it names the Matomo URL, which this
+		// site was not using, so a URL the network does not allow is removed instead of
+		// being kept for the site to connect to later.
+		$tracker_url = \WP_Piwik\TrackingCode\Generator::get_tracker_url( $matomo );
+		if ( 'disabled' === $value && ! $this->tracker_hosts->is_allowed_for_current_user( $tracker_url ) ) {
+			$this->removed_tracker_hosts[] = $this->get_host_to_report( $tracker_url, $matomo );
+			return $value;
+		}
+
+		if ( ! $this->may_current_user_track_via( $tracker_url, $matomo ) ) {
+			// the method names a Matomo the network does not allow, keep the existing value
+			return $stored;
 		}
 
 		return $value;
 	}
 
 	private function get_matomo_url_of_mode( $piwik_mode, $in ) {
+		// a cloud is named the way get_matomo_url() writes it out. read without its
+		// protocol, a subdomain such as 'evil.example.org://acme' would be taken for a URL
+		// of its own, whose host is the cloud rather than the server the browser loads.
 		if ( 'cloud' === $piwik_mode ) {
 			$subdomain = $this->get_submitted_option( $in, 'piwik_user' );
-			return '' === trim( $subdomain ) ? '' : $subdomain . '.innocraft.cloud';
+			return '' === trim( $subdomain ) ? '' : 'https://' . $subdomain . '.innocraft.cloud/';
 		}
 
 		if ( 'cloud-matomo' === $piwik_mode ) {
 			$subdomain = $this->get_submitted_option( $in, 'matomo_user' );
-			return '' === trim( $subdomain ) ? '' : $subdomain . '.matomo.cloud';
+			return '' === trim( $subdomain ) ? '' : 'https://' . $subdomain . '.matomo.cloud/';
 		}
 
 		// every other connection method names the Matomo by URL, or by a file path that
@@ -639,8 +700,9 @@ class Settings {
 	}
 
 	/**
-	 * Drop from a CDN URL every character a URL cannot hold, and every host the network
-	 * does not allow the current user to serve the tracker from.
+	 * Read a CDN URL the way the tracking code writes it out, see
+	 * TrackingCode::normalize_cdn_url(), and refuse every host the network does not allow
+	 * the current user to serve the tracker from.
 	 *
 	 * @param mixed  $value new CDN URL
 	 * @param array  $in configuration set
@@ -649,17 +711,26 @@ class Settings {
 	 * @phpstan-ignore method.unused
 	 */
 	private function check_cdn_url( $value, $in, $key ) {
-		if ( ! is_string( $value ) ) {
+		if ( is_string( $value ) && null === \WP_Piwik\TrackingCode\Generator::encode_what_a_url_cannot_hold( $value ) ) {
+			// dropping what the host cannot be encoded to would name another server
+			$this->rejected_settings[] = $key;
+			return (string) $this->get_global_option( $key );
+		}
+
+		$value = \WP_Piwik\TrackingCode::normalize_cdn_url( $value );
+		if ( '' === $value ) {
 			return '';
 		}
 
-		$value = \WP_Piwik\TrackingCode\Generator::strip_what_a_url_cannot_hold( $value );
-		if ( '' === trim( $value ) ) {
-			return '';
-		}
-
+		// an earlier version stored the CDN URL as it was typed, so it is read the way the
+		// new one is before the two are compared
 		$stored = (string) $this->get_global_option( $key );
-		if ( $value !== $stored && ! $this->may_current_user_track_via( $value ) ) {
+
+		// the CDN URL is checked the way the tracking code writes it out, behind a protocol.
+		if (
+			\WP_Piwik\TrackingCode::normalize_cdn_url( $stored ) !== $value
+			&& ! $this->may_current_user_track_via( 'https://' . $value . '/' )
+		) {
 			return $stored; // keep the CDN the network allows
 		}
 
@@ -667,21 +738,48 @@ class Settings {
 	}
 
 	/**
-	 * @param string $url tracker URL, CDN URL or bare host
+	 * @param string      $url tracker URL, CDN URL or bare host
+	 * @param string|null $written the value the URL was read from, to report when the URL
+	 *                             names no host
 	 * @return boolean
 	 */
-	private function may_current_user_track_via( $url ) {
+	private function may_current_user_track_via( $url, $written = null ) {
 		if ( $this->tracker_hosts->is_allowed_for_current_user( $url ) ) {
 			return true;
 		}
 
-		$host = $this->tracker_hosts->host_from_url( $url );
-		if ( '' === $host ) {
-			$host = (string) $url;
-		}
-		$this->rejected_tracker_hosts[] = $host;
+		$this->rejected_tracker_hosts[] = $this->get_host_to_report( $url, $written );
 
 		return false;
+	}
+
+	/**
+	 * @param string $matomo_url Matomo URL as the settings name it
+	 * @return boolean
+	 */
+	private function may_current_user_track_via_matomo( $matomo_url ) {
+		// the Matomo URL is checked the way the tracking code writes it out. eg, read on its
+		// own, ' evil.example.org://stats.example.org' would name stats.example.org, while
+		// the browser loads the tracker from evil.example.org.
+		return $this->may_current_user_track_via(
+			\WP_Piwik\TrackingCode\Generator::get_tracker_url( $matomo_url ),
+			$matomo_url
+		);
+	}
+
+	/**
+	 * @param string      $url tracker URL, CDN URL or bare host
+	 * @param string|null $written the value the URL was read from, to report when the URL
+	 *                             names no host
+	 * @return string the host the value names, or the value itself when it names none
+	 */
+	private function get_host_to_report( $url, $written = null ) {
+		$host = $this->tracker_hosts->host_from_url( $url );
+		if ( '' !== $host ) {
+			return $host;
+		}
+
+		return trim( (string) ( null === $written ? $url : $written ) );
 	}
 
 	/**
@@ -700,6 +798,16 @@ class Settings {
 	 */
 	public function get_rejected_tracker_hosts() {
 		return array_values( array_unique( $this->rejected_tracker_hosts ) );
+	}
+
+	/**
+	 * Get the tracker hosts the last applied configuration set removed, because it turned
+	 * the connection to Matomo off while naming a Matomo URL the network does not allow
+	 *
+	 * @return array<int, string> host names, empty when nothing was removed
+	 */
+	public function get_removed_tracker_hosts() {
+		return array_values( array_unique( $this->removed_tracker_hosts ) );
 	}
 
 	/**

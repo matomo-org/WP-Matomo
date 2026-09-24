@@ -819,6 +819,35 @@ class SettingsTest extends WP_Piwik_TestCase {
 		$this->assertSame( 'cdn.example.org/!--script', $settings->get_global_option( $key ) );
 	}
 
+	/**
+	 * @dataProvider get_cdn_url_settings
+	 */
+	public function test_apply_changes_should_store_a_cdn_url_without_the_protocol_it_was_typed_with( $key ) {
+		$this->log_in_as_a_user_who_may_publish_script();
+
+		$settings = $this->create_settings();
+
+		$settings->apply_changes( [ $key => 'https://cdn.example.org/matomo/' ] );
+
+		$this->assertSame( 'cdn.example.org/matomo', $settings->get_global_option( $key ) );
+	}
+
+	/**
+	 * @dataProvider get_cdn_url_settings
+	 */
+	public function test_apply_changes_should_keep_a_cdn_url_an_earlier_version_stored_as_it_was_typed( $key ) {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( 'matomo.example.org' );
+
+		$settings = $this->create_settings( [ $key => 'cdn.elsewhere.example.org ' ] );
+
+		// saving the form posts the field back unchanged
+		$settings->apply_changes( [ $key => 'cdn.elsewhere.example.org ' ] );
+
+		$this->assertSame( 'cdn.elsewhere.example.org', $settings->get_global_option( $key ) );
+		$this->assertSame( [], $settings->get_rejected_tracker_hosts() );
+	}
+
 	public function get_cdn_url_settings() {
 		return [
 			'plain CDN URL' => [ 'track_cdnurl' ],
@@ -932,6 +961,195 @@ class SettingsTest extends WP_Piwik_TestCase {
 	}
 
 	/**
+	 * @dataProvider get_cdn_url_settings
+	 */
+	public function test_apply_changes_should_load_the_tracker_of_a_site_of_a_network_from_a_cdn_it_allows_typed_with_its_protocol( $key ) {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( 'cdn.example.org' );
+
+		$settings = $this->create_settings();
+
+		$settings->apply_changes( [ $key => 'https://cdn.example.org/matomo' ] );
+
+		$this->assertSame( 'cdn.example.org/matomo', $settings->get_global_option( $key ) );
+		$this->assertSame( [], $settings->get_rejected_tracker_hosts() );
+	}
+
+	/**
+	 * @dataProvider get_matomo_urls_hiding_the_protocol_behind_a_server
+	 */
+	public function test_apply_changes_should_not_point_a_site_of_a_network_at_a_matomo_url_naming_a_server_before_a_host_it_allows( $matomo_url, $reported ) {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( 'matomo.example.org' );
+
+		$settings = $this->create_settings( [ 'piwik_url' => 'https://matomo.example.org/' ] );
+
+		$settings->apply_changes( [ 'piwik_url' => $matomo_url ] );
+
+		$this->assertSame( 'https://matomo.example.org/', $settings->get_global_option( 'piwik_url' ) );
+		$this->assertSame( [ $reported ], $settings->get_rejected_tracker_hosts() );
+	}
+
+	public function get_matomo_urls_hiding_the_protocol_behind_a_server() {
+		return [
+			'behind a space'       => [ ' evil.example.org://matomo.example.org', 'evil.example.org://matomo.example.org/' ],
+			'behind a tab'         => [ "\tevil.example.org://matomo.example.org", 'evil.example.org://matomo.example.org/' ],
+			'holding a line break' => [ "evil.example.org://matomo.example.org/\nmatomo", 'evil.example.org://matomo.example.org/matomo/' ],
+		];
+	}
+
+	public function test_apply_changes_should_not_let_a_site_of_a_network_change_to_a_connection_method_naming_a_server_before_a_host_it_allows() {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( [ 'matomo.example.org', '*.matomo.cloud' ] );
+
+		// a Matomo URL stored by an earlier version, kept out of use while the site connects
+		// to the cloud
+		$settings = $this->create_settings(
+			[
+				'piwik_mode'  => 'cloud-matomo',
+				'matomo_user' => 'acme',
+				'piwik_url'   => ' evil.example.org://matomo.example.org/',
+			]
+		);
+
+		$settings->apply_changes( [ 'piwik_mode' => 'http' ] );
+
+		$this->assertSame( 'cloud-matomo', $settings->get_global_option( 'piwik_mode' ) );
+		$this->assertSame( [ 'evil.example.org://matomo.example.org/' ], $settings->get_rejected_tracker_hosts() );
+	}
+
+	public function test_apply_changes_should_store_a_matomo_url_without_the_whitespace_around_it() {
+		$this->log_in_as_a_user_who_may_publish_script();
+
+		$settings = $this->create_settings();
+
+		$settings->apply_changes( [ 'piwik_url' => " https://stats.example.org/matomo\n" ] );
+
+		$this->assertSame( 'https://stats.example.org/matomo/', $settings->get_global_option( 'piwik_url' ) );
+	}
+
+	public function test_apply_changes_should_point_a_site_of_a_network_at_a_protocol_relative_matomo_url_it_allows() {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( 'matomo.example.org' );
+
+		$settings = $this->create_settings();
+
+		$settings->apply_changes( [ 'piwik_url' => '//matomo.example.org/matomo/' ] );
+
+		$this->assertSame( '//matomo.example.org/matomo/', $settings->get_global_option( 'piwik_url' ) );
+		$this->assertSame( [], $settings->get_rejected_tracker_hosts() );
+	}
+
+	public function test_apply_changes_should_not_report_a_matomo_url_a_site_of_a_network_keeps_that_was_stored_with_whitespace_around_it() {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( 'matomo.example.org' );
+
+		$settings = $this->create_settings( [ 'piwik_url' => '   https://stats.example.org/' ] );
+
+		$settings->apply_changes( [ 'piwik_url' => ' https://stats.example.org/' ] );
+
+		$this->assertSame( [], $settings->get_rejected_tracker_hosts() );
+	}
+
+	/**
+	 * @dataProvider get_matomo_urls_the_tracking_code_rewrites
+	 */
+	public function test_apply_changes_should_store_a_matomo_url_the_way_the_tracking_code_loads_it( $matomo_url, $expected ) {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( [ 'matomo.example.org', 'xn--bcher-kva.example' ] );
+
+		$settings = $this->create_settings();
+
+		$settings->apply_changes( [ 'piwik_url' => $matomo_url ] );
+
+		$this->assertSame( $expected, $settings->get_global_option( 'piwik_url' ) );
+	}
+
+	public function get_matomo_urls_the_tracking_code_rewrites() {
+		return [
+			'a host outside ASCII' => [ "https://b\xc3\xbccher.example/matomo/", 'https://xn--bcher-kva.example/matomo/' ],
+			'a path outside ASCII' => [ "https://matomo.example.org/st\xc3\xa4ts/", 'https://matomo.example.org/st%C3%A4ts/' ],
+			'a space in the path'  => [ 'https://matomo.example.org/my matomo/', 'https://matomo.example.org/my%20matomo/' ],
+			'a backslash'          => [ 'https://evil.example.org\\@matomo.example.org/', 'https://evil.example.org@matomo.example.org/' ],
+		];
+	}
+
+	public function test_apply_changes_should_store_a_matomo_url_with_a_host_outside_ascii_in_its_ascii_form() {
+		$this->log_in_as_a_user_who_may_publish_script();
+
+		$settings = $this->create_settings();
+
+		$settings->apply_changes( [ 'piwik_url' => "https://statistik.b\xc3\xbccher.example/" ] );
+
+		$this->assertSame( 'https://statistik.xn--bcher-kva.example/', $settings->get_global_option( 'piwik_url' ) );
+		$this->assertSame( [], $settings->get_rejected_settings() );
+	}
+
+	public function test_apply_changes_should_not_point_a_site_of_a_network_at_a_matomo_url_whose_host_outside_ascii_it_does_not_allow() {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( 'matomo.example.org' );
+
+		$settings = $this->create_settings( [ 'piwik_url' => 'https://matomo.example.org/' ] );
+
+		// a different server than matomo.example.org, however similar the two look
+		$settings->apply_changes( [ 'piwik_url' => "https://matomo.example\xc3\xa9.org/" ] );
+
+		$this->assertSame( 'https://matomo.example.org/', $settings->get_global_option( 'piwik_url' ) );
+		$this->assertSame( [ 'matomo.xn--example-hya.org' ], $settings->get_rejected_tracker_hosts() );
+	}
+
+	/**
+	 * @dataProvider get_cdn_url_settings
+	 */
+	public function test_apply_changes_should_store_a_cdn_url_with_a_host_outside_ascii_in_its_ascii_form( $key ) {
+		$this->log_in_as_a_user_who_may_publish_script();
+
+		$settings = $this->create_settings();
+
+		$settings->apply_changes( [ $key => "cdn.b\xc3\xbccher.example/matomo" ] );
+
+		$this->assertSame( 'cdn.xn--bcher-kva.example/matomo', $settings->get_global_option( $key ) );
+	}
+
+	public function test_apply_changes_should_not_report_a_matomo_url_a_site_of_a_network_keeps_that_was_stored_with_a_host_outside_ascii() {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( 'matomo.example.org' );
+
+		$settings = $this->create_settings( [ 'piwik_url' => "https://stats.example\xc3\xa9.org/" ] );
+
+		$settings->apply_changes( [ 'piwik_url' => "https://stats.example\xc3\xa9.org/" ] );
+
+		$this->assertSame( [], $settings->get_rejected_tracker_hosts() );
+	}
+
+	public function test_apply_changes_should_point_a_site_of_a_network_at_a_matomo_url_it_allows_written_with_extra_slashes_after_the_protocol() {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( 'matomo.example.org' );
+
+		$settings = $this->create_settings();
+
+		$settings->apply_changes( [ 'piwik_url' => 'https:///matomo.example.org/matomo/' ] );
+
+		$this->assertSame( 'https:///matomo.example.org/matomo/', $settings->get_global_option( 'piwik_url' ) );
+		$this->assertSame( [], $settings->get_rejected_tracker_hosts() );
+	}
+
+	/**
+	 * @dataProvider get_cdn_url_settings
+	 */
+	public function test_apply_changes_should_not_load_the_tracker_of_a_site_of_a_network_from_a_cdn_naming_a_host_it_allows_after_one_it_does_not( $key ) {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( 'cdn.example.org' );
+
+		$settings = $this->create_settings( [ $key => 'cdn.example.org/matomo' ] );
+
+		$settings->apply_changes( [ $key => 'evil.example.org://cdn.example.org' ] );
+
+		$this->assertSame( 'cdn.example.org/matomo', $settings->get_global_option( $key ) );
+		$this->assertSame( [ 'evil.example.org' ], $settings->get_rejected_tracker_hosts() );
+	}
+
+	/**
 	 * @dataProvider get_cloud_subdomain_settings
 	 */
 	public function test_apply_changes_should_not_point_a_site_of_a_network_at_a_cloud_the_network_does_not_allow( $key ) {
@@ -990,14 +1208,30 @@ class SettingsTest extends WP_Piwik_TestCase {
 	/**
 	 * @dataProvider get_cloud_subdomain_settings
 	 */
-	public function test_apply_changes_should_name_no_setting_for_a_cloud_subdomain_it_stored( $key ) {
+	public function test_apply_changes_should_name_no_setting_for_a_cloud_subdomain_it_stored( $setting_key ) {
 		$this->log_in_as_a_user_who_may_publish_script();
 
 		$settings = $this->create_settings();
 
-		$settings->apply_changes( [ $key => 'acme' ] );
+		$settings->apply_changes( [ $setting_key => 'acme' ] );
 
 		$this->assertSame( [], $settings->get_rejected_settings() );
+	}
+
+	/**
+	 * @dataProvider get_cloud_subdomain_settings
+	 */
+	public function test_apply_changes_should_keep_a_cloud_subdomain_an_earlier_version_stored_as_it_was_typed( $setting_key ) {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( 'matomo.example.org' );
+
+		$settings = $this->create_settings( [ $setting_key => ' Acme' ] );
+
+		// saving the form posts the field back unchanged
+		$settings->apply_changes( [ $setting_key => ' Acme' ] );
+
+		$this->assertSame( 'acme', $settings->get_global_option( $setting_key ) );
+		$this->assertSame( [], $settings->get_rejected_tracker_hosts() );
 	}
 
 	public function get_cloud_subdomain_settings() {
@@ -1030,6 +1264,30 @@ class SettingsTest extends WP_Piwik_TestCase {
 		);
 
 		$this->assertSame( 'cloud-matomo', $settings->get_global_option( 'piwik_mode' ) );
+		$this->assertSame( [ 'evil.example.org' ], $settings->get_rejected_tracker_hosts() );
+	}
+
+	public function test_apply_changes_should_not_connect_a_site_of_a_network_to_a_cloud_subdomain_an_earlier_version_stored_naming_a_server_of_its_own() {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( [ 'matomo.example.org', '*.matomo.cloud' ] );
+
+		$settings = $this->create_settings(
+			[
+				'piwik_mode'  => 'http',
+				'piwik_url'   => 'https://matomo.example.org/',
+				'matomo_user' => 'evil.example.org://acme',
+			]
+		);
+
+		$settings->apply_changes(
+			[
+				'piwik_mode'  => 'cloud-matomo',
+				'piwik_url'   => 'https://matomo.example.org/',
+				'matomo_user' => 'evil.example.org://acme',
+			]
+		);
+
+		$this->assertSame( 'http', $settings->get_global_option( 'piwik_mode' ) );
 		$this->assertSame( [ 'evil.example.org' ], $settings->get_rejected_tracker_hosts() );
 	}
 
@@ -1089,6 +1347,199 @@ class SettingsTest extends WP_Piwik_TestCase {
 		$this->assertSame( 'cloud-matomo', $settings->get_global_option( 'piwik_mode' ) );
 	}
 
+	public function test_apply_changes_should_not_connect_a_site_of_a_network_to_a_matomo_url_it_does_not_allow_by_naming_no_connection_method() {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( '*.matomo.cloud' );
+
+		// a URL stored before the network named its allowed hosts, kept out of use while
+		// the site connects to the cloud
+		$settings = $this->create_settings(
+			[
+				'piwik_mode'  => 'cloud-matomo',
+				'matomo_user' => 'testuser',
+				'piwik_url'   => 'https://evil.example.org/',
+			]
+		);
+
+		// a configuration set that names no connection method is stored as the default
+		// one (http)
+		$settings->apply_changes(
+			[
+				'matomo_user' => 'testuser',
+				'piwik_url'   => 'https://evil.example.org/',
+			]
+		);
+
+		$this->assertSame( 'cloud-matomo', $settings->get_global_option( 'piwik_mode' ) );
+		$this->assertSame( 'https://testuser.matomo.cloud/', $settings->get_matomo_url() );
+		$this->assertSame( [ 'evil.example.org' ], $settings->get_rejected_tracker_hosts() );
+	}
+
+	public function test_apply_changes_should_store_the_default_connection_method_when_the_configuration_set_names_none() {
+		$settings = $this->create_settings( [ 'piwik_mode' => 'cloud-matomo' ] );
+
+		$settings->apply_changes( [] );
+
+		$this->assertSame( 'http', $settings->get_global_option( 'piwik_mode' ) );
+	}
+
+	public function test_apply_changes_should_let_a_site_of_a_network_change_to_a_connection_method_naming_the_matomo_it_already_uses() {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( 'matomo.example.org' );
+
+		// a URL stored before the network named its allowed hosts, in use since
+		$settings = $this->create_settings(
+			[
+				'piwik_mode' => 'http',
+				'piwik_url'  => 'https://evil.example.org/',
+			]
+		);
+
+		// note: if we don't specify piwik_url again, it will default to ''
+		$settings->apply_changes(
+			[
+				'piwik_mode' => 'disabled',
+				'piwik_url'  => 'https://evil.example.org/',
+			]
+		);
+
+		$this->assertSame( 'disabled', $settings->get_global_option( 'piwik_mode' ) );
+		$this->assertSame( [], $settings->get_rejected_tracker_hosts() );
+	}
+
+	public function test_apply_changes_should_keep_the_matomo_url_a_site_of_a_network_uses_when_it_turns_its_connection_off() {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( 'matomo.example.org' );
+
+		// a URL stored before the network named its allowed hosts, in use since. the site
+		// may keep using it, so turning the connection off does not take it away.
+		$settings = $this->create_settings(
+			[
+				'piwik_mode' => 'http',
+				'piwik_url'  => 'https://evil.example.org/',
+			]
+		);
+
+		$settings->apply_changes(
+			[
+				'piwik_mode' => 'disabled',
+				'piwik_url'  => 'https://evil.example.org/',
+			]
+		);
+
+		$this->assertSame( 'https://evil.example.org/', $settings->get_global_option( 'piwik_url' ) );
+		$this->assertSame( [], $settings->get_removed_tracker_hosts() );
+	}
+
+	public function test_apply_changes_should_let_a_site_of_a_network_turn_its_connection_off_while_it_holds_a_matomo_url_the_network_does_not_allow() {
+		$settings = $this->create_a_cloud_site_holding_a_matomo_url_the_network_does_not_allow();
+
+		$settings->apply_changes(
+			[
+				'piwik_mode'  => 'disabled',
+				'matomo_user' => 'testuser',
+				'piwik_url'   => 'https://evil.example.org/',
+			]
+		);
+
+		$this->assertSame( 'disabled', $settings->get_global_option( 'piwik_mode' ) );
+		$this->assertSame( [], $settings->get_rejected_tracker_hosts() );
+	}
+
+	public function test_apply_changes_should_remove_a_matomo_url_the_network_does_not_allow_when_a_site_of_a_network_turns_its_connection_off() {
+		$settings = $this->create_a_cloud_site_holding_a_matomo_url_the_network_does_not_allow();
+
+		// with the connection off the site names its Matomo URL, which it was not using,
+		// so keeping it would let the site turn it on later as the Matomo it already uses
+		$settings->apply_changes(
+			[
+				'piwik_mode'  => 'disabled',
+				'matomo_user' => 'testuser',
+				'piwik_url'   => 'https://evil.example.org/',
+			]
+		);
+
+		$this->assertSame( '', $settings->get_global_option( 'piwik_url' ) );
+		$this->assertSame( [ 'evil.example.org' ], $settings->get_removed_tracker_hosts() );
+	}
+
+	public function test_apply_changes_should_not_connect_a_site_of_a_network_to_a_matomo_url_it_does_not_allow_by_turning_its_connection_off_and_on_again() {
+		$settings = $this->create_a_cloud_site_holding_a_matomo_url_the_network_does_not_allow();
+
+		$settings->apply_changes(
+			[
+				'piwik_mode'  => 'disabled',
+				'matomo_user' => 'testuser',
+				'piwik_url'   => 'https://evil.example.org/',
+			]
+		);
+		$settings->apply_changes(
+			[
+				'piwik_mode'  => 'http',
+				'matomo_user' => 'testuser',
+				'piwik_url'   => 'https://evil.example.org/',
+			]
+		);
+
+		// the URL is refused as the new one it now is, which leaves the connection method
+		// naming no Matomo at all
+		$this->assertSame( '', $settings->get_matomo_url() );
+		$this->assertSame( [ 'evil.example.org' ], $settings->get_rejected_tracker_hosts() );
+	}
+
+	public function test_apply_changes_should_keep_a_matomo_url_the_network_allows_when_a_site_of_a_network_turns_its_connection_off() {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( [ '*.matomo.cloud', 'matomo.example.org' ] );
+
+		$settings = $this->create_settings(
+			[
+				'piwik_mode'  => 'cloud-matomo',
+				'matomo_user' => 'testuser',
+				'piwik_url'   => 'https://matomo.example.org/',
+			]
+		);
+
+		$settings->apply_changes(
+			[
+				'piwik_mode'  => 'disabled',
+				'matomo_user' => 'testuser',
+				'piwik_url'   => 'https://matomo.example.org/',
+			]
+		);
+
+		$this->assertSame( 'https://matomo.example.org/', $settings->get_global_option( 'piwik_url' ) );
+		$this->assertSame( [], $settings->get_removed_tracker_hosts() );
+	}
+
+	public function test_apply_changes_should_keep_any_matomo_url_when_a_network_administrator_turns_the_connection_off() {
+		$this->skip_unless_multisite();
+		$this->log_in_as_a_user_who_may_publish_script();
+		$this->allow_tracker_hosts( '*.matomo.cloud' );
+
+		$settings = $this->create_settings(
+			[
+				'piwik_mode'  => 'cloud-matomo',
+				'matomo_user' => 'testuser',
+				'piwik_url'   => 'https://evil.example.org/',
+			]
+		);
+
+		$settings->apply_changes(
+			[
+				'piwik_mode'  => 'disabled',
+				'matomo_user' => 'testuser',
+				'piwik_url'   => 'https://evil.example.org/',
+			]
+		);
+
+		$this->assertSame( 'https://evil.example.org/', $settings->get_global_option( 'piwik_url' ) );
+		$this->assertSame( [], $settings->get_removed_tracker_hosts() );
+	}
+
+	public function test_get_removed_tracker_hosts_should_be_empty_before_a_configuration_is_applied() {
+		$this->assertSame( [], $this->create_settings()->get_removed_tracker_hosts() );
+	}
+
 	public function test_apply_changes_should_keep_a_matomo_url_a_site_had_before_the_network_named_its_allowed_hosts() {
 		$this->log_in_as_a_network_site_administrator();
 		$this->allow_tracker_hosts( 'matomo.example.org' );
@@ -1137,6 +1588,21 @@ class SettingsTest extends WP_Piwik_TestCase {
 		$this->assertSame(
 			[ 'evil.example.org', 'cdn.evil.example.org' ],
 			$settings->get_rejected_tracker_hosts()
+		);
+	}
+
+	private function create_a_cloud_site_holding_a_matomo_url_the_network_does_not_allow() {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( '*.matomo.cloud' );
+
+		// a URL stored before the network named its allowed hosts, kept out of use while
+		// the site connects to the cloud
+		return $this->create_settings(
+			[
+				'piwik_mode'  => 'cloud-matomo',
+				'matomo_user' => 'testuser',
+				'piwik_url'   => 'https://evil.example.org/',
+			]
 		);
 	}
 

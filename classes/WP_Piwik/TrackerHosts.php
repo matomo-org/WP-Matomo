@@ -13,19 +13,17 @@ class TrackerHosts {
 	const MAX_ENTRIES      = 50;
 	const MAX_ENTRY_LENGTH = 253; // the longest a host name can be
 
-	/**
-	 * A host name, optionally preceded by a '*.' wildcard standing for any subdomain of
-	 * it. A bare '*' is not an entry: a list that allows everything is what leaving the
-	 * setting empty is for.
-	 */
-	const ENTRY_PATTERN = '/^(\*\.)?[a-z0-9]([a-z0-9\-._]*[a-z0-9])?$/';
-
 	const HOST_PATTERN = '/^[a-z0-9]([a-z0-9\-._]*[a-z0-9])?$/';
 
 	/**
 	 * @var array<int, string>
 	 */
 	private $cloud_hosts = array( '*.matomo.cloud', '*.innocraft.cloud' );
+
+	/**
+	 * @var array<int, string> values the last allowlist save attempt could not hold
+	 */
+	private $rejected_entries = array();
 
 	/**
 	 * Whether the current user is required to pick a tracker host from the allow list.
@@ -127,21 +125,32 @@ class TrackerHosts {
 			$entries = $this->get_default_allow_list();
 		}
 
+		/**
+		 * Filter the hosts a site of this network may load its tracker from.
+		 *
+		 * @since 1.1.13
+		 *
+		 * @param array<int, string> $entries host names, each optionally preceded by a
+		 *                                    '*.' wildcard
+		 */
 		// phpcs:ignore WordPress.NamingConventions.ValidHookName.UseUnderscores, WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound
 		$filtered = apply_filters( 'wp-piwik_allowed_tracker_hosts', $entries );
 		if ( $filtered === $entries ) {
 			return $entries;
 		}
 
-		$parsed = $this->parse( $filtered );
-		if ( empty( $parsed ) ) {
+		// the entry count is bounded to keep a list somebody types from growing the option
+		// without end. a list that comes from code was written by somebody who knows how
+		// many hosts their network runs, so no limit is enforced.
+		$parsed = $this->parse( $filtered, null );
+		if ( empty( $parsed['entries'] ) ) {
 			// filter returned nothing usable, so we revert to the default (otherwise the network
 			// would not be able to load the JS tracker from anywhere)
 			_doing_it_wrong(
 				__METHOD__,
 				sprintf(
 					/* translators: %s: name of a WordPress filter */
-					esc_html__( 'The %s filter has to answer with a list of host names, each optionally preceded by a "*." wildcard. Nothing it answered with is a valid host, so the existing stored/default list is used instead.', 'wp-piwik' ),
+					__( 'The %s filter has to answer with a list of host names, each optionally preceded by a "*." wildcard. Nothing it answered with is a valid host, so the existing stored/default list is used instead.', 'wp-piwik' ), // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 					'<code>wp-piwik_allowed_tracker_hosts</code>'
 				),
 				'1.1.13'
@@ -149,7 +158,7 @@ class TrackerHosts {
 			return $entries;
 		}
 
-		return $parsed;
+		return $parsed['entries'];
 	}
 
 	/**
@@ -165,21 +174,27 @@ class TrackerHosts {
 			return array();
 		}
 
-		// only allow string entries
-		$entries = array_filter( $entries, 'is_string' );
+		// another plugin or a wp-cli call can write anything into a network option, and an
+		// entry that is not a host name would be compared against one
+		$parsed = $this->parse( $entries );
 
-		return array_values( $entries );
+		return $parsed['entries'];
 	}
 
+	/**
+	 * Get the hosts a site of this network may load the Matomo JS tracker from when the network
+	 * does not specify its own allowlist.
+	 *
+	 * The two Matomo clouds, which Matomo and InnoCraft run, and nothing else.
+	 *
+	 * Note: the current site URL is left out, because the site administrator would then be able
+	 * to point the tracker to a file in the uploads directory, effectively adding arbitrary JavaScript
+	 * to the frontend.
+	 *
+	 * @return array<int, string> allow list entries
+	 */
 	public function get_default_allow_list() {
-		$entries = $this->cloud_hosts;
-
-		$host = $this->host_from_url( $this->get_network_matomo_url() );
-		if ( '' !== $host ) {
-			$entries[] = $host;
-		}
-
-		return $entries;
+		return $this->cloud_hosts;
 	}
 
 	/**
@@ -187,46 +202,80 @@ class TrackerHosts {
 	 * @return boolean whether the current user was allowed to store the list
 	 */
 	public function update_allow_list( $value ) {
+		$this->rejected_entries = array();
+
 		if ( ! $this->can_edit_allow_list() ) {
 			return false;
 		}
 
-		update_site_option( self::OPTION, $this->parse( $value ) );
+		$parsed                 = $this->parse( $value );
+		$this->rejected_entries = $parsed['rejected'];
+		update_site_option( self::OPTION, $parsed['entries'] );
 		return true;
 	}
 
 	/**
-	 * Drop from an allow list everything that is not a host it can name
+	 * Get the entries the last stored allow list could not hold
 	 *
-	 * @param mixed $value allow list, one host per line or comma separated
-	 * @return array<int, string> allow list entries
+	 * A list that ends up holding nothing is a list that does not apply, so an entry this
+	 * cannot read is the difference between a network that restricted its sites and one
+	 * that believes it did.
+	 *
+	 * @return array<int, string> entries as they were written, empty when the list held
+	 *                            every one of them
 	 */
-	public function parse( $value ) {
-		if ( is_array( $value ) ) {
-			$value = implode( "\n", $value );
-		}
-		if ( ! is_string( $value ) ) {
-			return array();
-		}
+	public function get_rejected_entries() {
+		return $this->rejected_entries;
+	}
 
-		$entries = array();
-		foreach ( preg_split( '/[\s,;]+/', $value ) as $entry ) {
-			$entry = strtolower( trim( $entry ) );
-			if (
-				'' === $entry
-				|| strlen( $entry ) > self::MAX_ENTRY_LENGTH
-				|| ! preg_match( self::ENTRY_PATTERN, $entry )
-			) {
+	/**
+	 * Read an allow list into the hosts it names and the entries it cannot name one with.
+	 *
+	 * @param mixed    $value allow list, one host per line or comma separated
+	 * @param int|null $max_entries most entries to keep, null to keep every one
+	 * @return array{entries: array<int, string>, rejected: array<int, string>} the hosts the
+	 *         list names, and the entries that were rejected
+	 */
+	public function parse( $value, $max_entries = self::MAX_ENTRIES ) {
+		$entries  = array();
+		$rejected = array();
+
+		foreach ( self::split_into_entries( $value ) as $written ) {
+			$entry = $this->normalize_entry( $written );
+
+			if ( '' !== $entry && in_array( $entry, $entries, true ) ) {
+				continue; // entry is a duplicate, ignore it
+			}
+
+			$is_past_entry_limit = null !== $max_entries && count( $entries ) >= $max_entries;
+			if ( '' === $entry || $is_past_entry_limit ) {
+				$rejected[] = $written;
 				continue;
 			}
 
 			$entries[] = $entry;
-			if ( count( $entries ) >= self::MAX_ENTRIES ) {
-				break;
-			}
 		}
 
-		return array_values( array_unique( $entries ) );
+		return array(
+			'entries'  => $entries,
+			'rejected' => array_values( array_unique( $rejected ) ),
+		);
+	}
+
+	private static function split_into_entries( $value ) {
+		if ( is_array( $value ) ) {
+			// a POST can carry anything, and only a string is an entry somebody wrote
+			$value = implode( "\n", array_filter( $value, 'is_string' ) );
+		}
+
+		if ( ! is_string( $value ) ) {
+			return array();
+		}
+
+		$entries = preg_split( '/[\s,;]+/', trim( $value ), -1, PREG_SPLIT_NO_EMPTY );
+		$entries = array_filter( $entries );
+		$entries = array_values( $entries );
+		return $entries;
 	}
 
 	/**
@@ -251,43 +300,65 @@ class TrackerHosts {
 		return is_string( $host ) ? $this->normalize_host( $host ) : '';
 	}
 
-	/**
-	 * Get the Matomo the network itself is connected to
-	 *
-	 * @return string Matomo URL, empty when the network names none
-	 */
-	private function get_network_matomo_url() {
-		if ( ! is_multisite() ) {
+	private function normalize_entry( $entry ) {
+		if ( ! is_string( $entry ) ) {
 			return '';
 		}
 
-		// a network activated plugin keeps the Matomo URL in one network wide option
-		$url = (string) get_site_option( 'wp-piwik_global-piwik_url', '' );
-		if ( '' !== $url ) {
-			return $url;
+		$entry = strtolower( trim( $entry ) );
+
+		// the wildcard belongs to the entry rather than to the host name, so it is taken
+		// off before the host is read and put back afterwards
+		$wildcard = '';
+		if ( 0 === strpos( $entry, '*.' ) ) {
+			$wildcard = '*.';
+			$entry    = substr( $entry, 2 );
 		}
 
-		// activated site by site there is no network wide one, and the main site's is the
-		// closest thing to a Matomo the network chose
-		return (string) get_blog_option( get_main_site_id(), 'wp-piwik_global-piwik_url', '' );
+		$host = $this->host_from_url( $entry );
+		if (
+			'' === $host
+			|| strlen( $wildcard ) + strlen( $host ) > self::MAX_ENTRY_LENGTH
+		) {
+			return '';
+		}
+
+		return $wildcard . $host;
 	}
 
 	/**
 	 * @param mixed $host host name
-	 * @return string lower case host name, empty when the value is not one
+	 * @return string lower case ASCII host name, empty when the value is not one
 	 */
 	private function normalize_host( $host ) {
 		if ( ! is_string( $host ) ) {
 			return '';
 		}
 
-		$host = strtolower( trim( $host ) );
+		$host = $this->to_ascii_host( strtolower( trim( $host ) ) );
 		if ( '' === $host
 			|| strlen( $host ) > self::MAX_ENTRY_LENGTH
-			|| ! preg_match( self::HOST_PATTERN, $host ) ) {
+			|| ! preg_match( self::HOST_PATTERN, $host )
+		) {
 			return '';
 		}
 
 		return $host;
+	}
+
+	/**
+	 * Write a host name the way a browser resolves it
+	 *
+	 * @param string $host lower case host name
+	 * @return string the same host in ASCII, empty when it has no ASCII form
+	 */
+	private function to_ascii_host( $host ) {
+		if ( ! preg_match( '/[^\x00-\x7f]/', $host ) ) {
+			return $host; // already ASCII, nothing to convert
+		}
+
+		// the same conversion the tracking code writes the host out with
+		$ascii = \WP_Piwik\TrackingCode\Generator::to_ascii_host( $host );
+		return null === $ascii ? '' : $ascii;
 	}
 }

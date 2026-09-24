@@ -1008,8 +1008,14 @@ class WP_Piwik {
 			return $cached;
 		}
 
-		if ( self::holds_named_sites( $cached ) ) {
-			return $cached;
+		$allow_list = self::$settings->get_tracker_hosts()->get_allow_list();
+
+		// make sure we do not invalidate a cache value that has the same entries, just in
+		// a different order
+		sort( $allow_list );
+
+		if ( self::holds_sites_named_under_allow_list( $cached, $allow_list ) ) {
+			return $cached['sites'];
 		}
 
 		$settings_by_blog = wp_is_large_network() ? null : self::read_tracking_settings_of_every_site();
@@ -1018,8 +1024,6 @@ class WP_Piwik {
 			set_site_transient( WP_Piwik\Settings::MANUAL_TRACKING_SITES_CACHE, self::MANUAL_TRACKING_NETWORK_TOO_LARGE, DAY_IN_SECONDS );
 			return self::MANUAL_TRACKING_NETWORK_TOO_LARGE;
 		}
-
-		$allow_list = self::$settings->get_tracker_hosts()->get_allow_list();
 
 		$sites_by_reason = array(
 			self::REVIEW_REASON_MANUAL_CODE  => array(),
@@ -1045,8 +1049,29 @@ class WP_Piwik {
 			}
 		}
 
-		set_site_transient( WP_Piwik\Settings::MANUAL_TRACKING_SITES_CACHE, $sites_by_reason, DAY_IN_SECONDS );
+		set_site_transient(
+			WP_Piwik\Settings::MANUAL_TRACKING_SITES_CACHE,
+			array(
+				// the lists the sites were judged against, so the notice will not display if
+				// a change is made to the allowlist after this transient is recorded
+				'allow_list' => $allow_list,
+				'sites'      => $sites_by_reason,
+			),
+			DAY_IN_SECONDS
+		);
 		return $sites_by_reason;
+	}
+
+	private static function holds_sites_named_under_allow_list( $cached, $allow_list ) {
+		if ( ! is_array( $cached ) || ! isset( $cached['allow_list'], $cached['sites'] ) ) {
+			return false; // cached value has incorrect structure
+		}
+
+		if ( $cached['allow_list'] !== $allow_list ) {
+			return false; // allowlist used to create cached value is not the same as the current allowlist
+		}
+
+		return self::holds_named_sites( $cached['sites'] );
 	}
 
 	/**
@@ -1199,17 +1224,30 @@ class WP_Piwik {
 		$tracker_hosts = self::$settings->get_tracker_hosts();
 
 		foreach ( self::get_tracker_values_of_site( $settings ) as $value ) {
-			// before checking, sanitize the value as it is sanitized before outputting in JS
-			$value = \WP_Piwik\TrackingCode\Generator::strip_what_a_url_cannot_hold( $value );
+			// before checking, sanitize the value as it is sanitized before outputting in JS.
+			// note: encode_what_a_url_cannot_hold removes surrounding whitespace like trim() does.
+			$encoded = \WP_Piwik\TrackingCode\Generator::encode_what_a_url_cannot_hold( $value );
+			if ( null === $encoded ) {
+				return true; // names a host the review cannot write in ASCII
+			}
 
-			// a value the browser reads as a path uses the current site's host. the
-			// deprecated PHP API connection method stored '/' as the Matomo URL, so it is
-			// possible that a site of this network holds one.
-			if ( '' === $value || ( '/' === $value[0] && '//' !== substr( $value, 0, 2 ) ) ) {
+			$stripped = \WP_Piwik\TrackingCode\Generator::strip_what_a_url_cannot_hold( $encoded );
+			if ( $encoded !== $stripped ) {
+				return true;
+			}
+
+			$value = $stripped;
+
+			// the deprecated PHP API connection method stored '/' as the Matomo URL, which
+			// names no server, so it is possible that a site of this network holds one. any
+			// other value starting with a slash is not a path to the browser: it skips the
+			// slashes that come before a host, so '/evil.example.org/' is read as a server.
+			if ( '' === $value || '/' === $value ) {
 				continue;
 			}
 
-			$host = $tracker_hosts->host_from_url( $value );
+			$host = \WP_Piwik\TrackingCode\Generator::get_tracker_url( $value );
+			$host = $tracker_hosts->host_from_url( $host );
 			if ( '' === $host || ! $tracker_hosts->allows( $host, $allow_list ) ) {
 				return true;
 			}
@@ -1222,29 +1260,43 @@ class WP_Piwik {
 	 * Get the values a site's settings name as the source of the Matomo JavaScript tracker.
 	 *
 	 * @param array $settings the site's tracking settings, see read_tracking_settings_of_every_site()
-	 * @return array<int, string> URLs and host names, empty when the site names none
+	 * @return array<int, string> URLs, empty when the site names none
 	 */
 	private static function get_tracker_values_of_site( $settings ) {
-		$values = array(
-			// every connection method but the two clouds names its Matomo by URL, or by a
-			// file path that names no host at all
-			self::get_site_setting( $settings, 'wp-piwik_global-piwik_url' ),
-			self::get_site_setting( $settings, 'wp-piwik_global-track_cdnurl' ),
-			self::get_site_setting( $settings, 'wp-piwik_global-track_cdnurlssl' ),
+		$values = array();
+
+		// every connection method but the two clouds names its Matomo by URL, or by a
+		// file path that names no host at all
+		$url = self::get_site_setting( $settings, 'wp-piwik_global-piwik_url' );
+		if ( '' !== $url ) {
+			$values[] = $url;
+		}
+
+		// CDN URLs are prepended with the protocol used in tracking code output to ensure
+		// it is parsed the way the browser does via parse_url
+		$cdn_option_names = array(
+			'wp-piwik_global-track_cdnurl',
+			'wp-piwik_global-track_cdnurlssl',
 		);
+		foreach ( $cdn_option_names as $option_name ) {
+			$cdn_url = self::get_site_setting( $settings, $option_name );
+			$cdn_url = \WP_Piwik\TrackingCode::normalize_cdn_url( $cdn_url );
+			if ( '' !== $cdn_url ) {
+				$values[] = 'https://' . $cdn_url . '/';
+			}
+		}
 
 		$clouds = array(
 			'wp-piwik_global-piwik_user'  => '.innocraft.cloud',
 			'wp-piwik_global-matomo_user' => '.matomo.cloud',
 		);
 		foreach ( $clouds as $option_name => $domain ) {
-			$subdomain = self::get_site_setting( $settings, $option_name );
-			if ( '' !== trim( $subdomain ) ) {
-				$values[] = $subdomain . $domain;
+			$subdomain = trim( self::get_site_setting( $settings, $option_name ) );
+			if ( '' !== $subdomain ) {
+				$values[] = 'https://' . $subdomain . $domain . '/';
 			}
 		}
 
-		$values = array_filter( $values, 'strlen' );
 		$values = array_unique( $values );
 		$values = array_values( $values );
 		return $values;
@@ -2300,7 +2352,13 @@ class WP_Piwik {
 		}
 
 		$matomo_url = self::$settings->get_matomo_url();
-		if ( ! is_numeric( $site_id ) || empty( $matomo_url ) ) {
+		if (
+			! is_numeric( $site_id )
+			|| empty( $matomo_url )
+			// a URL a host cannot be read from, eg, one naming a host outside ASCII that this
+			// server cannot write in ASCII. this would have the browser read the tracker path as a host
+			|| '' === WP_Piwik\TrackingCode\Generator::get_tracker_url( $matomo_url )
+		) {
 			// there is nothing to point the tracker at, and a tracking code naming the wrong
 			// site is worse than none
 			self::$logger->log( 'Cannot generate tracking code: Matomo site ' . wp_json_encode( $site_id ) . ' at Matomo URL ' . wp_json_encode( $matomo_url ) );
