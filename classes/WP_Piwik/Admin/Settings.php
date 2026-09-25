@@ -2,6 +2,8 @@
 
 namespace WP_Piwik\Admin;
 
+use WP_Piwik\Settings\SaveFailure;
+
 /**
  * WordPress Admin settings page
  *
@@ -924,7 +926,7 @@ class Settings extends \WP_Piwik\Admin {
 	 * allowed to name
 	 */
 	public function show_rejected_tracker_hosts() {
-		$rejected = self::$settings->get_rejected_tracker_hosts();
+		$rejected = $this->get_failed_hosts( SaveFailure::HOST_NOT_ALLOWED );
 		if ( empty( $rejected ) ) {
 			return;
 		}
@@ -932,12 +934,7 @@ class Settings extends \WP_Piwik\Admin {
 		$this->show_box(
 			'error',
 			'no',
-			sprintf(
-				/* translators: 1: comma separated list of host names the save named, 2: comma separated list of host names the network allows */
-				esc_html__( 'This site is not allowed to load its tracker from %1$s, so that part of the configuration was left as it was. A network administrator decides which servers a site may use, and this network allows: %2$s.', 'wp-piwik' ),
-				'<code>' . implode( '</code>, <code>', array_map( 'esc_html', $rejected ) ) . '</code>',
-				'<code>' . implode( '</code>, <code>', array_map( 'esc_html', self::$settings->get_tracker_hosts()->get_allow_list() ) ) . '</code>'
-			)
+			SaveFailure::get_not_allowed_hosts_message( $rejected, self::$settings->get_tracker_hosts()->get_allow_list() )
 		);
 	}
 
@@ -946,7 +943,7 @@ class Settings extends \WP_Piwik\Admin {
 	 * a configuration that disabled tracking.
 	 */
 	public function show_removed_tracker_hosts() {
-		$removed = self::$settings->get_removed_tracker_hosts();
+		$removed = $this->get_failed_hosts( SaveFailure::HOST_REMOVED );
 		if ( empty( $removed ) ) {
 			return;
 		}
@@ -954,12 +951,7 @@ class Settings extends \WP_Piwik\Admin {
 		$this->show_box(
 			'error',
 			'no',
-			sprintf(
-				/* translators: 1: comma separated list of host names the Matomo URL named, 2: comma separated list of host names the network allows */
-				esc_html__( 'Tracking was disabled, and the Matomo URL naming %1$s was removed, because this site is not allowed to load its tracker from it. A network administrator decides which servers a site may use, and this network allows: %2$s.', 'wp-piwik' ),
-				'<code>' . implode( '</code>, <code>', array_map( 'esc_html', $removed ) ) . '</code>',
-				'<code>' . implode( '</code>, <code>', array_map( 'esc_html', self::$settings->get_tracker_hosts()->get_allow_list() ) ) . '</code>'
-			)
+			SaveFailure::get_removed_hosts_message( $removed, self::$settings->get_tracker_hosts()->get_allow_list() )
 		);
 	}
 
@@ -971,23 +963,15 @@ class Settings extends \WP_Piwik\Admin {
 			return;
 		}
 
-		$message = sprintf(
-			/* translators: 1: comma separated list of entries as they were written, 2: the most entries the list holds */
-			esc_html__( '"Allowed tracker hosts" only holds host names, at most %2$d of them, so %1$s could not be saved. Every other entry was stored.', 'wp-piwik' ),
-			'<code>' . implode( '</code>, <code>', array_map( 'esc_html', $rejected ) ) . '</code>',
-			\WP_Piwik\TrackerHosts::MAX_ENTRIES
+		$this->show_box(
+			'error',
+			'no',
+			SaveFailure::get_rejected_allow_list_entries_message(
+				$rejected,
+				$tracker_hosts->get_stored_allow_list(),
+				$tracker_hosts->get_allow_list()
+			)
 		);
-
-		$stored = $tracker_hosts->get_stored_allow_list();
-		if ( empty( $stored ) ) {
-			$message .= ' ' . sprintf(
-				/* translators: %s: comma separated list of host names */
-				esc_html__( 'Nothing is stored now, so the sites of this network may use the default hosts again: %s.', 'wp-piwik' ),
-				'<code>' . implode( '</code>, <code>', array_map( 'esc_html', $tracker_hosts->get_allow_list() ) ) . '</code>'
-			);
-		}
-
-		$this->show_box( 'error', 'no', $message );
 	}
 
 	/**
@@ -995,63 +979,25 @@ class Settings extends \WP_Piwik\Admin {
 	 * usable value.
 	 */
 	public function show_rejected_settings() {
-		$labels = array(
-			'piwik_user'  => __( 'Innocraft subdomain', 'wp-piwik' ),
-			'matomo_user' => __( 'Matomo subdomain', 'wp-piwik' ),
-		);
-
-		$url_labels = array(
-			'piwik_url'       => __( 'Matomo URL', 'wp-piwik' ),
-			'track_cdnurl'    => __( 'CDN URL', 'wp-piwik' ),
-			'track_cdnurlssl' => __( 'CDN URL (SSL)', 'wp-piwik' ),
-		);
-
-		foreach ( self::$settings->get_rejected_settings() as $key ) {
-			if ( isset( $url_labels[ $key ] ) && function_exists( 'idn_to_ascii' ) ) {
-				// the intl extension is there, so it was the host itself that could not be converted
-				$this->show_box(
-					'error',
-					'no',
-					sprintf(
-						/* translators: %s: name of a setting of this page */
-						esc_html__( '"%s" names a host outside ASCII that could not be converted to its ASCII form, so it was left as it was. Please check the host for a typo, such as two dots in a row.', 'wp-piwik' ),
-						esc_html( $url_labels[ $key ] )
-					)
-				);
-				continue;
+		foreach ( self::$settings->get_save_failures() as $failure ) {
+			$message = $failure->get_message();
+			if ( '' !== $message ) {
+				$this->show_box( 'error', 'no', $message );
 			}
-
-			if ( isset( $url_labels[ $key ] ) ) {
-				$this->show_box(
-					'error',
-					'no',
-					sprintf(
-						/* translators: 1: name of a setting of this page, 2: an example host name outside ASCII, 3: the same host name in its ASCII form */
-						esc_html__( '"%1$s" names a host outside ASCII, which this server cannot write the way a browser does because the PHP intl extension is missing, so it was left as it was. Please enter the host in its ASCII form instead, e.g. %3$s for %2$s.', 'wp-piwik' ),
-						esc_html( $url_labels[ $key ] ),
-						'<code>bücher.example</code>',
-						'<code>xn--bcher-kva.example</code>'
-					)
-				);
-				continue;
-			}
-
-			if ( ! isset( $labels[ $key ] ) ) {
-				continue;
-			}
-
-			$this->show_box(
-				'error',
-				'no',
-				sprintf(
-					/* translators: 1: name of a setting of this page, 2: an example subdomain, 3: the URL that subdomain belongs to */
-					esc_html__( '"%1$s" has to be the single name your Matomo is reachable under, e.g. %2$s of %3$s, so it was left as it was.', 'wp-piwik' ),
-					esc_html( $labels[ $key ] ),
-					'<code>acme</code>',
-					'<code>https://acme.' . ( 'piwik_user' === $key ? 'innocraft' : 'matomo' ) . '.cloud/</code>'
-				)
-			);
 		}
+	}
+
+	/**
+	 * @param string $reason one of the SaveFailure constants
+	 * @return array<int, string> the tracker hosts the failures of that reason named, each
+	 *                            once
+	 */
+	private function get_failed_hosts( $reason ) {
+		$hosts = [];
+		foreach ( self::$settings->get_save_failures( $reason ) as $failure ) {
+			$hosts[] = $failure->get_host();
+		}
+		return array_values( array_unique( $hosts ) );
 	}
 
 	/**
