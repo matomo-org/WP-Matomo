@@ -10,8 +10,10 @@ class SaveFailure {
 	const HOST_NOT_ALLOWED = 'host_not_allowed';
 
 	/**
-	 * The connection to Matomo was turned off while naming a Matomo URL the network does not
-	 * allow, so the URL was removed.
+	 * The connection WordPress uses to request reports from Matomo was turned off while it
+	 * named a Matomo URL the network does not allow, so the URL was removed. Tracking is
+	 * not part of that connection, except through the proxy script, which forwards to the
+	 * Matomo that connection names.
 	 */
 	const HOST_REMOVED = 'host_removed';
 
@@ -113,11 +115,34 @@ class SaveFailure {
 		);
 	}
 
-	public static function get_removed_hosts_message( array $hosts, array $allow_list ) {
-		return sprintf(
-			/* translators: 1: comma separated list of host names the Matomo URL named, 2: comma separated list of host names the network allows */
-			esc_html__( 'Tracking was disabled, and the Matomo URL naming %1$s was removed, because this site is not allowed to load its tracker from it. A network administrator decides which servers a site may use, and this network allows: %2$s.', 'wp-piwik' ),
-			self::format_list( $hosts ),
+	/**
+	 * @param array<int, string> $hosts      host names the removed Matomo URL named
+	 * @param array<int, string> $allow_list host names the network allows
+	 * @param string             $track_mode tracking mode of the site
+	 * @param bool               $track_feed whether the site tracks its feeds
+	 * @return string
+	 */
+	public static function get_removed_hosts_message( array $hosts, array $allow_list, $track_mode, $track_feed ) {
+		$message = sprintf(
+			/* translators: %s: comma separated list of host names the Matomo URL named */
+			esc_html__( 'The connection WordPress uses to show reports from Matomo was turned off, and the Matomo URL naming %s was removed, because this site is not allowed to load its tracker from it.', 'wp-piwik' ),
+			self::format_list( $hosts )
+		);
+
+		if ( 'proxy' === $track_mode ) {
+			$message .= ' ' . esc_html__( 'This site tracks through the proxy script, which sends every tracking request to the Matomo this connection names, so tracking has stopped until the connection names a Matomo this network allows.', 'wp-piwik' );
+		} elseif ( 'disabled' !== $track_mode ) {
+			$message .= ' ' . esc_html__( 'The tracking code of this site is not affected.', 'wp-piwik' );
+
+			// the tracking image added to feeds is sent to the Matomo URL itself
+			if ( $track_feed ) {
+				$message .= ' ' . esc_html__( 'Feed tracking has stopped, though, because the tracking pixel added to feed entries targets the Matomo URL that was removed.', 'wp-piwik' );
+			}
+		}
+
+		return $message . ' ' . sprintf(
+			/* translators: %s: comma separated list of host names the network allows */
+			esc_html__( 'A network administrator decides which servers a site may use, and this network allows: %s.', 'wp-piwik' ),
 			self::format_list( $allow_list )
 		);
 	}

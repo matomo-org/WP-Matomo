@@ -202,6 +202,50 @@ class AdminSettingsTest extends WP_Piwik_TestCase {
 		$this->assertStringContainsString( '*.matomo.cloud', $html );
 	}
 
+	public function test_show_removed_tracker_hosts_should_say_that_the_tracking_code_is_not_affected_when_the_site_does_not_track_through_the_proxy_script() {
+		$html = $this->render_removed_tracker_hosts( $this->remove_a_tracker_host_of_a_site_tracking_with( [ 'track_mode' => 'default' ] ) );
+
+		$this->assertStringContainsString( 'The tracking code of this site is not affected', $html );
+		$this->assertStringNotContainsString( 'proxy script', $html );
+		$this->assertStringNotContainsString( 'Feed tracking', $html );
+	}
+
+	public function test_show_removed_tracker_hosts_should_say_that_tracking_stopped_when_the_site_tracks_through_the_proxy_script() {
+		$html = $this->render_removed_tracker_hosts( $this->remove_a_tracker_host_of_a_site_tracking_with( [ 'track_mode' => 'proxy' ] ) );
+
+		$this->assertStringContainsString( 'tracking has stopped', $html );
+		$this->assertStringNotContainsString( 'is not affected', $html );
+	}
+
+	public function test_show_removed_tracker_hosts_should_say_that_feed_tracking_stopped_when_the_site_tracks_its_feeds() {
+		$html = $this->render_removed_tracker_hosts(
+			$this->remove_a_tracker_host_of_a_site_tracking_with(
+				[
+					'track_mode' => 'default',
+					'track_feed' => true,
+				]
+			)
+		);
+
+		$this->assertStringContainsString( 'The tracking code of this site is not affected', $html );
+		$this->assertStringContainsString( 'Feed tracking has stopped', $html );
+	}
+
+	public function test_show_removed_tracker_hosts_should_say_nothing_about_tracking_when_the_site_does_not_track() {
+		$html = $this->render_removed_tracker_hosts(
+			$this->remove_a_tracker_host_of_a_site_tracking_with(
+				[
+					'track_mode' => 'disabled',
+					'track_feed' => true,
+				]
+			)
+		);
+
+		$this->assertStringContainsString( 'evil.example.org', $html );
+		$this->assertStringNotContainsString( 'is not affected', $html );
+		$this->assertStringNotContainsString( 'has stopped', $html );
+	}
+
 	public function test_show_removed_tracker_hosts_should_show_nothing_when_the_save_removed_nothing() {
 		$this->log_in_as_a_network_site_administrator();
 		$this->allow_tracker_hosts( 'matomo.example.org' );
@@ -270,6 +314,21 @@ class AdminSettingsTest extends WP_Piwik_TestCase {
 		ob_start();
 		$admin->show_removed_tracker_hosts();
 		return ob_get_clean();
+	}
+
+	private function remove_a_tracker_host_of_a_site_tracking_with( array $tracking ) {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( '*.matomo.cloud' );
+
+		$connection = [
+			'matomo_user' => 'testuser',
+			'piwik_url'   => 'https://evil.example.org/',
+		];
+
+		$settings = $this->create_settings( array_merge( $connection, $tracking, [ 'piwik_mode' => 'cloud-matomo' ] ) );
+		$settings->apply_changes( array_merge( $connection, $tracking, [ 'piwik_mode' => 'disabled' ] ) );
+
+		return $settings;
 	}
 
 	private function render_rejected_tracker_host_entries( $settings ) {

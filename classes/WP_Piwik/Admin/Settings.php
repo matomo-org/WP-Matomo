@@ -940,7 +940,7 @@ class Settings extends \WP_Piwik\Admin {
 
 	/**
 	 * Tell the user which disallowed tracker hosts were removed after they saved
-	 * a configuration that disabled tracking.
+	 * a configuration that turned the reporting connection to Matomo off.
 	 */
 	public function show_removed_tracker_hosts() {
 		$removed = $this->get_failed_hosts( SaveFailure::HOST_REMOVED );
@@ -951,7 +951,12 @@ class Settings extends \WP_Piwik\Admin {
 		$this->show_box(
 			'error',
 			'no',
-			SaveFailure::get_removed_hosts_message( $removed, self::$settings->get_tracker_hosts()->get_allow_list() )
+			SaveFailure::get_removed_hosts_message(
+				$removed,
+				self::$settings->get_tracker_hosts()->get_allow_list(),
+				self::$settings->get_global_option( 'track_mode' ),
+				(bool) self::$settings->get_global_option( 'track_feed' )
+			)
 		);
 	}
 

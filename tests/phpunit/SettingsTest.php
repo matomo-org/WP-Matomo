@@ -1354,6 +1354,123 @@ class SettingsTest extends WP_Piwik_TestCase {
 		$this->assertSame( [], $this->get_failed_hosts( $settings, SaveFailure::HOST_NOT_ALLOWED ) );
 	}
 
+	public function test_apply_changes_should_let_a_site_of_a_network_change_to_a_cloud_and_name_its_subdomain_in_the_same_save() {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( [ 'matomo.example.org', '*.matomo.cloud' ] );
+
+		$settings = $this->create_settings(
+			[
+				'piwik_mode' => 'http',
+				'piwik_url'  => 'https://matomo.example.org/',
+			]
+		);
+
+		$settings->apply_changes(
+			[
+				'piwik_mode'  => 'cloud-matomo',
+				'piwik_url'   => 'https://matomo.example.org/',
+				'matomo_user' => 'acme',
+			]
+		);
+
+		$this->assertSame( 'cloud-matomo', $settings->get_global_option( 'piwik_mode' ) );
+		$this->assertSame( 'https://acme.matomo.cloud/', $settings->get_matomo_url() );
+		$this->assertSame( [], $settings->get_save_failures() );
+	}
+
+	public function test_apply_changes_should_keep_the_connection_method_of_a_site_of_a_network_when_the_cloud_subdomain_it_changes_to_is_not_allowed() {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( 'matomo.example.org' );
+
+		$settings = $this->create_settings(
+			[
+				'piwik_mode' => 'http',
+				'piwik_url'  => 'https://matomo.example.org/',
+			]
+		);
+
+		$settings->apply_changes(
+			[
+				'piwik_mode'  => 'cloud-matomo',
+				'piwik_url'   => 'https://matomo.example.org/',
+				'matomo_user' => 'acme',
+			]
+		);
+
+		// the refused subdomain leaves none stored, so the cloud would name no Matomo at all
+		$this->assertSame( 'http', $settings->get_global_option( 'piwik_mode' ) );
+		$this->assertSame( 'https://matomo.example.org/', $settings->get_matomo_url() );
+		$this->assertSame( [ 'acme.matomo.cloud' ], $this->get_failed_hosts( $settings, SaveFailure::HOST_NOT_ALLOWED ) );
+	}
+
+	public function test_apply_changes_should_keep_the_connection_method_when_the_cloud_subdomain_it_changes_to_is_not_a_host_name_label() {
+		$this->log_in_as_a_user_who_may_publish_script();
+
+		$settings = $this->create_settings(
+			[
+				'piwik_mode' => 'http',
+				'piwik_url'  => 'https://matomo.example.org/',
+			]
+		);
+
+		$settings->apply_changes(
+			[
+				'piwik_mode' => 'cloud',
+				'piwik_url'  => 'https://matomo.example.org/',
+				'piwik_user' => 'Acme Corp',
+			]
+		);
+
+		$this->assertSame( 'http', $settings->get_global_option( 'piwik_mode' ) );
+		$this->assertEquals( [ new SaveFailure( SaveFailure::INVALID_SUBDOMAIN, 'piwik_user' ) ], $settings->get_save_failures() );
+	}
+
+	public function test_apply_changes_should_keep_the_connection_method_of_a_site_of_a_network_when_the_matomo_url_it_changes_to_is_not_allowed() {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( '*.matomo.cloud' );
+
+		$settings = $this->create_settings(
+			[
+				'piwik_mode'  => 'cloud-matomo',
+				'matomo_user' => 'acme',
+			]
+		);
+
+		$settings->apply_changes(
+			[
+				'piwik_mode'  => 'http',
+				'matomo_user' => 'acme',
+				'piwik_url'   => 'https://evil.example.org/',
+			]
+		);
+
+		$this->assertSame( 'cloud-matomo', $settings->get_global_option( 'piwik_mode' ) );
+		$this->assertSame( 'https://acme.matomo.cloud/', $settings->get_matomo_url() );
+	}
+
+	public function test_apply_changes_should_let_a_site_of_a_network_turn_its_connection_off_when_the_matomo_url_it_submits_is_not_allowed() {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( 'matomo.example.org' );
+
+		$settings = $this->create_settings(
+			[
+				'piwik_mode' => 'http',
+				'piwik_url'  => 'https://matomo.example.org/',
+			]
+		);
+
+		$settings->apply_changes(
+			[
+				'piwik_mode' => 'disabled',
+				'piwik_url'  => 'https://evil.example.org/',
+			]
+		);
+
+		$this->assertSame( 'disabled', $settings->get_global_option( 'piwik_mode' ) );
+		$this->assertSame( 'https://matomo.example.org/', $settings->get_global_option( 'piwik_url' ) );
+		$this->assertSame( [ 'evil.example.org' ], $this->get_failed_hosts( $settings, SaveFailure::HOST_NOT_ALLOWED ) );
+	}
+
 	public function test_apply_changes_should_let_a_network_administrator_change_to_any_connection_method() {
 		$this->skip_unless_multisite();
 		$this->log_in_as_a_user_who_may_publish_script();

@@ -572,6 +572,16 @@ class Settings {
 			return $value; // the mode is not changing, so there is nothing to check
 		}
 
+		// the associated value the new piwik mode uses was refused earlier in this save, so
+		// the stored one was kept. since this value is required for the new piwik mode to work,
+		// we also abort changing the piwik mode. turning the connection off is never refused.
+		if (
+			'disabled' !== $value
+			&& ! empty( $this->get_save_failures_of_setting( $this->get_setting_of_mode( $value ) ) )
+		) {
+			return $stored;
+		}
+
 		$matomo = $this->get_matomo_url_of_mode( $value, $in );
 		if ( '' === trim( $matomo ) ) {
 			return $value; // the method names no Matomo, so the tracker moves nowhere
@@ -603,6 +613,37 @@ class Settings {
 		}
 
 		return $value;
+	}
+
+	/**
+	 * @param string $piwik_mode connection method
+	 * @return string the setting that names the Matomo of that connection method
+	 */
+	private function get_setting_of_mode( $piwik_mode ) {
+		if ( 'cloud' === $piwik_mode ) {
+			return 'piwik_user';
+		}
+
+		if ( 'cloud-matomo' === $piwik_mode ) {
+			return 'matomo_user';
+		}
+
+		return 'piwik_url';
+	}
+
+	/**
+	 * @param string $setting setting the failures were recorded for
+	 * @return array<int, SaveFailure> failures of that setting in the current save
+	 */
+	private function get_save_failures_of_setting( $setting ) {
+		return array_values(
+			array_filter(
+				$this->save_failures,
+				function ( SaveFailure $failure ) use ( $setting ) {
+					return $failure->get_setting() === $setting;
+				}
+			)
+		);
 	}
 
 	private function get_matomo_url_of_mode( $piwik_mode, $in ) {
