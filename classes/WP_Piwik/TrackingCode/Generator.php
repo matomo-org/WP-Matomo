@@ -26,7 +26,7 @@ class Generator {
 	 */
 	public function generate( $id_site, $matomo_url, array $options = array() ) {
 		$options = array_merge( $this->get_default_options(), $options );
-		$host    = $this->get_tracker_host( $matomo_url );
+		$host    = self::get_tracker_host( $matomo_url );
 		$id_site = (int) $id_site;
 
 		// no protocol so it uses whatever the page was loaded with
@@ -203,15 +203,26 @@ class Generator {
 	}
 
 	/**
+	 * Get the URL the tracking code loads the tracker from
+	 *
+	 * @param string $matomo_url URL of the Matomo instance
+	 * @return string protocol relative URL, empty when the Matomo URL names no server
+	 */
+	public static function get_tracker_url( $matomo_url ) {
+		$host = self::get_tracker_host( $matomo_url );
+		return '' === $host ? '' : '//' . $host . '/';
+	}
+
+	/**
 	 * @param string $matomo_url URL of the Matomo instance
 	 * @return string host and path, without a protocol or a trailing slash
 	 */
-	private function get_tracker_host( $matomo_url ) {
-		$matomo_url = (string) $matomo_url;
+	private static function get_tracker_host( $matomo_url ) {
+		$matomo_url = self::normalize_url( $matomo_url );
 
 		// check if the protocol is in the URL
 		if ( ! preg_match( '~^([A-Za-z][A-Za-z0-9+.-]*)://(.*?)$~D', $matomo_url, $matches ) ) {
-			return rtrim( self::strip_what_a_url_cannot_hold( $matomo_url ), '/' );
+			return trim( $matomo_url, '/' );
 		}
 
 		// the tracker is loaded over the protocol of the page, so a Matomo reachable over
@@ -220,7 +231,9 @@ class Generator {
 			return '';
 		}
 
-		return rtrim( self::strip_what_a_url_cannot_hold( $matches[2] ), '/' );
+		// the browser skips extra slashes after the protocol as well, so
+		// 'https:///stats.example.org' names stats.example.org
+		return trim( $matches[2], '/' );
 	}
 
 	/**
@@ -233,6 +246,97 @@ class Generator {
 		// the unreserved and reserved characters of RFC 3986, plus the percent sign of an
 		// escape sequence, minus the apostrophe
 		return preg_replace( '/[^A-Za-z0-9\-._~:\/?#\[\]@!$&()*+,;=%]/', '', (string) $url );
+	}
+
+	/**
+	 * Read a URL the way the tracking code writes it out: encoded the way a browser sends
+	 * it, then stripped of every character a URL cannot hold.
+	 *
+	 * @param string $url URL as it was typed or stored
+	 * @return string the same URL, empty when it names a host this server cannot write in ASCII
+	 */
+	public static function normalize_url( $url ) {
+		$url = self::encode_what_a_url_cannot_hold( $url );
+		return null === $url ? '' : self::strip_what_a_url_cannot_hold( $url );
+	}
+
+	/**
+	 * Encode the characters of a URL a browser encodes before sending it: a host outside
+	 * ASCII is written in its punycode form, and a space or a byte outside ASCII anywhere
+	 * else is percent encoded.
+	 *
+	 * Dropping them the way strip_what_a_url_cannot_hold() does, can end up naming another
+	 * server, eg, statistik.bücher.de would become statistik.bcher.de.
+	 *
+	 * @param string $url URL as it was typed or stored
+	 * @return string|null the encoded URL, surrounding whitespace removed. null when it names
+	 *                     a host outside ASCII that this server cannot write in ASCII.
+	 */
+	public static function encode_what_a_url_cannot_hold( $url ) {
+		$url = trim( (string) $url );
+		if ( ! preg_match( '/[ \x80-\xff]/', $url ) ) {
+			return $url; // nothing a browser would encode
+		}
+
+		// the host follows the protocol and the slashes after it, and ends where the path,
+		// the query or the fragment begins. a browser reads a backslash as a slash.
+		preg_match( '~^((?:[A-Za-z][A-Za-z0-9+.\-]*:)?[/\\\\]*)([^/\\\\?#]*)(.*)$~sD', $url, $parts );
+		list( , $before_host, $authority, $after_host ) = $parts;
+
+		// a user name and password may precede the host
+		$at       = strrpos( $authority, '@' );
+		$userinfo = false === $at ? '' : substr( $authority, 0, $at + 1 );
+		$host     = false === $at ? $authority : substr( $authority, $at + 1 );
+
+		if ( preg_match( '/[\x80-\xff]/', $host ) ) {
+			// a host outside ASCII holds no colon, so the first one begins the port
+			preg_match( '/^([^:]*)(.*)$/sD', $host, $host_parts );
+			$ascii_host = self::to_ascii_host( $host_parts[1] );
+			if ( null === $ascii_host ) {
+				return null;
+			}
+			$host = $ascii_host . $host_parts[2];
+		}
+
+		return $before_host . self::percent_encode( $userinfo ) . $host . self::percent_encode( $after_host );
+	}
+
+	/**
+	 * Write a host name outside ASCII the way a browser resolves it
+	 *
+	 * @param string $host host name outside ASCII
+	 * @return string|null the host in its punycode form, null when there is none
+	 */
+	public static function to_ascii_host( $host ) {
+		if ( ! function_exists( 'idn_to_ascii' ) ) {
+			// without the intl extension there is no way to write the host the way a browser does
+			return null;
+		}
+
+		// the flags a browser reads a host with. without IDNA_NONTRANSITIONAL_TO_ASCII, an ICU
+		// older than 76 maps characters a browser keeps, eg, faß.de would become fass.de, which
+		// is another server.
+		$ascii = idn_to_ascii(
+			$host,
+			IDNA_NONTRANSITIONAL_TO_ASCII | IDNA_CHECK_BIDI | IDNA_CHECK_CONTEXTJ,
+			INTL_IDNA_VARIANT_UTS46
+		);
+		return is_string( $ascii ) && '' !== $ascii ? $ascii : null;
+	}
+
+	/**
+	 * @param string $value part of a URL
+	 * @return string the same, with every space and byte outside ASCII percent encoded
+	 */
+	private static function percent_encode( $value ) {
+		// only encoding specific characters
+		return preg_replace_callback(
+			'/[ \x80-\xff]/',
+			function ( $matches ) {
+				return rawurlencode( $matches[0] );
+			},
+			$value
+		);
 	}
 
 	/**

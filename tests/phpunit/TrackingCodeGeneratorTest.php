@@ -174,11 +174,86 @@ class TrackingCodeGeneratorTest extends WP_Piwik_TestCase {
 		$this->assertStringContainsString( 'var u="///";', $code );
 	}
 
+	/**
+	 * @dataProvider get_matomo_urls_hiding_the_protocol_behind_a_server
+	 */
+	public function test_generate_should_not_load_the_tracker_from_a_server_named_before_a_hidden_protocol( $matomo_url ) {
+		$code = $this->generator->generate( 1, $matomo_url );
+
+		$this->assertStringContainsString( 'var u="///";', $code );
+		$this->assertStringNotContainsString( 'evil.example.org', $code );
+	}
+
+	public function get_matomo_urls_hiding_the_protocol_behind_a_server() {
+		return [
+			'behind a space'       => [ ' evil.example.org://stats.example.org/' ],
+			'behind a tab'         => [ "\tevil.example.org://stats.example.org/" ],
+			'holding a line break' => [ "evil.example.org://stats.example.org/\nmatomo/" ],
+		];
+	}
+
+	public function test_generate_should_track_into_a_matomo_whose_url_is_surrounded_by_whitespace() {
+		$code = $this->generator->generate( 1, " https://stats.example.org/\n" );
+
+		$this->assertStringContainsString( 'var u="//stats.example.org/";', $code );
+	}
+
 	public function test_generate_should_track_the_site_matomo_knows_the_blog_as() {
 		$code = $this->generator->generate( '7 or 1=1', 'https://stats.example.org/', [ 'track_no_script' => true ] );
 
 		$this->assertStringContainsString( "_paq.push(['setSiteId', '7']);", $code );
 		$this->assertStringContainsString( 'matomo.php?idsite=7&amp;rec=1', $code );
+	}
+
+	public function test_get_tracker_url_should_name_the_url_the_tracking_code_loads_the_tracker_from() {
+		$this->assertSame( '//stats.example.org/matomo/', Generator::get_tracker_url( 'https://stats.example.org/matomo' ) );
+	}
+
+	public function test_get_tracker_url_should_name_a_protocol_relative_matomo_url_the_way_a_browser_reads_it() {
+		$this->assertSame( '//stats.example.org/matomo/', Generator::get_tracker_url( '//stats.example.org/matomo/' ) );
+	}
+
+	public function test_get_tracker_url_should_name_a_matomo_url_with_extra_slashes_after_the_protocol_the_way_a_browser_reads_it() {
+		$this->assertSame( '//stats.example.org/matomo/', Generator::get_tracker_url( 'https:///stats.example.org/matomo/' ) );
+	}
+
+	public function test_get_tracker_url_should_name_a_host_outside_ascii_the_way_a_browser_reads_it() {
+		$this->assertSame( '//statistik.xn--bcher-kva.example/matomo/', Generator::get_tracker_url( "https://statistik.b\xc3\xbccher.example/matomo/" ) );
+	}
+
+	public function test_get_tracker_url_should_percent_encode_a_path_outside_ascii_the_way_a_browser_does() {
+		$this->assertSame( '//stats.example.org/st%C3%A4ts%20matomo/', Generator::get_tracker_url( "https://stats.example.org/st\xc3\xa4ts matomo/" ) );
+	}
+
+	public function test_encode_what_a_url_cannot_hold_should_leave_the_port_and_the_user_of_a_host_outside_ascii_in_place() {
+		$this->assertSame(
+			'https://%C3%BCser@statistik.xn--bcher-kva.example:8080/',
+			Generator::encode_what_a_url_cannot_hold( "https://\xc3\xbcser@statistik.b\xc3\xbccher.example:8080/" )
+		);
+	}
+
+	public function test_encode_what_a_url_cannot_hold_should_leave_the_query_the_fragment_and_existing_escapes_of_a_url_in_place() {
+		$this->assertSame(
+			'https://stats.example.org/st%C3%A4ts/?a=1&b=%41#top',
+			Generator::encode_what_a_url_cannot_hold( "https://stats.example.org/st\xc3\xa4ts/?a=1&b=%41#top" )
+		);
+	}
+
+	public function test_encode_what_a_url_cannot_hold_should_leave_a_url_in_ascii_as_it_is() {
+		$this->assertSame( 'https://stats.example.org/matomo/', Generator::encode_what_a_url_cannot_hold( ' https://stats.example.org/matomo/ ' ) );
+	}
+
+	public function test_encode_what_a_url_cannot_hold_should_write_a_host_with_a_sharp_s_the_way_a_browser_does() {
+		$this->assertSame( 'https://matomo.xn--fa-hia.de/', Generator::encode_what_a_url_cannot_hold( "https://matomo.fa\xc3\x9f.de/" ) );
+	}
+
+	public function test_encode_what_a_url_cannot_hold_should_refuse_a_host_a_browser_refuses() {
+		// a zero width joiner is only allowed after a virama, a browser rejects this host
+		$this->assertNull( Generator::encode_what_a_url_cannot_hold( "https://a\xe2\x80\x8db.example/" ) );
+	}
+
+	public function test_get_tracker_url_should_name_nothing_for_a_matomo_a_browser_cannot_reach() {
+		$this->assertSame( '', Generator::get_tracker_url( 'ftp://stats.example.org/' ) );
 	}
 
 	/**

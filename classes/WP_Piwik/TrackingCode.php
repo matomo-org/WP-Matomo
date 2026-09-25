@@ -95,8 +95,10 @@ class TrackingCode {
 				$code
 			);
 		}
-		$cdn_url     = self::strip_what_the_html_parser_reads( $settings->get_global_option( 'track_cdnurl' ) );
-		$cdn_url_ssl = self::strip_what_the_html_parser_reads( $settings->get_global_option( 'track_cdnurlssl' ) );
+
+		$cdn_url     = self::normalize_cdn_url( $settings->get_global_option( 'track_cdnurl' ) );
+		$cdn_url_ssl = self::normalize_cdn_url( $settings->get_global_option( 'track_cdnurlssl' ) );
+
 		if ( $cdn_url || $cdn_url_ssl ) {
 			$secure_url   = wp_json_encode( 'https://' . ( $cdn_url_ssl ? $cdn_url_ssl : $cdn_url ) . '/' );
 			$insecure_url = wp_json_encode( 'http://' . ( $cdn_url ? $cdn_url : $cdn_url_ssl ) . '/' );
@@ -263,6 +265,27 @@ EOF;
 			'noscript' => $no_script,
 			'proxy'    => $fetched_proxy_url,
 		);
+	}
+
+	/**
+	 * Read a CDN URL the way the tracking code writes it out, behind a protocol of its own.
+	 *
+	 * @param mixed $cdn_url CDN URL as it was typed or stored
+	 * @return string host and path, without a protocol or a trailing slash, empty when
+	 *                there are none
+	 */
+	public static function normalize_cdn_url( $cdn_url ) {
+		if ( ! is_string( $cdn_url ) ) {
+			return '';
+		}
+
+		$cdn_url = \WP_Piwik\TrackingCode\Generator::normalize_url( $cdn_url );
+
+		// every leading protocol and slash, so 'https://https://cdn.example.org' and
+		// '//cdn.example.org' name cdn.example.org as well
+		$cdn_url = preg_replace( '~^(?:(?:https?:)?/+)+~i', '', $cdn_url );
+
+		return rtrim( $cdn_url, '/' );
 	}
 
 	/**

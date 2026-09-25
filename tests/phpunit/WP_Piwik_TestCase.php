@@ -56,7 +56,13 @@ abstract class WP_Piwik_TestCase extends \WP_UnitTestCase {
 
 		if ( is_multisite() ) {
 			// network wide state lives in sitemeta, which the query below does not reach
-			delete_site_option( \WP_Piwik::MANUAL_TRACKING_REVIEW_OPTION );
+			// phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- test cleanup, rolled back with the test transaction
+			$meta_keys = $wpdb->get_col(
+				"SELECT meta_key FROM {$wpdb->sitemeta} WHERE meta_key LIKE 'wp-piwik%'"
+			);
+			foreach ( $meta_keys as $meta_key ) {
+				delete_site_option( $meta_key );
+			}
 			delete_site_transient( \WP_Piwik\Settings::MANUAL_TRACKING_SITES_CACHE );
 		}
 

@@ -2,6 +2,8 @@
 
 namespace WP_Piwik;
 
+use WP_Piwik\Settings\SaveFailure;
+
 /**
  * Manage WP-Piwik settings
  *
@@ -68,6 +70,8 @@ class Settings {
 		// checked first
 		'track_mode'              => 'check_track_mode',
 		'piwik_url'               => 'check_piwik_url',
+		'piwik_user'              => 'check_cloud_subdomain',
+		'matomo_user'             => 'check_cloud_subdomain',
 		'piwik_token'             => 'check_piwik_token',
 		'site_id'                 => 'request_piwik_site_id',
 		'tracking_code'           => 'prepare_tracking_code',
@@ -186,13 +190,25 @@ class Settings {
 	private $settings_changed = false;
 
 	/**
+	 * @var array<int, SaveFailure> values the last configuration save attempt did not store
+	 *                              as they were submitted.
+	 */
+	private $save_failures = [];
+
+	/**
+	 * @var TrackerHosts
+	 */
+	private $tracker_hosts;
+
+	/**
 	 * Constructor class to prepare settings manager
 	 *
 	 * @param \WP_Piwik $wp_piwik
 	 *          active WP-Piwik instance
 	 */
 	public function __construct( $wp_piwik ) {
-		self::$wp_piwik = $wp_piwik;
+		self::$wp_piwik      = $wp_piwik;
+		$this->tracker_hosts = new TrackerHosts();
 		self::$wp_piwik->log( 'Store default settings' );
 		self::$default_settings = array(
 			'globalSettings' => $this->global_settings,
@@ -387,7 +403,21 @@ class Settings {
 		// make sure the version history does not change
 		$version_history = $this->get_global_option( 'version_history' );
 
+		// ensure a value for piwik_mode is set so that the check_settings() call below
+		// will validate any associated Matomo URLs properly
+		if ( ! isset( $in['piwik_mode'] ) ) {
+			$in['piwik_mode'] = self::$default_settings['globalSettings']['piwik_mode'];
+		}
+
 		$in = $this->check_settings( $in );
+
+		// the connection was turned off while it named a Matomo URL the network does not
+		// allow. we remove the URL explicitly so it can't be turned on accidentally afterwards.
+		// note: check_piwik_url() keeps a URL that is not changing, so it must be dropped here.
+		if ( ! empty( $this->get_save_failures( SaveFailure::HOST_REMOVED ) ) ) {
+			$in['piwik_url'] = '';
+		}
+
 		self::$wp_piwik->log( 'Apply changed settings:' );
 		foreach ( self::$default_settings ['globalSettings'] as $key => $val ) {
 			$this->set_global_option( $key, isset( $in [ $key ] ) ? $in [ $key ] : $val );
@@ -407,10 +437,14 @@ class Settings {
 	/**
 	 * Apply callback function on new settings
 	 *
+	 * Every callback is handed the value, the whole configuration set and the key it was
+	 * registered under, so one callback can serve several keys.
+	 *
 	 * @param array $in new configuration set
 	 * @return array configuration set after callback functions were applied
 	 */
 	private function check_settings( $in ) {
+		$this->save_failures = [];
 		foreach ( $this->check_settings as $key => $value ) {
 			if ( isset( $in [ $key ] ) ) {
 				$in [ $key ] = call_user_func_array(
@@ -421,6 +455,7 @@ class Settings {
 					array(
 						$in [ $key ],
 						$in,
+						$key,
 					)
 				);
 			}
@@ -437,11 +472,68 @@ class Settings {
 	 * @phpstan-ignore method.unused
 	 */
 	private function check_piwik_url( $value ) {
-		$value = (string) $value;
-		if ( '' === trim( $value ) ) {
+		// the URL is stored the way the tracking code writes it out, since the proxy script, the
+		// opt-out iframe and the REST client read the stored value rather than the tracking code
+		$value = \WP_Piwik\TrackingCode\Generator::encode_what_a_url_cannot_hold( $value );
+		if ( null === $value ) {
+			// dropping what the host cannot be encoded to would name another server, so
+			// we must reject it instead.
+			$this->reject_unconvertible_host( 'piwik_url' );
+			return (string) $this->get_global_option( 'piwik_url' );
+		}
+
+		$value = \WP_Piwik\TrackingCode\Generator::strip_what_a_url_cannot_hold( $value );
+		if ( '' === $value ) {
 			return ''; // no URL, don't add a slash
 		}
-		return substr( $value, - 1, 1 ) !== '/' ? $value . '/' : $value;
+
+		$value = substr( $value, - 1, 1 ) !== '/' ? $value . '/' : $value;
+
+		// an earlier version stored the URL as it was typed, so it is read the way the new
+		// one is before the two are compared
+		$stored = (string) $this->get_global_option( 'piwik_url' );
+		if (
+			\WP_Piwik\TrackingCode\Generator::normalize_url( $stored ) !== $value
+			&& ! $this->may_current_user_track_via_matomo( $value )
+		) {
+			return $stored; // keep the Matomo the network allows
+		}
+
+		return $value;
+	}
+
+	/**
+	 * Check the subdomain of a cloud hosted Matomo
+	 *
+	 * @param mixed  $value new subdomain
+	 * @param array  $in configuration set
+	 * @param string $key setting the subdomain belongs to
+	 * @return string subdomain
+	 * @phpstan-ignore method.unused
+	 */
+	private function check_cloud_subdomain( $value, $in, $key ) {
+		$value = is_string( $value ) ? strtolower( trim( $value ) ) : '';
+		if ( '' === $value ) {
+			return '';
+		}
+
+		$stored = (string) $this->get_global_option( $key );
+		if ( strtolower( trim( $stored ) ) === $value ) {
+			return $value; // nothing is changing, so there is nothing to check
+		}
+
+		if ( ! preg_match( '/^[a-z0-9]([a-z0-9\-]*[a-z0-9])?$/', $value ) ) {
+			// the subdomain looks incorrect or malicious, so reject it
+			$this->save_failures[] = new SaveFailure( SaveFailure::INVALID_SUBDOMAIN, $key );
+			return $stored;
+		}
+
+		$domain = 'piwik_user' === $key ? '.innocraft.cloud' : '.matomo.cloud';
+		if ( ! $this->may_current_user_track_via( $key, 'https://' . $value . $domain . '/' ) ) {
+			return $stored; // keep the cloud the network allows
+		}
+
+		return $value;
 	}
 
 	/**
@@ -468,12 +560,109 @@ class Settings {
 	}
 
 
-	public function check_piwik_mode( $value ) {
+	public function check_piwik_mode( $value, $in = array() ) {
+		$stored = (string) $this->get_global_option( 'piwik_mode' );
+
 		$options = $this->get_matomo_mode_options();
 		if ( ! in_array( $value, array_keys( $options ), true ) ) {
-			return $this->get_global_option( 'piwik_mode' );
+			return $stored; // invalid mode
 		}
+
+		if ( $value === $stored ) {
+			return $value; // the mode is not changing, so there is nothing to check
+		}
+
+		// the associated value the new piwik mode uses was refused earlier in this save, so
+		// the stored one was kept. since this value is required for the new piwik mode to work,
+		// we also abort changing the piwik mode. turning the connection off is never refused.
+		if (
+			'disabled' !== $value
+			&& ! empty( $this->get_save_failures_of_setting( $this->get_setting_of_mode( $value ) ) )
+		) {
+			return $stored;
+		}
+
+		$matomo = $this->get_matomo_url_of_mode( $value, $in );
+		if ( '' === trim( $matomo ) ) {
+			return $value; // the method names no Matomo, so the tracker moves nowhere
+		}
+
+		if ( trim( $matomo ) === trim( $this->get_matomo_url_of_mode( $stored, $in ) ) ) {
+			// the target matomo is not changing. in this case we do not check if the
+			// current user can use this target, because it was already saved, and the
+			// current user is not trying to change it.
+			return $value;
+		}
+
+		// turning the connection off is never refused. it names the Matomo URL, which this
+		// site was not using, so a URL the network does not allow is removed instead of
+		// being kept for the site to connect to later.
+		$tracker_url = \WP_Piwik\TrackingCode\Generator::get_tracker_url( $matomo );
+		if ( 'disabled' === $value && ! $this->tracker_hosts->is_allowed_for_current_user( $tracker_url ) ) {
+			$this->save_failures[] = new SaveFailure(
+				SaveFailure::HOST_REMOVED,
+				'piwik_mode',
+				$this->get_host_to_report( $tracker_url, $matomo )
+			);
+			return $value;
+		}
+
+		if ( ! $this->may_current_user_track_via( 'piwik_mode', $tracker_url, $matomo ) ) {
+			// the method names a Matomo the network does not allow, keep the existing value
+			return $stored;
+		}
+
 		return $value;
+	}
+
+	/**
+	 * @param string $piwik_mode connection method
+	 * @return string the setting that names the Matomo of that connection method
+	 */
+	private function get_setting_of_mode( $piwik_mode ) {
+		if ( 'cloud' === $piwik_mode ) {
+			return 'piwik_user';
+		}
+
+		if ( 'cloud-matomo' === $piwik_mode ) {
+			return 'matomo_user';
+		}
+
+		return 'piwik_url';
+	}
+
+	/**
+	 * @param string $setting setting the failures were recorded for
+	 * @return array<int, SaveFailure> failures of that setting in the current save
+	 */
+	private function get_save_failures_of_setting( $setting ) {
+		return array_values(
+			array_filter(
+				$this->save_failures,
+				function ( SaveFailure $failure ) use ( $setting ) {
+					return $failure->get_setting() === $setting;
+				}
+			)
+		);
+	}
+
+	private function get_matomo_url_of_mode( $piwik_mode, $in ) {
+		// a cloud is named the way get_matomo_url() writes it out. read without its
+		// protocol, a subdomain such as 'evil.example.org://acme' would be taken for a URL
+		// of its own, whose host is the cloud rather than the server the browser loads.
+		if ( 'cloud' === $piwik_mode ) {
+			$subdomain = $this->get_submitted_option( $in, 'piwik_user' );
+			return '' === trim( $subdomain ) ? '' : 'https://' . $subdomain . '.innocraft.cloud/';
+		}
+
+		if ( 'cloud-matomo' === $piwik_mode ) {
+			$subdomain = $this->get_submitted_option( $in, 'matomo_user' );
+			return '' === trim( $subdomain ) ? '' : 'https://' . $subdomain . '.matomo.cloud/';
+		}
+
+		// every other connection method names the Matomo by URL, or by a file path that
+		// names no host at all
+		return $this->get_submitted_option( $in, 'piwik_url' );
 	}
 
 	/**
@@ -543,17 +732,136 @@ class Settings {
 	}
 
 	/**
-	 * Drop from a CDN URL every character a URL cannot hold.
+	 * Read a CDN URL the way the tracking code writes it out, see
+	 * TrackingCode::normalize_cdn_url(), and refuse every host the network does not allow
+	 * the current user to serve the tracker from.
 	 *
-	 * @param mixed $value new CDN URL
+	 * @param mixed  $value new CDN URL
+	 * @param array  $in configuration set
+	 * @param string $key setting the CDN URL belongs to
 	 * @return string CDN URL
 	 * @phpstan-ignore method.unused
 	 */
-	private function check_cdn_url( $value ) {
-		if ( ! is_string( $value ) ) {
+	private function check_cdn_url( $value, $in, $key ) {
+		if ( is_string( $value ) && null === \WP_Piwik\TrackingCode\Generator::encode_what_a_url_cannot_hold( $value ) ) {
+			// dropping what the host cannot be encoded to would name another server
+			$this->reject_unconvertible_host( $key );
+			return (string) $this->get_global_option( $key );
+		}
+
+		$value = \WP_Piwik\TrackingCode::normalize_cdn_url( $value );
+		if ( '' === $value ) {
 			return '';
 		}
-		return \WP_Piwik\TrackingCode\Generator::strip_what_a_url_cannot_hold( $value );
+
+		// an earlier version stored the CDN URL as it was typed, so it is read the way the
+		// new one is before the two are compared
+		$stored = (string) $this->get_global_option( $key );
+
+		// the CDN URL is checked the way the tracking code writes it out, behind a protocol.
+		if (
+			\WP_Piwik\TrackingCode::normalize_cdn_url( $stored ) !== $value
+			&& ! $this->may_current_user_track_via( $key, 'https://' . $value . '/' )
+		) {
+			return $stored; // keep the CDN the network allows
+		}
+
+		return $value;
+	}
+
+	/**
+	 * @param string $key setting the value was submitted for
+	 */
+	private function reject_unconvertible_host( $key ) {
+		// without the intl extension no host outside ASCII can be converted, otherwise it
+		// was the host itself that could not be
+		$reason = function_exists( 'idn_to_ascii' ) ? SaveFailure::HOST_NOT_CONVERTIBLE : SaveFailure::HOST_NEEDS_INTL;
+
+		$this->save_failures[] = new SaveFailure( $reason, $key );
+	}
+
+	/**
+	 * @param string      $key setting the URL was submitted for
+	 * @param string      $url tracker URL, CDN URL or bare host
+	 * @param string|null $written the value the URL was read from, to report when the URL
+	 *                             names no host
+	 * @return boolean
+	 */
+	private function may_current_user_track_via( $key, $url, $written = null ) {
+		if ( $this->tracker_hosts->is_allowed_for_current_user( $url ) ) {
+			return true;
+		}
+
+		$this->save_failures[] = new SaveFailure(
+			SaveFailure::HOST_NOT_ALLOWED,
+			$key,
+			$this->get_host_to_report( $url, $written )
+		);
+
+		return false;
+	}
+
+	/**
+	 * @param string $matomo_url Matomo URL as the settings name it
+	 * @return boolean
+	 */
+	private function may_current_user_track_via_matomo( $matomo_url ) {
+		// the Matomo URL is checked the way the tracking code writes it out. eg, read on its
+		// own, ' evil.example.org://stats.example.org' would name stats.example.org, while
+		// the browser loads the tracker from evil.example.org.
+		return $this->may_current_user_track_via(
+			'piwik_url',
+			\WP_Piwik\TrackingCode\Generator::get_tracker_url( $matomo_url ),
+			$matomo_url
+		);
+	}
+
+	/**
+	 * @param string      $url tracker URL, CDN URL or bare host
+	 * @param string|null $written the value the URL was read from, to report when the URL
+	 *                             names no host
+	 * @return string the host the value names, or the value itself when it names none
+	 */
+	private function get_host_to_report( $url, $written = null ) {
+		$host = $this->tracker_hosts->host_from_url( $url );
+		if ( '' !== $host ) {
+			return $host;
+		}
+
+		return trim( (string) ( null === $written ? $url : $written ) );
+	}
+
+	/**
+	 * Get the hosts a site of this network may load its tracker from
+	 *
+	 * @return TrackerHosts
+	 */
+	public function get_tracker_hosts() {
+		return $this->tracker_hosts;
+	}
+
+	/**
+	 * Get the values the last configuration save attempt did not store as they were
+	 * submitted.
+	 *
+	 * @param string|null $reason_filter one of the SaveFailure constants, to get only the failures
+	 *                                   of that reason
+	 * @return array<int, SaveFailure> failures in the order they occurred, empty when every
+	 *                                 value was stored
+	 */
+	public function get_save_failures( $reason_filter = null ) {
+		if ( null === $reason_filter ) {
+			return $this->save_failures;
+		}
+
+		return array_values(
+			array_filter(
+				$this->save_failures,
+				function ( SaveFailure $failure ) use ( $reason_filter ) {
+					return $failure->get_reason() === $reason_filter;
+				}
+			)
+		);
 	}
 
 	/**
@@ -732,10 +1040,11 @@ class Settings {
 	 * @return string tracking mode
 	 */
 	private function get_submitted_track_mode( $in ) {
-		return isset( $in['track_mode'] )
-			? $in['track_mode']
-			// fall back to the stored tracking code if nothing is in the submitted form
-			: $this->get_global_option( 'track_mode' );
+		return $this->get_submitted_option( $in, 'track_mode' );
+	}
+
+	private function get_submitted_option( $in, $key ) {
+		return (string) ( isset( $in[ $key ] ) ? $in[ $key ] : $this->get_global_option( $key ) );
 	}
 
 	/**
