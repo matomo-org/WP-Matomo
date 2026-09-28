@@ -159,6 +159,27 @@ HTACCESS
 	echo "    wrote .htaccess"
 }
 
+write_multisite_constants() {
+	local path="$1" domain site_path
+
+	read -r domain site_path < <(wp db query "SELECT domain, path FROM wpms_site WHERE id = 1" --skip-column-names --path="$path")
+	echo "    network tables exist but wp-config.php lacks the multisite constants, adding them"
+	wp config set WP_ALLOW_MULTISITE true --raw --type=constant --path="$path"
+	wp config set MULTISITE true --raw --type=constant --path="$path"
+	wp config set SUBDOMAIN_INSTALL false --raw --type=constant --path="$path"
+	wp config set base "$site_path" --type=variable --path="$path"
+	wp config set DOMAIN_CURRENT_SITE "$domain" --type=constant --path="$path"
+	wp config set PATH_CURRENT_SITE "$site_path" --type=constant --path="$path"
+	wp config set SITE_ID_CURRENT_SITE 1 --raw --type=constant --path="$path"
+	wp config set BLOG_ID_CURRENT_SITE 1 --raw --type=constant --path="$path"
+}
+
+follow_sitename() {
+	local path="$1"
+
+	wp config set DOMAIN_CURRENT_SITE "getenv( 'DDEV_SITENAME' ) . '-ms.' . getenv( 'DDEV_TLD' )" --raw --type=constant --path="$path"
+}
+
 activate_plugin() {
 	local path="$1" network="$2"
 
@@ -188,10 +209,18 @@ if wants multisite; then
 	download_core "${DOCROOT}/multisite" "$WP_VERSION"
 	write_config "${DOCROOT}/multisite" "wpms_"
 	install_site "${DOCROOT}/multisite" "$MS_URL" "Connect Matomo (network)"
-	if ! wp core is-installed --network --path="${DOCROOT}/multisite" 2>/dev/null; then
+	if [ -z "$(wp db query "SHOW TABLES LIKE 'wpms\_site'" --skip-column-names --path="${DOCROOT}/multisite")" ]; then
 		echo "    converting to a subdirectory network"
 		wp core multisite-convert --path="${DOCROOT}/multisite" --title="Connect Matomo network"
 	fi
+	if ! wp core is-installed --network --path="${DOCROOT}/multisite" 2>/dev/null; then
+		write_multisite_constants "${DOCROOT}/multisite"
+	fi
+	if ! wp core is-installed --network --path="${DOCROOT}/multisite" 2>/dev/null; then
+		echo "wp/multisite is still not a network, check ${DOCROOT}/multisite/wp-config.php." >&2
+		exit 1
+	fi
+	follow_sitename "${DOCROOT}/multisite"
 	write_htaccess "${DOCROOT}/multisite" multisite
 	activate_plugin "${DOCROOT}/multisite" 1
 fi

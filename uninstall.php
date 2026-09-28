@@ -109,6 +109,7 @@ function wp_matomo_uninstall() {
 		delete_site_option( 'wp-piwik-notices' );
 		delete_site_option( 'wp-piwik-deprecated_shortcodes' );
 		delete_site_option( 'wp-piwik-manual_tracking_review' );
+		delete_site_option( 'wp-piwik-allowed_tracker_hosts' );
 		delete_site_transient( 'wp-piwik-manual_tracking_sites' );
 	}
 

@@ -5,6 +5,9 @@ $wpRootDir = getenv('WP_MATOMO_WP_ROOT_DIR');
 $wpRootDir = !empty($wpRootDir)?$wpRootDir:'../../../../';
 require ($wpRootDir.'wp-load.php');
 
+// the plugin's autoloader is not registered here, so every class the settings class need has to
+// be included manually
+require_once ('../classes/WP_Piwik/TrackerHosts.php');
 require_once ('../classes/WP_Piwik/Settings.php');
 require_once ('../classes/WP_Piwik/Logger.php');
 require_once ('../classes/WP_Piwik/Logger/Dummy.php');
