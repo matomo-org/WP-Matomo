@@ -1721,8 +1721,16 @@ class WP_Piwik {
 	 */
 	public static function define_piwik_constants() {
 		if ( ! defined( 'PIWIK_INCLUDE_PATH' ) ) {
-			define( 'PIWIK_INCLUDE_PATH', self::$settings->get_global_option( 'piwik_path' ) );
-			define( 'PIWIK_USER_PATH', self::$settings->get_global_option( 'piwik_path' ) );
+			$piwik_path = self::$settings->get_global_option( 'piwik_path' );
+			// Resolve to a real local directory before it can be used by require_once.
+			// realpath() rejects stream wrappers (including phar://) and prevents
+			// settings from supplying a wrapper-based include path.
+			$piwik_path = is_string( $piwik_path ) && '' !== $piwik_path ? realpath( $piwik_path ) : false;
+			if ( false !== $piwik_path && ! is_dir( $piwik_path ) ) {
+				$piwik_path = false;
+			}
+			define( 'PIWIK_INCLUDE_PATH', $piwik_path );
+			define( 'PIWIK_USER_PATH', $piwik_path );
 			define( 'PIWIK_ENABLE_DISPATCH', false );
 			define( 'PIWIK_ENABLE_ERROR_HANDLER', false );
 			define( 'PIWIK_ENABLE_SESSION_START', false );
