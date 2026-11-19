@@ -1,0 +1,73 @@
+#!/bin/bash
+
+## Description: Point the WordPress sites at this project's hostnames after a database from another project was imported
+## Usage: wp-matomo:rehost
+## Example: "ddev wp-matomo:rehost"
+## ExecRaw: true
+
+# A database imported from another DDEV project (a copy's template, say) still
+# names that project's hosts: WordPress then redirects every request to them, and
+# the multisite does so even for its front page. This rewrites the single site's
+# URLs and the network's domain to this project's actual one, and points the multisite's
+# wp-config.php at DDEV_SITENAME if it names a fixed domain. It runs after every
+# "ddev import-db" (see hooks in config.yaml) and does nothing when the hosts
+# already match.
+
+set -eu -o pipefail
+
+DOCROOT="/var/www/html/${DDEV_DOCROOT:-wp}"
+# keep in step with write_multisite_constants in wp-matomo_install
+MS_DOMAIN_PHP="getenv( 'DDEV_SITENAME' ) . '-ms.' . getenv( 'DDEV_TLD' )"
+
+for arg in "$@"; do
+	case "$arg" in
+		-h|--help) sed -n '3,5p' "$0"; exit 0 ;;
+		*) echo "Unknown option: $arg" >&2; exit 1 ;;
+	esac
+done
+
+# the value of a table's first column, or nothing if the table does not exist.
+query() {
+	local path="$1" table="$2" sql="$3"
+
+	if [ -n "$(wp db query "SHOW TABLES LIKE '${table//_/\\_}'" --skip-column-names --path="$path")" ]; then
+		wp db query "$sql" --skip-column-names --path="$path"
+	fi
+}
+
+rehost_single() {
+	local path="${DOCROOT}/single" from to
+
+	[ -f "${path}/wp-config.php" ] || return 0
+	from=$(query "$path" wp_options "SELECT option_value FROM wp_options WHERE option_name = 'siteurl'")
+	from="${from#*://}"
+	from="${from%%[:/]*}"
+	to="${DDEV_SITENAME}.${DDEV_TLD}"
+	if [ -z "$from" ] || [ "$from" = "$to" ]; then
+		return
+	fi
+	echo "==> wp/single: ${from} -> ${to}"
+	wp search-replace "$from" "$to" --path="$path" --url="$to" --skip-plugins --skip-themes --report-changed-only
+}
+
+rehost_multisite() {
+	local path="${DOCROOT}/multisite" from to
+
+	[ -f "${path}/wp-config.php" ] || return 0
+	to="${DDEV_SITENAME}-ms.${DDEV_TLD}"
+	# a copied wp-config.php from before the domain followed DDEV_SITENAME
+	if grep -q "define( *'DOMAIN_CURRENT_SITE', *'" "${path}/wp-config.php"; then
+		echo "==> wp/multisite: DOMAIN_CURRENT_SITE now follows DDEV_SITENAME"
+		wp config set DOMAIN_CURRENT_SITE "$MS_DOMAIN_PHP" --raw --type=constant --path="$path"
+	fi
+	from=$(query "$path" wpms_site "SELECT domain FROM wpms_site WHERE id = 1")
+	if [ -z "$from" ] || [ "$from" = "$to" ]; then
+		return
+	fi
+	echo "==> wp/multisite: ${from} -> ${to}"
+	wp db query "UPDATE wpms_site SET domain = '${to}' WHERE domain = '${from}'; UPDATE wpms_blogs SET domain = '${to}' WHERE domain = '${from}'" --path="$path"
+	wp search-replace "$from" "$to" --network --path="$path" --url="$to" --skip-plugins --skip-themes --report-changed-only
+}
+
+rehost_single
+rehost_multisite

@@ -62,11 +62,17 @@ class OptOutTest extends WP_Piwik_TestCase {
 		$this->assertStringContainsString( 'src="https://matomo.example.org/index.php?module=CoreAdminHome', $output );
 	}
 
-	private function create_opt_out( array $params ) {
+	public function test_show_should_render_nothing_for_a_matomo_url_that_is_no_web_address() {
+		$output = $this->create_opt_out( array(), 'javascript:alert(1)//' )->get();
+
+		$this->assertSame( '', $output );
+	}
+
+	private function create_opt_out( array $params, $piwik_url = 'https://matomo.example.org/' ) {
 		$settings = $this->create_settings(
 			array(
 				'piwik_mode' => 'http',
-				'piwik_url'  => 'https://matomo.example.org/',
+				'piwik_url'  => $piwik_url,
 			),
 			array( 'site_id' => 7 )
 		);

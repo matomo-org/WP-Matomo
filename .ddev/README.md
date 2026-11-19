@@ -129,6 +129,17 @@ container this repository is mounted *below* `wp/`, so deleting `wp/` from in th
 through the bind mount and delete your working tree. Never run `rm -rf` under `wp/wp-content` from
 inside the container.
 
+## Importing a database from another project
+
+```
+ddev wp-matomo:rehost
+```
+
+A database from another DDEV project, such as the one a copy of this project was made from, still
+names that project's hosts, and WordPress redirects every request to them. This rewrites the
+single site's URLs and the network's domain to this project's. It runs by itself after every
+`ddev import-db`, and does nothing when the hosts already match.
+
 ## Changing PHP, MariaDB or WordPress versions
 
 Create `.ddev/config.local.yaml` and override what you need, then `ddev restart`. For example:

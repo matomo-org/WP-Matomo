@@ -239,6 +239,16 @@ class WpPiwikTest extends WP_Piwik_TestCase {
 		$this->assertEmpty( get_option( 'wp-piwik-last_tracking_code_update' ) );
 	}
 
+	public function test_update_tracking_code_should_store_nothing_when_the_matomo_url_names_a_host_it_cannot_write_in_ascii() {
+		// stored by an earlier version, which did not check the URL
+		$this->configure_plugin( [ 'piwik_url' => "https://matomo.b\xc3\xbccher..example/" ] );
+
+		$this->assertFalse( $this->wp_piwik->update_tracking_code( 1 ) );
+
+		$this->assertEmpty( get_option( 'wp-piwik-tracking_code' ) );
+		$this->assertEmpty( get_option( 'wp-piwik-last_tracking_code_update' ) );
+	}
+
 	public function test_update_tracking_code_stores_nothing_when_the_blog_has_no_matomo_site() {
 		$this->configure_plugin( [], [ 'site_id' => '' ] );
 

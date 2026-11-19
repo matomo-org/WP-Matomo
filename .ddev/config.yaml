@@ -10,6 +10,8 @@ xdebug_enabled: false
 disable_settings_management: true
 disable_upload_dirs_warning: true
 
+# The multisite's host. Keep it the project name plus "-ms": apache-site.conf
+# serves ${DDEV_SITENAME}-ms.
 additional_hostnames:
   - wp-matomo-ms
 
@@ -42,3 +44,7 @@ hooks:
     - exec-host: mkdir -p wp/single/wp-content/plugins/wp-piwik wp/multisite/wp-content/plugins/wp-piwik wp/tests/wp-content/plugins/wp-piwik
   post-start:
     - exec: 'test -f /var/www/html/wp/single/wp-load.php || echo "WordPress is not installed yet -> run: ddev wp-matomo:install"'
+  post-import-db:
+    # A database from another project (such as the template of a Quick Demo
+    # Creator copy) names that project's hosts, which WordPress redirects to.
+    - exec: bash /mnt/ddev_config/commands/web/wp-matomo_rehost

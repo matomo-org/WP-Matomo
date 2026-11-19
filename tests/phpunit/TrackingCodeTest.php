@@ -74,15 +74,25 @@ class TrackingCodeTest extends WP_Piwik_TestCase {
 	public function test_prepare_tracking_code_should_not_let_a_cdn_url_end_the_script_element() {
 		$result = $this->prepare( [ 'track_cdnurl' => '</script><script>alert(1)</script>' ] );
 
-		$this->assertStringContainsString( '"https:\/\/\/scriptscriptalert(1)\/script\/"', $result['script'] );
+		$this->assertStringContainsString( '"https:\/\/scriptscriptalert(1)\/script\/"', $result['script'] );
 		$this->assertSame( 1, substr_count( $result['script'], '</script>' ), 'the tracking code has one script element' );
 	}
 
 	public function test_prepare_tracking_code_should_not_let_a_cdn_url_end_the_string_it_is_put_in() {
 		$result = $this->prepare( [ 'track_cdnurlssl' => 'cdn.example.org/"+alert(1)+"' ] );
 
-		$this->assertStringNotContainsString( '"+alert(1)+"', $result['script'] );
-		$this->assertStringContainsString( '\"+alert(1)+\"', $result['script'] );
+		$this->assertStringContainsString( '"https:\/\/cdn.example.org\/+alert(1)+\/"', $result['script'] );
+		$this->assertStringNotContainsString( '+alert(1)+"', $result['script'] );
+	}
+
+	public function test_prepare_tracking_code_should_not_let_a_cdn_url_name_a_host_of_its_own() {
+		// a browser reads the backslash as the end of the host and loads the tracker from
+		// evil.example.org, while every check this value passed read the host as
+		// cdn.example.org
+		$result = $this->prepare( [ 'track_cdnurl' => 'evil.example.org\\@cdn.example.org' ] );
+
+		$this->assertStringContainsString( '"http:\/\/evil.example.org@cdn.example.org\/"', $result['script'] );
+		$this->assertStringNotContainsString( 'evil.example.org\\\\', $result['script'] );
 	}
 
 	public function test_prepare_tracking_code_should_not_let_a_cdn_url_start_a_script_element() {
@@ -92,6 +102,12 @@ class TrackingCodeTest extends WP_Piwik_TestCase {
 
 		$this->assertStringContainsString( '"https:\/\/cdn.example.org\/!--script\/"', $result['script'] );
 		$this->assertSame( 1, substr_count( $result['script'], '<script' ), 'the tracking code opens one script element' );
+	}
+
+	public function test_prepare_tracking_code_should_load_the_tracker_from_a_cdn_url_stored_with_its_protocol() {
+		$result = $this->prepare( [ 'track_cdnurl' => 'https://cdn.example.org/' ] );
+
+		$this->assertStringContainsString( '"https:\/\/cdn.example.org\/" : "http:\/\/cdn.example.org\/"', $result['script'] );
 	}
 
 	public function test_prepare_tracking_code_should_not_let_a_download_class_start_a_script_element() {
@@ -178,6 +194,31 @@ class TrackingCodeTest extends WP_Piwik_TestCase {
 		TrackingCode::prepare_tracking_code( $this->get_sample_code(), $settings, new Dummy( 'test' ) );
 
 		$this->assertGreaterThan( 0, (int) $settings->get_option( 'last_tracking_code_update' ) );
+	}
+
+	/**
+	 * @dataProvider get_cdn_urls_typed_with_a_protocol
+	 */
+	public function test_normalize_cdn_url_should_drop_the_protocol_the_url_was_typed_with( $cdn_url ) {
+		$this->assertSame( 'cdn.example.org/matomo', TrackingCode::normalize_cdn_url( $cdn_url ) );
+	}
+
+	public function get_cdn_urls_typed_with_a_protocol() {
+		return [
+			'https'                => [ 'https://cdn.example.org/matomo' ],
+			'http in upper case'   => [ 'HTTP://cdn.example.org/matomo' ],
+			'protocol relative'    => [ '//cdn.example.org/matomo' ],
+			'a protocol twice'     => [ 'https://https://cdn.example.org/matomo' ],
+			'surrounded by spaces' => [ ' https://cdn.example.org/matomo/ ' ],
+		];
+	}
+
+	public function test_normalize_cdn_url_should_keep_a_host_whose_name_begins_with_the_letters_of_a_protocol() {
+		$this->assertSame( 'httpcdn.example.org', TrackingCode::normalize_cdn_url( 'httpcdn.example.org' ) );
+	}
+
+	public function test_normalize_cdn_url_should_name_nothing_for_a_value_that_is_not_a_string() {
+		$this->assertSame( '', TrackingCode::normalize_cdn_url( [ 'cdn.example.org' ] ) );
 	}
 
 	private function create_tracking_code( $plugin = null ) {

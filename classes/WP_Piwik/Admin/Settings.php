@@ -2,6 +2,8 @@
 
 namespace WP_Piwik\Admin;
 
+use WP_Piwik\Settings\SaveFailure;
+
 /**
  * WordPress Admin settings page
  *
@@ -28,6 +30,11 @@ class Settings extends \WP_Piwik\Admin {
 			return;
 		} elseif ( self::$wp_piwik->is_config_submitted() ) {
 			$this->show_box( 'updated', 'yes', esc_html__( 'Changes saved.', 'wp-piwik' ) );
+			$this->show_rejected_tracker_hosts();
+			$this->show_removed_tracker_hosts();
+			$this->show_rejected_tracker_host_entries();
+			$this->show_rejected_settings();
+
 			self::$wp_piwik->reset_request();
 			if ( 'php' === self::$settings->get_global_option( 'piwik_mode' ) ) {
 				self::$wp_piwik->define_piwik_constants();
@@ -141,12 +148,12 @@ class Settings extends \WP_Piwik\Admin {
 				self::$wp_piwik->is_configured()
 			);
 
-			$this->show_input( 'piwik_url', __( 'Matomo URL', 'wp-piwik' ), __( 'Enter your Matomo URL. This is the same URL you use to access your Matomo instance, e.g. http://www.example.com/matomo/.', 'wp-piwik' ), 'http' !== self::$settings->get_global_option( 'piwik_mode' ), 'wp-piwik-mode-option', 'http', self::$wp_piwik->is_configured(), true );
+			$this->show_input( 'piwik_url', __( 'Matomo URL', 'wp-piwik' ), __( 'Enter your Matomo URL. This is the same URL you use to access your Matomo instance, e.g. http://www.example.com/matomo/.', 'wp-piwik' ) . $this->get_allowed_tracker_hosts_description(), 'http' !== self::$settings->get_global_option( 'piwik_mode' ), 'wp-piwik-mode-option', 'http', self::$wp_piwik->is_configured(), true );
 			if ( 'php' === self::$settings->get_global_option( 'piwik_mode' ) ) {
 				$this->show_input( 'piwik_path', __( 'Matomo path (deprecated)', 'wp-piwik' ), __( 'Enter the file path to your Matomo instance, e.g. /var/www/matomo/. Only used by the deprecated "Self-hosted (PHP API)" connection method.', 'wp-piwik' ), false, 'wp-piwik-mode-option', 'php', self::$wp_piwik->is_configured(), true );
 			}
-			$this->show_input( 'piwik_user', __( 'Innocraft subdomain', 'wp-piwik' ), __( 'Enter your InnoCraft Cloud subdomain. It is also part of your URL: https://SUBDOMAIN.innocraft.cloud.', 'wp-piwik' ), 'cloud' !== self::$settings->get_global_option( 'piwik_mode' ), 'wp-piwik-mode-option', 'cloud', self::$wp_piwik->is_configured() );
-			$this->show_input( 'matomo_user', __( 'Matomo subdomain', 'wp-piwik' ), __( 'Enter your Matomo Cloud subdomain. It is also part of your URL: https://SUBDOMAIN.matomo.cloud.', 'wp-piwik' ), 'cloud-matomo' !== self::$settings->get_global_option( 'piwik_mode' ), 'wp-piwik-mode-option', 'cloud-matomo', self::$wp_piwik->is_configured() );
+			$this->show_input( 'piwik_user', __( 'Innocraft subdomain', 'wp-piwik' ), __( 'Enter your InnoCraft Cloud subdomain. It is also part of your URL: https://SUBDOMAIN.innocraft.cloud.', 'wp-piwik' ) . $this->get_allowed_tracker_hosts_description(), 'cloud' !== self::$settings->get_global_option( 'piwik_mode' ), 'wp-piwik-mode-option', 'cloud', self::$wp_piwik->is_configured() );
+			$this->show_input( 'matomo_user', __( 'Matomo subdomain', 'wp-piwik' ), __( 'Enter your Matomo Cloud subdomain. It is also part of your URL: https://SUBDOMAIN.matomo.cloud.', 'wp-piwik' ) . $this->get_allowed_tracker_hosts_description(), 'cloud-matomo' !== self::$settings->get_global_option( 'piwik_mode' ), 'wp-piwik-mode-option', 'cloud-matomo', self::$wp_piwik->is_configured() );
 			$this->show_input( 'piwik_token', __( 'Auth token', 'wp-piwik' ), __( 'Enter your Matomo auth token here. It is an alphanumerical code like 0a1b2c34d56e78901fa2bc3d45678efa.', 'wp-piwik' ) . ' ' . sprintf( __( 'See %1$sWP-Matomo FAQ%2$s.', 'wp-piwik' ), '<a href="https://wordpress.org/plugins/wp-piwik/faq/" target="_BLANK">', '</a>' ), false, '', '', self::$wp_piwik->is_configured(), true, 'password' );
 
 			// Site configuration
@@ -691,9 +698,11 @@ class Settings extends \WP_Piwik\Admin {
 				)
 		);
 
-		$this->show_input( 'track_cdnurl', __( 'CDN URL', 'wp-piwik' ) . ' http://', 'Enter URL if you want to load the tracking code via CDN.' );
+		$this->show_allowed_tracker_hosts();
 
-		$this->show_input( 'track_cdnurlssl', __( 'CDN URL (SSL)', 'wp-piwik' ) . ' https://', 'Enter URL if you want to load the tracking code via a separate SSL CDN.' );
+		$this->show_input( 'track_cdnurl', __( 'CDN URL', 'wp-piwik' ) . ' http://', __( 'Enter URL if you want to load the tracking code via CDN.', 'wp-piwik' ) . $this->get_allowed_tracker_hosts_description() );
+
+		$this->show_input( 'track_cdnurlssl', __( 'CDN URL (SSL)', 'wp-piwik' ) . ' https://', __( 'Enter URL if you want to load the tracking code via a separate SSL CDN.', 'wp-piwik' ) . $this->get_allowed_tracker_hosts_description() );
 
 		$this->show_select(
 			'force_protocol',
@@ -838,13 +847,162 @@ class Settings extends \WP_Piwik\Admin {
 			$group_name,
 			$hide_description,
 			function () use ( $id, $on_change, $rows, $is_readonly, $is_global ) {
+				$option_value = $is_global ? self::$settings->get_global_option( $id ) : self::$settings->get_option( $id );
 				?>
-				<textarea cols="80" rows="<?php echo esc_attr( $rows ); ?>" id="<?php echo esc_attr( $id ); ?>" name="wp-piwik[<?php echo esc_attr( $id ); ?>]" onchange="<?php echo esc_attr( $on_change ); ?>" <?php echo ( $is_readonly ? ' readonly="readonly"' : '' ); ?>>
-					<?php echo esc_html( $is_global ? self::$settings->get_global_option( $id ) : self::$settings->get_option( $id ) ); ?>
-				</textarea>
+				<textarea
+					cols="80"
+					rows="<?php echo esc_attr( $rows ); ?>"
+					id="<?php echo esc_attr( $id ); ?>"
+					name="wp-piwik[<?php echo esc_attr( $id ); ?>]"
+					onchange="<?php echo esc_attr( $on_change ); ?>"
+					<?php echo ( $is_readonly ? ' readonly="readonly"' : '' ); ?>
+					>
+					<?php
+						echo esc_textarea( (string) ( $option_value ) );
+					?>
+					</textarea>
 				<?php
 			}
 		);
+	}
+
+	/**
+	 * Show the hosts a site of this network may load its tracker from, for a user who
+	 * may change them
+	 */
+	public function show_allowed_tracker_hosts() {
+		$tracker_hosts = self::$settings->get_tracker_hosts();
+		if ( ! $tracker_hosts->can_edit_allow_list() ) {
+			return;
+		}
+
+		$stored = implode( "\n", $tracker_hosts->get_stored_allow_list() );
+
+		$description = esc_html__( 'The Matomo URL, the cloud subdomain and the CDN URLs name the server that serves the tracker to every visitor of a site, so an administrator of a single site of this network may only pick a host named here. One host per line; an entry written as a URL is read for the host it names. A leading *. stands for any subdomain, e.g. *.matomo.cloud. Leaving this empty does not forbid every host: the two Matomo clouds apply instead, so if the sites of this network use a Matomo you run yourself, name its host here. Note: this restriction does not apply to you (a network administrator may name any host).', 'wp-piwik' );
+		if ( '' === $stored ) {
+			$description .= '<br />' . sprintf(
+				/* translators: %s: comma separated list of host names */
+				esc_html__( 'Currently allowed: %s.', 'wp-piwik' ),
+				'<code>' . implode( '</code>, <code>', array_map( 'esc_html', $tracker_hosts->get_allow_list() ) ) . '</code>'
+			);
+		}
+
+		$this->show_input_wrapper(
+			\WP_Piwik\TrackerHosts::FORM_FIELD,
+			__( 'Allowed tracker hosts', 'wp-piwik' ),
+			$description,
+			false,
+			'',
+			false,
+			function () use ( $stored ) {
+				?>
+				<?php // the value starts where the element does: anything between the two is part of it, and a host the network administrator reads back indented is one they did not type. ?>
+				<textarea cols="80" rows="4" id="<?php echo esc_attr( \WP_Piwik\TrackerHosts::FORM_FIELD ); ?>"
+					name="wp-piwik[<?php echo esc_attr( \WP_Piwik\TrackerHosts::FORM_FIELD ); ?>]"
+					><?php echo esc_textarea( $stored ); ?></textarea>
+				<?php
+			}
+		);
+	}
+
+	/**
+	 * @return string empty when the current user may name any host
+	 */
+	private function get_allowed_tracker_hosts_description() {
+		$tracker_hosts = self::$settings->get_tracker_hosts();
+		if ( ! $tracker_hosts->is_enforced() ) {
+			return '';
+		}
+
+		return '<br />' . sprintf(
+			/* translators: %s: comma separated list of host names */
+			esc_html__( 'The tracker runs on every page of this site, so only a network administrator decides which servers it may be loaded from. This site may use: %s. Any other host is ignored when the settings are saved.', 'wp-piwik' ),
+			'<code>' . implode( '</code>, <code>', array_map( 'esc_html', $tracker_hosts->get_allow_list() ) ) . '</code>'
+		);
+	}
+
+	/**
+	 * Tell the user which tracker hosts the configuration they just saved was not
+	 * allowed to name
+	 */
+	public function show_rejected_tracker_hosts() {
+		$rejected = $this->get_failed_hosts( SaveFailure::HOST_NOT_ALLOWED );
+		if ( empty( $rejected ) ) {
+			return;
+		}
+
+		$this->show_box(
+			'error',
+			'no',
+			SaveFailure::get_not_allowed_hosts_message( $rejected, self::$settings->get_tracker_hosts()->get_allow_list() )
+		);
+	}
+
+	/**
+	 * Tell the user which disallowed tracker hosts were removed after they saved
+	 * a configuration that turned the reporting connection to Matomo off.
+	 */
+	public function show_removed_tracker_hosts() {
+		$removed = $this->get_failed_hosts( SaveFailure::HOST_REMOVED );
+		if ( empty( $removed ) ) {
+			return;
+		}
+
+		$this->show_box(
+			'error',
+			'no',
+			SaveFailure::get_removed_hosts_message(
+				$removed,
+				self::$settings->get_tracker_hosts()->get_allow_list(),
+				self::$settings->get_global_option( 'track_mode' ),
+				(bool) self::$settings->get_global_option( 'track_feed' )
+			)
+		);
+	}
+
+	public function show_rejected_tracker_host_entries() {
+		$tracker_hosts = self::$settings->get_tracker_hosts();
+
+		$rejected = $tracker_hosts->get_rejected_entries();
+		if ( empty( $rejected ) ) {
+			return;
+		}
+
+		$this->show_box(
+			'error',
+			'no',
+			SaveFailure::get_rejected_allow_list_entries_message(
+				$rejected,
+				$tracker_hosts->get_stored_allow_list(),
+				$tracker_hosts->get_allow_list()
+			)
+		);
+	}
+
+	/**
+	 * Tell the user which settings the configuration they just saved did not have a
+	 * usable value.
+	 */
+	public function show_rejected_settings() {
+		foreach ( self::$settings->get_save_failures() as $failure ) {
+			$message = $failure->get_message();
+			if ( '' !== $message ) {
+				$this->show_box( 'error', 'no', $message );
+			}
+		}
+	}
+
+	/**
+	 * @param string $reason one of the SaveFailure constants
+	 * @return array<int, string> the tracker hosts the failures of that reason named, each
+	 *                            once
+	 */
+	private function get_failed_hosts( $reason ) {
+		$hosts = [];
+		foreach ( self::$settings->get_save_failures( $reason ) as $failure ) {
+			$hosts[] = $failure->get_host();
+		}
+		return array_values( array_unique( $hosts ) );
 	}
 
 	/**
