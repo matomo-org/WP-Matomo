@@ -70,6 +70,7 @@ class Settings {
 		// checked first
 		'track_mode'              => 'check_track_mode',
 		'piwik_url'               => 'check_piwik_url',
+		'proxy_url'               => 'check_proxy_url',
 		'piwik_user'              => 'check_cloud_subdomain',
 		'matomo_user'             => 'check_cloud_subdomain',
 		'piwik_token'             => 'check_piwik_token',
@@ -540,6 +541,16 @@ class Settings {
 		}
 
 		return $value;
+	}
+
+	/**
+	 * Keep the proxy URL the tracking code was last generated with
+	 *
+	 * @return string proxy URL
+	 * @phpstan-ignore method.unused
+	 */
+	private function check_proxy_url() {
+		return (string) $this->get_global_option( 'proxy_url' );
 	}
 
 	/**

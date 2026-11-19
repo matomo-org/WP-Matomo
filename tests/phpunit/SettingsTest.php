@@ -481,6 +481,16 @@ class SettingsTest extends WP_Piwik_TestCase {
 		$this->assertCount( 1, $settings->get_save_failures( SaveFailure::HOST_NOT_ALLOWED ) );
 	}
 
+	public function test_apply_changes_should_keep_the_proxy_url_the_tracking_code_was_generated_with() {
+		$this->log_in_as_a_user_who_may_publish_script();
+
+		$settings = $this->create_settings( [ 'proxy_url' => '//matomo.example.org/' ] );
+
+		$settings->apply_changes( [ 'proxy_url' => 'http://127.0.0.1/internal?x=' ] );
+
+		$this->assertSame( '//matomo.example.org/', $settings->get_global_option( 'proxy_url' ) );
+	}
+
 	public function test_apply_changes_should_slash_a_matomo_url_that_does_not_end_in_one() {
 		$this->log_in_as_a_user_who_may_publish_script();
 
