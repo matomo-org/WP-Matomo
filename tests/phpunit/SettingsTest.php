@@ -446,6 +446,41 @@ class SettingsTest extends WP_Piwik_TestCase {
 		$this->assertSame( '', $settings->get_matomo_url() );
 	}
 
+	/**
+	 * @dataProvider get_matomo_urls_that_are_no_web_address
+	 */
+	public function test_apply_changes_should_not_store_a_matomo_url_that_is_no_web_address( $matomo_url ) {
+		$this->log_in_as_a_user_who_may_publish_script();
+
+		$settings = $this->create_settings( [ 'piwik_url' => 'https://matomo.example.org/' ] );
+
+		$settings->apply_changes( [ 'piwik_url' => $matomo_url ] );
+
+		$this->assertSame( 'https://matomo.example.org/', $settings->get_global_option( 'piwik_url' ) );
+		$this->assertEquals( [ new SaveFailure( SaveFailure::INVALID_URL, 'piwik_url' ) ], $settings->get_save_failures() );
+	}
+
+	public function get_matomo_urls_that_are_no_web_address() {
+		return [
+			'a script'             => [ 'javascript:alert(1)//' ],
+			'a script, upper case' => [ 'JavaScript:alert(1)//' ],
+			'data'                 => [ 'data:text/html,matomo' ],
+			'a host only'          => [ 'matomo.example.org/' ],
+		];
+	}
+
+	public function test_apply_changes_should_not_point_a_site_of_a_network_at_a_script_ending_in_a_host_it_allows() {
+		$this->log_in_as_a_network_site_administrator();
+		$this->allow_tracker_hosts( 'matomo.example.org' );
+
+		$settings = $this->create_settings( [ 'piwik_url' => 'https://matomo.example.org/' ] );
+
+		$settings->apply_changes( [ 'piwik_url' => 'javascript:alert(1)//@matomo.example.org/' ] );
+
+		$this->assertSame( 'https://matomo.example.org/', $settings->get_global_option( 'piwik_url' ) );
+		$this->assertCount( 1, $settings->get_save_failures( SaveFailure::HOST_NOT_ALLOWED ) );
+	}
+
 	public function test_apply_changes_should_slash_a_matomo_url_that_does_not_end_in_one() {
 		$this->log_in_as_a_user_who_may_publish_script();
 

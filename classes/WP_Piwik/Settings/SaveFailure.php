@@ -34,6 +34,11 @@ class SaveFailure {
 	const INVALID_SUBDOMAIN = 'invalid_subdomain';
 
 	/**
+	 * The value is not the address of a server reached over http or https.
+	 */
+	const INVALID_URL = 'invalid_url';
+
+	/**
 	 * @var string
 	 */
 	private $reason;
@@ -100,6 +105,13 @@ class SaveFailure {
 					esc_html( $labels[ $this->setting ] ),
 					'<code>acme</code>',
 					'<code>https://acme.' . ( 'piwik_user' === $this->setting ? 'innocraft' : 'matomo' ) . '.cloud/</code>'
+				);
+			case self::INVALID_URL:
+				return sprintf(
+					/* translators: 1: name of a setting of this page, 2: an example URL */
+					esc_html__( '"%1$s" has to be an http or https address, e.g. %2$s, so it was left as it was.', 'wp-piwik' ),
+					esc_html( $labels[ $this->setting ] ),
+					'<code>https://matomo.example.org/</code>'
 				);
 			default:
 				return '';

@@ -214,6 +214,16 @@ class Generator {
 	}
 
 	/**
+	 * Whether a browser reads the URL as the address of a server it reaches over http or https
+	 *
+	 * @param string $url URL as it was typed or stored
+	 * @return boolean
+	 */
+	public static function is_web_url( $url ) {
+		return 1 === preg_match( '~^(?:https?:)?//+[^/?#]~i', self::normalize_url( $url ) );
+	}
+
+	/**
 	 * @param string $matomo_url URL of the Matomo instance
 	 * @return string host and path, without a protocol or a trailing slash
 	 */
@@ -222,7 +232,12 @@ class Generator {
 
 		// check if the protocol is in the URL
 		if ( ! preg_match( '~^([A-Za-z][A-Za-z0-9+.-]*)://(.*?)$~D', $matomo_url, $matches ) ) {
-			return trim( $matomo_url, '/' );
+			$host_and_path = trim( $matomo_url, '/' );
+			$authority     = preg_split( '~[/?#]~', $host_and_path, 2 );
+			if ( ! preg_match( '~^(?:\[[0-9A-Fa-f:.]+\]|[^:@\[\]]+)(?::\d*)?$~D', $authority[0] ) ) {
+				return '';
+			}
+			return $host_and_path;
 		}
 
 		// the tracker is loaded over the protocol of the page, so a Matomo reachable over

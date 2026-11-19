@@ -257,6 +257,59 @@ class TrackingCodeGeneratorTest extends WP_Piwik_TestCase {
 	}
 
 	/**
+	 * @dataProvider get_matomo_urls_without_a_protocol_naming_no_host
+	 */
+	public function test_get_tracker_url_should_name_nothing_for_a_matomo_url_without_a_protocol_naming_no_host( $matomo_url ) {
+		$this->assertSame( '', Generator::get_tracker_url( $matomo_url ) );
+	}
+
+	public function get_matomo_urls_without_a_protocol_naming_no_host() {
+		return [
+			'a script'               => [ 'javascript:alert(1)//' ],
+			'a script before a host' => [ 'javascript:alert(1)@stats.example.org/' ],
+			'a user before a host'   => [ 'user@stats.example.org/' ],
+		];
+	}
+
+	public function test_get_tracker_url_should_name_a_host_with_a_port_written_without_a_protocol() {
+		$this->assertSame( '//stats.example.org:8080/matomo/', Generator::get_tracker_url( 'stats.example.org:8080/matomo' ) );
+	}
+
+	/**
+	 * @dataProvider get_web_urls
+	 */
+	public function test_is_web_url_should_accept_an_http_or_https_address( $url ) {
+		$this->assertTrue( Generator::is_web_url( $url ) );
+	}
+
+	public function get_web_urls() {
+		return [
+			'https'             => [ 'https://stats.example.org/' ],
+			'http'              => [ 'HTTP://stats.example.org/matomo/' ],
+			'protocol relative' => [ '//stats.example.org/' ],
+			'extra slashes'     => [ 'https:///stats.example.org/' ],
+		];
+	}
+
+	/**
+	 * @dataProvider get_urls_that_are_no_web_address
+	 */
+	public function test_is_web_url_should_refuse_anything_else( $url ) {
+		$this->assertFalse( Generator::is_web_url( $url ) );
+	}
+
+	public function get_urls_that_are_no_web_address() {
+		return [
+			'a script'               => [ 'javascript:alert(1)//' ],
+			'a script before a host' => [ 'javascript:alert(1)//@stats.example.org/' ],
+			'data'                   => [ 'data:text/html,matomo' ],
+			'another protocol'       => [ 'ftp://stats.example.org/' ],
+			'a host only'            => [ 'stats.example.org/' ],
+			'empty'                  => [ '' ],
+		];
+	}
+
+	/**
 	 * Decode a Matomo tracking code expectation the way Connect Matomo decoded the answers
 	 * of SitesManager.getJavascriptTag
 	 *

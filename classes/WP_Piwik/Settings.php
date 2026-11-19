@@ -492,11 +492,17 @@ class Settings {
 		// an earlier version stored the URL as it was typed, so it is read the way the new
 		// one is before the two are compared
 		$stored = (string) $this->get_global_option( 'piwik_url' );
-		if (
-			\WP_Piwik\TrackingCode\Generator::normalize_url( $stored ) !== $value
-			&& ! $this->may_current_user_track_via_matomo( $value )
-		) {
+		if ( \WP_Piwik\TrackingCode\Generator::normalize_url( $stored ) === $value ) {
+			return $value;
+		}
+
+		if ( ! $this->may_current_user_track_via_matomo( $value ) ) {
 			return $stored; // keep the Matomo the network allows
+		}
+
+		if ( ! \WP_Piwik\TrackingCode\Generator::is_web_url( $value ) ) {
+			$this->save_failures[] = new SaveFailure( SaveFailure::INVALID_URL, 'piwik_url' );
+			return $stored;
 		}
 
 		return $value;
