@@ -203,6 +203,16 @@ class Generator {
 	}
 
 	/**
+	 * Whether a browser reads the URL as the address of a server it reaches over http or https
+	 *
+	 * @param string $url URL as it was typed or stored
+	 * @return boolean
+	 */
+	public static function is_web_url( $url ) {
+		return 1 === preg_match( '~^(?:https?:)?//+[^/?#]~i', (string) $url );
+	}
+
+	/**
 	 * @param string $matomo_url URL of the Matomo instance
 	 * @return string host and path, without a protocol or a trailing slash
 	 */

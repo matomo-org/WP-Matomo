@@ -437,11 +437,19 @@ class Settings {
 	 * @phpstan-ignore method.unused
 	 */
 	private function check_piwik_url( $value ) {
-		$value = (string) $value;
-		if ( '' === trim( $value ) ) {
+		$value = trim( (string) $value );
+		if ( '' === $value ) {
 			return ''; // no URL, don't add a slash
 		}
-		return substr( $value, - 1, 1 ) !== '/' ? $value . '/' : $value;
+		$value  = substr( $value, - 1, 1 ) !== '/' ? $value . '/' : $value;
+		$stored = (string) $this->get_global_option( 'piwik_url' );
+		if ( $stored === $value ) {
+			return $value;
+		}
+		if ( ! preg_match( '~^(?:[A-Za-z][A-Za-z0-9+.-]*:(?!\d)|/)~', $value ) ) {
+			$value = 'https://' . $value;
+		}
+		return \WP_Piwik\TrackingCode\Generator::is_web_url( $value ) ? $value : $stored;
 	}
 
 	/**

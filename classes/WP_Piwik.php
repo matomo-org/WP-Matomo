@@ -1496,8 +1496,10 @@ class WP_Piwik {
 					$url .= 'piwik.php';
 				}
 			}
-			$tracking_image = $url . '?idsite=' . self::$settings->get_option( 'site_id' ) . '&rec=1&url=' . rawurlencode( $posturl ) . '&action_name=' . rawurlencode( $title ) . '&urlref=' . rawurlencode( $urlref );
-			$content       .= '<img src="' . esc_attr( $tracking_image ) . '" style="border:0;width:0;height:0" width="0" height="0" alt="" />';
+			$tracking_image = esc_url( $url . '?idsite=' . self::$settings->get_option( 'site_id' ) . '&rec=1&url=' . rawurlencode( $posturl ) . '&action_name=' . rawurlencode( $title ) . '&urlref=' . rawurlencode( $urlref ), array( 'http', 'https' ) );
+			if ( '' !== $tracking_image ) {
+				$content .= '<img src="' . $tracking_image . '" style="border:0;width:0;height:0" width="0" height="0" alt="" />';
+			}
 		}
 		return $content;
 	}

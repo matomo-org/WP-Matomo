@@ -37,6 +37,10 @@ class OptOut extends \WP_Piwik\Widget {
 		$height   = $this->parameter['height'];
 		$idsite   = ( '' !== $this->parameter['idsite'] ? 'idsite=' . (int) $this->parameter['idsite'] . '&' : '' );
 		$language = rawurlencode( $this->parameter['language'] );
-		$this->out( '<iframe frameborder="no" width="' . esc_attr( $width ) . '" height="' . esc_attr( $height ) . '" src="' . esc_attr( $piwik_url . 'index.php?module=CoreAdminHome&action=optOut&' . $idsite . 'language=' . $language ) . '"></iframe>' );
+		$src      = esc_url( $piwik_url . 'index.php?module=CoreAdminHome&action=optOut&' . $idsite . 'language=' . $language, array( 'http', 'https' ) );
+		if ( '' === $src ) {
+			return;
+		}
+		$this->out( '<iframe frameborder="no" width="' . esc_attr( $width ) . '" height="' . esc_attr( $height ) . '" src="' . $src . '"></iframe>' );
 	}
 }
