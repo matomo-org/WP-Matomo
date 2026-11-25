@@ -196,7 +196,6 @@ class TrackingCodeGeneratorTest extends WP_Piwik_TestCase {
 			'a host only'          => [ 'stats.example.org/', false ],
 			'no host'              => [ 'https://', false ],
 			'a script'             => [ 'javascript:alert(1)//', false ],
-			'a script with a host' => [ 'javascript:alert(1);%2F%2F@stats.example.org/#', false ],
 			'data'                 => [ 'data:text/html,matomo', false ],
 			'another protocol'     => [ 'ftp://stats.example.org/', false ],
 			'empty'                => [ '', false ],

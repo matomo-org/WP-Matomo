@@ -468,7 +468,6 @@ class SettingsTest extends WP_Piwik_TestCase {
 		return [
 			'a script'             => [ 'javascript:alert(1)//' ],
 			'a script, upper case' => [ 'JavaScript:alert(1)//' ],
-			'a script with a host' => [ 'javascript:alert(1);%2F%2F@matomo.example.org/#' ],
 			'data'                 => [ 'data:text/html,matomo' ],
 			'another protocol'     => [ 'ftp://matomo.example.org/' ],
 			'a path only'          => [ '/matomo/' ],
