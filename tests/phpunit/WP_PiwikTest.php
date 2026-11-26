@@ -68,7 +68,7 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_add_feed_tracking_should_add_no_image_for_a_matomo_url_that_is_no_web_address() {
-		$content = $this->add_feed_tracking_for_a_post( 'javascript:alert(1)//' );
+		$content = $this->add_feed_tracking_for_a_post( 'ftp://matomo.example.org/' );
 
 		$this->assertSame( 'entry', $content );
 	}

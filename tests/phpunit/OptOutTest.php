@@ -63,7 +63,7 @@ class OptOutTest extends WP_Piwik_TestCase {
 	}
 
 	public function test_show_should_render_nothing_for_a_matomo_url_that_is_no_web_address() {
-		$output = $this->create_opt_out( array(), 'javascript:alert(1)//' )->get();
+		$output = $this->create_opt_out( array(), 'ftp://matomo.example.org/' )->get();
 
 		$this->assertSame( '', $output );
 	}

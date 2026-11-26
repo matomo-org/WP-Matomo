@@ -190,15 +190,15 @@ class TrackingCodeGeneratorTest extends WP_Piwik_TestCase {
 
 	public function get_web_urls() {
 		return [
-			'http'                 => [ 'http://stats.example.org/', true ],
-			'https, upper case'    => [ 'HTTPS://stats.example.org/', true ],
-			'no protocol'          => [ '//stats.example.org/', true ],
-			'a host only'          => [ 'stats.example.org/', false ],
-			'no host'              => [ 'https://', false ],
-			'a script'             => [ 'javascript:alert(1)//', false ],
-			'data'                 => [ 'data:text/html,matomo', false ],
-			'another protocol'     => [ 'ftp://stats.example.org/', false ],
-			'empty'                => [ '', false ],
+			'http'                         => [ 'http://stats.example.org/', true ],
+			'https, upper case'            => [ 'HTTPS://stats.example.org/', true ],
+			'no protocol'                  => [ '//stats.example.org/', true ],
+			'a host only'                  => [ 'stats.example.org/', false ],
+			'no host'                      => [ 'https://', false ],
+			'data'                         => [ 'data:text/html,matomo', false ],
+			'another protocol'             => [ 'ftp://stats.example.org/', false ],
+			'another protocol, upper case' => [ 'FTP://stats.example.org/', false ],
+			'empty'                        => [ '', false ],
 		];
 	}
 

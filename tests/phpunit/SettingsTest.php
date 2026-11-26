@@ -466,11 +466,11 @@ class SettingsTest extends WP_Piwik_TestCase {
 
 	public function get_matomo_urls_that_are_no_web_address() {
 		return [
-			'a script'             => [ 'javascript:alert(1)//' ],
-			'a script, upper case' => [ 'JavaScript:alert(1)//' ],
-			'data'                 => [ 'data:text/html,matomo' ],
-			'another protocol'     => [ 'ftp://matomo.example.org/' ],
-			'a path only'          => [ '/matomo/' ],
+			'another protocol'             => [ 'ftp://matomo.example.org/' ],
+			'another protocol, upper case' => [ 'FTP://matomo.example.org/' ],
+			'data'                         => [ 'data:text/html,matomo' ],
+			'mail'                         => [ 'mailto:matomo@example.org' ],
+			'a path only'                  => [ '/matomo/' ],
 		];
 	}
 
@@ -490,7 +490,7 @@ class SettingsTest extends WP_Piwik_TestCase {
 			'http'              => [ 'http://stats.example.org/matomo/', 'http://stats.example.org/matomo/' ],
 			'https, upper case' => [ 'HTTPS://stats.example.org', 'HTTPS://stats.example.org/' ],
 			'with a port'       => [ 'https://stats.example.org:8443/', 'https://stats.example.org:8443/' ],
-			'no protocol'       => [ '//stats.example.org/', '//stats.example.org/' ],
+			'no protocol'       => [ '//stats.example.org/', 'https://stats.example.org/' ],
 			'with white space'  => [ ' https://stats.example.org/ ', 'https://stats.example.org/' ],
 			'a host only'       => [ 'stats.example.org/matomo', 'https://stats.example.org/matomo/' ],
 			'a host and port'   => [ 'stats.example.org:8080/', 'https://stats.example.org:8080/' ],

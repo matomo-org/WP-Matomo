@@ -446,7 +446,9 @@ class Settings {
 		if ( $stored === $value ) {
 			return $value;
 		}
-		if ( ! preg_match( '~^(?:[A-Za-z][A-Za-z0-9+.-]*:(?!\d)|/)~', $value ) ) {
+		if ( 0 === strpos( $value, '//' ) ) {
+			$value = 'https:' . $value;
+		} elseif ( ! preg_match( '~^(?:[A-Za-z][A-Za-z0-9+.-]*:(?!\d)|/)~', $value ) ) {
 			$value = 'https://' . $value;
 		}
 		return \WP_Piwik\TrackingCode\Generator::is_web_url( $value ) ? $value : $stored;
