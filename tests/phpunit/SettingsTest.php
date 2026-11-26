@@ -505,6 +505,25 @@ class SettingsTest extends WP_Piwik_TestCase {
 		$this->assertSame( 'stats.example.org/', $settings->get_global_option( 'piwik_url' ) );
 	}
 
+	/**
+	 * @dataProvider get_matomo_urls_and_whether_they_are_rejected
+	 */
+	public function test_is_rejected_should_tell_whether_a_new_matomo_url_was_not_stored( $matomo_url, $expected ) {
+		$settings = $this->create_settings( [ 'piwik_url' => 'https://matomo.example.org/' ] );
+
+		$settings->apply_changes( [ 'piwik_url' => $matomo_url ] );
+
+		$this->assertSame( $expected, $settings->is_rejected( 'piwik_url' ) );
+	}
+
+	public function get_matomo_urls_and_whether_they_are_rejected() {
+		return [
+			'another protocol' => [ 'ftp://matomo.example.org/', true ],
+			'a web address'    => [ 'https://stats.example.org/', false ],
+			'unchanged'        => [ 'https://matomo.example.org/', false ],
+		];
+	}
+
 	public function test_check_network_activation_is_false_when_not_network_activated() {
 		$settings = $this->create_settings();
 

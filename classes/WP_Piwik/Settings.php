@@ -185,6 +185,8 @@ class Settings {
 
 	private $settings_changed = false;
 
+	private $rejected_settings = array();
+
 	/**
 	 * Constructor class to prepare settings manager
 	 *
@@ -375,6 +377,17 @@ class Settings {
 	}
 
 	/**
+	 * Check if a new value of a setting was rejected during this request
+	 *
+	 * @param string $key
+	 *          option key
+	 * @return boolean Was the new value rejected?
+	 */
+	public function is_rejected( $key ) {
+		return in_array( $key, $this->rejected_settings, true );
+	}
+
+	/**
 	 * Apply new configuration
 	 *
 	 * @param array $in
@@ -451,7 +464,11 @@ class Settings {
 		} elseif ( ! preg_match( '~^(?:[A-Za-z][A-Za-z0-9+.-]*:(?!\d)|/)~', $value ) ) {
 			$value = 'https://' . $value;
 		}
-		return \WP_Piwik\TrackingCode\Generator::is_web_url( $value ) ? $value : $stored;
+		if ( ! \WP_Piwik\TrackingCode\Generator::is_web_url( $value ) ) {
+			$this->rejected_settings[] = 'piwik_url';
+			return $stored;
+		}
+		return $value;
 	}
 
 	/**
