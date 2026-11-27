@@ -68,6 +68,9 @@ class Settings {
 		// checked first
 		'track_mode'              => 'check_track_mode',
 		'piwik_url'               => 'check_piwik_url',
+		'proxy_url'               => 'check_proxy_url',
+		'piwik_user'              => 'check_cloud_account_name',
+		'matomo_user'             => 'check_cloud_account_name',
 		'piwik_token'             => 'check_piwik_token',
 		'site_id'                 => 'request_piwik_site_id',
 		'tracking_code'           => 'prepare_tracking_code',
@@ -434,6 +437,7 @@ class Settings {
 					array(
 						$in [ $key ],
 						$in,
+						$key,
 					)
 				);
 			}
@@ -469,6 +473,72 @@ class Settings {
 			return $stored;
 		}
 		return $value;
+	}
+
+	/**
+	 * Keep the proxy URL the tracking code was last generated with
+	 *
+	 * @return string proxy URL
+	 * @phpstan-ignore method.unused
+	 */
+	private function check_proxy_url() {
+		return (string) $this->get_global_option( 'proxy_url' );
+	}
+
+	/**
+	 * Check the account name of a cloud hosted Matomo
+	 *
+	 * @param mixed  $value new account name
+	 * @param array  $in configuration set
+	 * @param string $key setting the account name belongs to
+	 * @return string account name
+	 * @phpstan-ignore method.unused
+	 */
+	private function check_cloud_account_name( $value, $in, $key ) {
+		$value = strtolower( trim( (string) $value ) );
+		if ( '' === $value ) {
+			return '';
+		}
+		$stored = (string) $this->get_global_option( $key );
+		if ( strtolower( trim( $stored ) ) === $value ) {
+			return $value;
+		}
+		if ( ! self::is_cloud_account_name( $value ) ) {
+			$this->rejected_settings[] = $key;
+			return $stored;
+		}
+		return $value;
+	}
+
+	/**
+	 * Check if a value is a valid account name of a cloud hosted Matomo
+	 *
+	 * @param mixed $value account name
+	 * @return boolean Is the account name a single DNS label?
+	 */
+	public static function is_cloud_account_name( $value ) {
+		return is_string( $value ) && 1 === preg_match( '/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i', $value );
+	}
+
+	/**
+	 * Get the URL of the cloud hosted Matomo
+	 *
+	 * @return string URL, or an empty string if no cloud mode is used or the account name is invalid
+	 */
+	public function get_cloud_url() {
+		switch ( $this->get_global_option( 'piwik_mode' ) ) {
+			case 'cloud':
+				$account = $this->get_global_option( 'piwik_user' );
+				$domain  = 'innocraft.cloud';
+				break;
+			case 'cloud-matomo':
+				$account = $this->get_global_option( 'matomo_user' );
+				$domain  = 'matomo.cloud';
+				break;
+			default:
+				return '';
+		}
+		return self::is_cloud_account_name( $account ) ? 'https://' . $account . '.' . $domain . '/' : '';
 	}
 
 	/**
@@ -792,12 +862,8 @@ class Settings {
 	}
 
 	public function get_matomo_url() {
-		if ( 'cloud' === $this->get_global_option( 'piwik_mode' ) ) {
-			return 'https://' . $this->get_global_option( 'piwik_user' ) . '.innocraft.cloud/';
-		}
-
-		if ( 'cloud-matomo' === $this->get_global_option( 'piwik_mode' ) ) {
-			return 'https://' . $this->get_global_option( 'matomo_user' ) . '.matomo.cloud/';
+		if ( in_array( $this->get_global_option( 'piwik_mode' ), array( 'cloud', 'cloud-matomo' ), true ) ) {
+			return $this->get_cloud_url();
 		}
 
 		// every other mode is a Matomo the site names itself ...

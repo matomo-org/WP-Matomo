@@ -74,14 +74,42 @@ class OptOutTest extends WP_Piwik_TestCase {
 		$this->assertStringContainsString( 'src="http://matomo.example.org/index.php?module=CoreAdminHome', $output );
 	}
 
+	public function test_show_should_point_the_iframe_at_the_cloud_account() {
+		$output = $this->create_opt_out_with(
+			array(),
+			array(
+				'piwik_mode'  => 'cloud-matomo',
+				'matomo_user' => 'mysite',
+			)
+		)->get();
+
+		$this->assertStringContainsString( 'src="https://mysite.matomo.cloud/index.php?module=CoreAdminHome', $output );
+	}
+
+	public function test_show_should_render_nothing_for_a_stored_invalid_cloud_account_name() {
+		$output = $this->create_opt_out_with(
+			array(),
+			array(
+				'piwik_mode' => 'cloud',
+				'piwik_user' => 'my site',
+			)
+		)->get();
+
+		$this->assertSame( '', $output );
+	}
+
 	private function create_opt_out( array $params, $piwik_url = 'https://matomo.example.org/' ) {
-		$settings = $this->create_settings(
+		return $this->create_opt_out_with(
+			$params,
 			array(
 				'piwik_mode' => 'http',
 				'piwik_url'  => $piwik_url,
-			),
-			array( 'site_id' => 7 )
+			)
 		);
+	}
+
+	private function create_opt_out_with( array $params, array $global_options ) {
+		$settings = $this->create_settings( $global_options, array( 'site_id' => 7 ) );
 
 		$request = new OptOut_Test_Request( new \WP_Piwik_Test_Mock_Plugin(), $settings );
 		$request->reset();

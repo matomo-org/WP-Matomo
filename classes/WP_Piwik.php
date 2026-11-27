@@ -1137,9 +1137,8 @@ class WP_Piwik {
 			case 'php':
 				return '//' . wp_parse_url( self::$settings->get_global_option( 'proxy_url' ), PHP_URL_HOST );
 			case 'cloud':
-				return '//' . self::$settings->get_global_option( 'piwik_user' ) . '.innocraft.cloud';
 			case 'cloud-matomo':
-				return '//' . self::$settings->get_global_option( 'matomo_user' ) . '.matomo.cloud';
+				return '//' . wp_parse_url( self::$settings->get_cloud_url(), PHP_URL_HOST );
 			default:
 				return '//' . wp_parse_url( self::$settings->get_global_option( 'piwik_url' ), PHP_URL_HOST );
 		}
@@ -1570,8 +1569,8 @@ class WP_Piwik {
 			&& (
 				( 'http' === self::$settings->get_global_option( 'piwik_mode' ) && self::$settings->get_global_option( 'piwik_url' ) )
 				|| ( 'php' === self::$settings->get_global_option( 'piwik_mode' ) && self::$settings->get_global_option( 'piwik_path' ) )
-				|| ( 'cloud' === self::$settings->get_global_option( 'piwik_mode' ) && self::$settings->get_global_option( 'piwik_user' ) )
-				|| ( 'cloud-matomo' === self::$settings->get_global_option( 'piwik_mode' ) && self::$settings->get_global_option( 'matomo_user' ) )
+				|| ( 'cloud' === self::$settings->get_global_option( 'piwik_mode' ) && self::$settings->get_cloud_url() )
+				|| ( 'cloud-matomo' === self::$settings->get_global_option( 'piwik_mode' ) && self::$settings->get_cloud_url() )
 			);
 	}
 
