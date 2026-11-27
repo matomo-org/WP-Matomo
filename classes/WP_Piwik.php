@@ -1137,9 +1137,8 @@ class WP_Piwik {
 			case 'php':
 				return '//' . wp_parse_url( self::$settings->get_global_option( 'proxy_url' ), PHP_URL_HOST );
 			case 'cloud':
-				return '//' . self::$settings->get_global_option( 'piwik_user' ) . '.innocraft.cloud';
 			case 'cloud-matomo':
-				return '//' . self::$settings->get_global_option( 'matomo_user' ) . '.matomo.cloud';
+				return '//' . wp_parse_url( self::$settings->get_cloud_url(), PHP_URL_HOST );
 			default:
 				return '//' . wp_parse_url( self::$settings->get_global_option( 'piwik_url' ), PHP_URL_HOST );
 		}
@@ -1496,8 +1495,10 @@ class WP_Piwik {
 					$url .= 'piwik.php';
 				}
 			}
-			$tracking_image = $url . '?idsite=' . self::$settings->get_option( 'site_id' ) . '&rec=1&url=' . rawurlencode( $posturl ) . '&action_name=' . rawurlencode( $title ) . '&urlref=' . rawurlencode( $urlref );
-			$content       .= '<img src="' . esc_attr( $tracking_image ) . '" style="border:0;width:0;height:0" width="0" height="0" alt="" />';
+			$tracking_image = esc_url( $url . '?idsite=' . self::$settings->get_option( 'site_id' ) . '&rec=1&url=' . rawurlencode( $posturl ) . '&action_name=' . rawurlencode( $title ) . '&urlref=' . rawurlencode( $urlref ), array( 'http', 'https' ) );
+			if ( '' !== $tracking_image ) {
+				$content .= '<img src="' . $tracking_image . '" style="border:0;width:0;height:0" width="0" height="0" alt="" />';
+			}
 		}
 		return $content;
 	}
@@ -1568,8 +1569,8 @@ class WP_Piwik {
 			&& (
 				( 'http' === self::$settings->get_global_option( 'piwik_mode' ) && self::$settings->get_global_option( 'piwik_url' ) )
 				|| ( 'php' === self::$settings->get_global_option( 'piwik_mode' ) && self::$settings->get_global_option( 'piwik_path' ) )
-				|| ( 'cloud' === self::$settings->get_global_option( 'piwik_mode' ) && self::$settings->get_global_option( 'piwik_user' ) )
-				|| ( 'cloud-matomo' === self::$settings->get_global_option( 'piwik_mode' ) && self::$settings->get_global_option( 'matomo_user' ) )
+				|| ( 'cloud' === self::$settings->get_global_option( 'piwik_mode' ) && self::$settings->get_cloud_url() )
+				|| ( 'cloud-matomo' === self::$settings->get_global_option( 'piwik_mode' ) && self::$settings->get_cloud_url() )
 			);
 	}
 

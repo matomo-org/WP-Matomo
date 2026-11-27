@@ -28,6 +28,12 @@ class Settings extends \WP_Piwik\Admin {
 			return;
 		} elseif ( self::$wp_piwik->is_config_submitted() ) {
 			$this->show_box( 'updated', 'yes', esc_html__( 'Changes saved.', 'wp-piwik' ) );
+			if ( self::$settings->is_rejected( 'piwik_url' ) ) {
+				$this->show_box( 'error', 'no', esc_html__( 'The Matomo URL was not changed. Enter a URL that starts with http:// or https://.', 'wp-piwik' ) );
+			}
+			if ( self::$settings->is_rejected( 'piwik_user' ) || self::$settings->is_rejected( 'matomo_user' ) ) {
+				$this->show_box( 'error', 'no', esc_html__( 'The Matomo Cloud account name was not changed. Use only letters, digits and hyphens.', 'wp-piwik' ) );
+			}
 			self::$wp_piwik->reset_request();
 			if ( 'php' === self::$settings->get_global_option( 'piwik_mode' ) ) {
 				self::$wp_piwik->define_piwik_constants();

@@ -68,7 +68,7 @@ class Overview extends \WP_Piwik\Widget {
 			$table_foot = self::$settings->get_global_option( 'piwik_shortcut' )
 				? array(
 					esc_html__( 'Shortcut', 'wp-piwik' ) . ':',
-					'<a href="' . esc_attr( self::$settings->get_global_option( 'piwik_url' ) ) . '" target="_BLANK">Matomo</a>',
+					'<a href="' . esc_url( self::$settings->get_global_option( 'piwik_url' ), array( 'http', 'https' ) ) . '" target="_BLANK">Matomo</a>',
 				)
 				: null;
 			$this->table( $table_head, $table_body, $table_foot );

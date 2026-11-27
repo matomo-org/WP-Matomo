@@ -182,6 +182,27 @@ class TrackingCodeGeneratorTest extends WP_Piwik_TestCase {
 	}
 
 	/**
+	 * @dataProvider get_web_urls
+	 */
+	public function test_is_web_url( $url, $expected ) {
+		$this->assertSame( $expected, Generator::is_web_url( $url ) );
+	}
+
+	public function get_web_urls() {
+		return [
+			'http'                         => [ 'http://stats.example.org/', true ],
+			'https, upper case'            => [ 'HTTPS://stats.example.org/', true ],
+			'no protocol'                  => [ '//stats.example.org/', true ],
+			'a host only'                  => [ 'stats.example.org/', false ],
+			'no host'                      => [ 'https://', false ],
+			'data'                         => [ 'data:text/html,matomo', false ],
+			'another protocol'             => [ 'ftp://stats.example.org/', false ],
+			'another protocol, upper case' => [ 'FTP://stats.example.org/', false ],
+			'empty'                        => [ '', false ],
+		];
+	}
+
+	/**
 	 * Decode a Matomo tracking code expectation the way Connect Matomo decoded the answers
 	 * of SitesManager.getJavascriptTag
 	 *

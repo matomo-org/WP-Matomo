@@ -14,7 +14,7 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 	/**
 	 * @var array per site settings the tests below change on the shared settings instance
 	 */
-	private $restored_options = array( 'tracking_code', 'last_tracking_code_update' );
+	private $restored_options = array( 'tracking_code', 'last_tracking_code_update', 'site_id' );
 
 	private $settings_backup = array();
 
@@ -59,6 +59,18 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 		$output = $GLOBALS['wp-piwik']->shortcode( shortcode_parse_atts( 'module=opt-out' ) );
 
 		$this->assertStringContainsString( '<iframe', $output );
+	}
+
+	public function test_add_feed_tracking_should_add_a_tracking_image_from_the_configured_matomo() {
+		$content = $this->add_feed_tracking_for_a_post( 'https://matomo.example.org/' );
+
+		$this->assertStringContainsString( '<img src="https://matomo.example.org/piwik.php?idsite=7&#038;rec=1', $content );
+	}
+
+	public function test_add_feed_tracking_should_add_no_image_for_a_matomo_url_that_is_no_web_address() {
+		$content = $this->add_feed_tracking_for_a_post( 'ftp://matomo.example.org/' );
+
+		$this->assertSame( 'entry', $content );
 	}
 
 	public function test_show_php_mode_deprecation_notice_if_in_use_should_warn_a_site_still_connecting_through_the_php_api() {
@@ -868,6 +880,19 @@ class WP_PiwikTest extends WP_Piwik_TestCase {
 		// the update patches of an older revision running
 		update_option( 'wp-piwik_global-revision', 2023092201 );
 		update_option( 'wp-piwik_global-version_history', array( $version ) );
+	}
+
+	private function add_feed_tracking_for_a_post( $piwik_url ) {
+		$settings = \WP_Piwik::get_settings();
+		$settings->set_global_option( 'piwik_url', $piwik_url );
+		$settings->set_global_option( 'track_mode', 'default' );
+		$settings->set_option( 'site_id', 7 );
+
+		self::factory()->post->create();
+		$this->go_to( get_feed_link() );
+		the_post();
+
+		return $GLOBALS['wp-piwik']->add_feed_tracking( 'entry' );
 	}
 
 	/**

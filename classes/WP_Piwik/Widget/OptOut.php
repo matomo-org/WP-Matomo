@@ -22,10 +22,11 @@ class OptOut extends \WP_Piwik\Widget {
 				$piwik_url = $protocol . ':' . self::$settings->get_global_option( 'proxy_url' );
 				break;
 			case 'cloud':
-				$piwik_url = 'https://' . self::$settings->get_global_option( 'piwik_user' ) . '.innocraft.cloud/';
-				break;
 			case 'cloud-matomo':
-				$piwik_url = 'https://' . self::$settings->get_global_option( 'matomo_user' ) . '.matomo.cloud/';
+				$piwik_url = self::$settings->get_cloud_url();
+				if ( '' === $piwik_url ) {
+					return;
+				}
 				break;
 			default:
 				$piwik_url = self::$settings->get_global_option( 'piwik_url' );
@@ -37,6 +38,10 @@ class OptOut extends \WP_Piwik\Widget {
 		$height   = $this->parameter['height'];
 		$idsite   = ( '' !== $this->parameter['idsite'] ? 'idsite=' . (int) $this->parameter['idsite'] . '&' : '' );
 		$language = rawurlencode( $this->parameter['language'] );
-		$this->out( '<iframe frameborder="no" width="' . esc_attr( $width ) . '" height="' . esc_attr( $height ) . '" src="' . esc_attr( $piwik_url . 'index.php?module=CoreAdminHome&action=optOut&' . $idsite . 'language=' . $language ) . '"></iframe>' );
+		$src      = esc_url( $piwik_url . 'index.php?module=CoreAdminHome&action=optOut&' . $idsite . 'language=' . $language, array( 'http', 'https' ) );
+		if ( '' === $src ) {
+			return;
+		}
+		$this->out( '<iframe frameborder="no" width="' . esc_attr( $width ) . '" height="' . esc_attr( $height ) . '" src="' . $src . '"></iframe>' );
 	}
 }

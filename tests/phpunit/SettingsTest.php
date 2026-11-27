@@ -453,6 +453,169 @@ class SettingsTest extends WP_Piwik_TestCase {
 		$this->assertSame( 'https://stats.example.org/', $settings->get_global_option( 'piwik_url' ) );
 	}
 
+	/**
+	 * @dataProvider get_matomo_urls_that_are_no_web_address
+	 */
+	public function test_apply_changes_should_not_store_a_matomo_url_that_is_no_web_address( $matomo_url ) {
+		$settings = $this->create_settings( [ 'piwik_url' => 'https://matomo.example.org/' ] );
+
+		$settings->apply_changes( [ 'piwik_url' => $matomo_url ] );
+
+		$this->assertSame( 'https://matomo.example.org/', $settings->get_global_option( 'piwik_url' ) );
+	}
+
+	public function get_matomo_urls_that_are_no_web_address() {
+		return [
+			'another protocol'             => [ 'ftp://matomo.example.org/' ],
+			'another protocol, upper case' => [ 'FTP://matomo.example.org/' ],
+			'data'                         => [ 'data:text/html,matomo' ],
+			'mail'                         => [ 'mailto:matomo@example.org' ],
+			'a path only'                  => [ '/matomo/' ],
+		];
+	}
+
+	/**
+	 * @dataProvider get_matomo_urls_that_are_web_addresses
+	 */
+	public function test_apply_changes_should_store_a_matomo_url_that_is_a_web_address( $matomo_url, $expected ) {
+		$settings = $this->create_settings( [ 'piwik_url' => 'https://matomo.example.org/' ] );
+
+		$settings->apply_changes( [ 'piwik_url' => $matomo_url ] );
+
+		$this->assertSame( $expected, $settings->get_global_option( 'piwik_url' ) );
+	}
+
+	public function get_matomo_urls_that_are_web_addresses() {
+		return [
+			'http'              => [ 'http://stats.example.org/matomo/', 'http://stats.example.org/matomo/' ],
+			'https, upper case' => [ 'HTTPS://stats.example.org', 'HTTPS://stats.example.org/' ],
+			'with a port'       => [ 'https://stats.example.org:8443/', 'https://stats.example.org:8443/' ],
+			'no protocol'       => [ '//stats.example.org/', 'https://stats.example.org/' ],
+			'with white space'  => [ ' https://stats.example.org/ ', 'https://stats.example.org/' ],
+			'a host only'       => [ 'stats.example.org/matomo', 'https://stats.example.org/matomo/' ],
+			'a host and port'   => [ 'stats.example.org:8080/', 'https://stats.example.org:8080/' ],
+		];
+	}
+
+	public function test_apply_changes_should_keep_a_stored_matomo_url_that_is_no_web_address() {
+		$settings = $this->create_settings( [ 'piwik_url' => 'stats.example.org/' ] );
+
+		$settings->apply_changes( [ 'piwik_url' => 'stats.example.org/' ] );
+
+		$this->assertSame( 'stats.example.org/', $settings->get_global_option( 'piwik_url' ) );
+	}
+
+	/**
+	 * @dataProvider get_matomo_urls_and_whether_they_are_rejected
+	 */
+	public function test_is_rejected_should_tell_whether_a_new_matomo_url_was_not_stored( $matomo_url, $expected ) {
+		$settings = $this->create_settings( [ 'piwik_url' => 'https://matomo.example.org/' ] );
+
+		$settings->apply_changes( [ 'piwik_url' => $matomo_url ] );
+
+		$this->assertSame( $expected, $settings->is_rejected( 'piwik_url' ) );
+	}
+
+	public function get_matomo_urls_and_whether_they_are_rejected() {
+		return [
+			'another protocol' => [ 'ftp://matomo.example.org/', true ],
+			'a web address'    => [ 'https://stats.example.org/', false ],
+			'unchanged'        => [ 'https://matomo.example.org/', false ],
+		];
+	}
+
+	/**
+	 * @dataProvider get_cloud_account_names_that_are_accepted
+	 */
+	public function test_apply_changes_should_store_a_valid_cloud_account_name( $key, $account, $expected ) {
+		$settings = $this->create_settings( [ $key => 'stored' ] );
+
+		$settings->apply_changes( [ $key => $account ] );
+
+		$this->assertSame( $expected, $settings->get_global_option( $key ) );
+		$this->assertFalse( $settings->is_rejected( $key ) );
+	}
+
+	public function get_cloud_account_names_that_are_accepted() {
+		$cases = [];
+		foreach ( [ 'piwik_user', 'matomo_user' ] as $key ) {
+			$cases[ $key . ', letters' ]       = [ $key, 'mysite', 'mysite' ];
+			$cases[ $key . ', a hyphen' ]      = [ $key, 'my-site', 'my-site' ];
+			$cases[ $key . ', digits' ]        = [ $key, 'site2', 'site2' ];
+			$cases[ $key . ', upper case' ]    = [ $key, 'MySite', 'mysite' ];
+			$cases[ $key . ', white space' ]   = [ $key, ' mysite ', 'mysite' ];
+			$cases[ $key . ', 63 characters' ] = [ $key, str_repeat( 'a', 63 ), str_repeat( 'a', 63 ) ];
+			$cases[ $key . ', empty' ]         = [ $key, '', '' ];
+			$cases[ $key . ', unchanged' ]     = [ $key, 'stored', 'stored' ];
+		}
+		return $cases;
+	}
+
+	/**
+	 * @dataProvider get_cloud_account_names_that_are_rejected
+	 */
+	public function test_apply_changes_should_not_store_an_invalid_cloud_account_name( $key, $account ) {
+		$settings = $this->create_settings( [ $key => 'stored' ] );
+
+		$settings->apply_changes( [ $key => $account ] );
+
+		$this->assertSame( 'stored', $settings->get_global_option( $key ) );
+		$this->assertTrue( $settings->is_rejected( $key ) );
+	}
+
+	public function get_cloud_account_names_that_are_rejected() {
+		$cases = [];
+		foreach ( [ 'piwik_user', 'matomo_user' ] as $key ) {
+			$cases[ $key . ', a space' ]         = [ $key, 'my site' ];
+			$cases[ $key . ', an underscore' ]   = [ $key, 'my_site' ];
+			$cases[ $key . ', leading hyphen' ]  = [ $key, '-mysite' ];
+			$cases[ $key . ', trailing hyphen' ] = [ $key, 'mysite-' ];
+			$cases[ $key . ', 64 characters' ]   = [ $key, str_repeat( 'a', 64 ) ];
+		}
+		return $cases;
+	}
+
+	/**
+	 * @dataProvider get_cloud_modes
+	 */
+	public function test_get_matomo_url_should_be_empty_for_a_stored_invalid_cloud_account_name( $mode, $key ) {
+		$settings = $this->create_settings(
+			[
+				'piwik_mode' => $mode,
+				$key         => 'my site',
+			]
+		);
+
+		$this->assertSame( '', $settings->get_cloud_url() );
+		$this->assertSame( '', $settings->get_matomo_url() );
+	}
+
+	public function get_cloud_modes() {
+		return [
+			'InnoCraft Cloud' => [ 'cloud', 'piwik_user' ],
+			'Matomo Cloud'    => [ 'cloud-matomo', 'matomo_user' ],
+		];
+	}
+
+	public function test_get_cloud_url_should_be_empty_when_no_cloud_mode_is_used() {
+		$settings = $this->create_settings(
+			[
+				'piwik_mode' => 'http',
+				'piwik_user' => 'mysite',
+			]
+		);
+
+		$this->assertSame( '', $settings->get_cloud_url() );
+	}
+
+	public function test_apply_changes_should_keep_the_proxy_url_the_tracking_code_was_generated_with() {
+		$settings = $this->create_settings( [ 'proxy_url' => '//matomo.example.org/' ] );
+
+		$settings->apply_changes( [ 'proxy_url' => 'https://stats.example.org/' ] );
+
+		$this->assertSame( '//matomo.example.org/', $settings->get_global_option( 'proxy_url' ) );
+	}
+
 	public function test_check_network_activation_is_false_when_not_network_activated() {
 		$settings = $this->create_settings();
 
